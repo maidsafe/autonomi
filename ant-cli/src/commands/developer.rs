@@ -14,12 +14,14 @@
 
 use crate::actions::{NetworkContext, connect_to_network};
 use ant_protocol::NetworkAddress;
+use ant_protocol::storage::DataTypes;
 use autonomi::Client;
+use autonomi::PublicKey;
 use autonomi::client::data_types::chunk::ChunkAddress;
 use autonomi::client::data_types::graph::GraphEntryAddress;
-use autonomi::PublicKey;
-use autonomi::networking::{Multiaddr, PeerId, PeerInfo};
+use autonomi::networking::{Multiaddr, PaymentQuote, PeerId, PeerInfo};
 use color_eyre::{Result, eyre::eyre};
+use xor_name::XorName;
 
 /// Query a specific node to get its network view of closest peers to a target address.
 ///
@@ -70,6 +72,177 @@ pub async fn closest_peers(
     }
 
     Ok(())
+}
+
+/// Get a storage quote from a specific peer.
+///
+/// This command queries a specific node to get a quote for storing data.
+pub async fn get_quote(
+    peer_addr: &str,
+    address: &str,
+    data_type: u32,
+    data_size: usize,
+    network_context: NetworkContext,
+) -> Result<()> {
+    // Parse the target address to XorName
+    let xorname = parse_address_to_xorname(address)?;
+
+    // Convert data_type index to DataTypes enum
+    let data_type_enum = match data_type {
+        0 => DataTypes::Chunk,
+        1 => DataTypes::GraphEntry,
+        2 => DataTypes::Pointer,
+        3 => DataTypes::Scratchpad,
+        _ => {
+            return Err(eyre!(
+                "Invalid data type index: {}. Valid values: 0 (Chunk), 1 (GraphEntry), 2 (Pointer), 3 (Scratchpad)",
+                data_type
+            ));
+        }
+    };
+
+    println!("Connecting to network...");
+    let client = connect_to_network(network_context)
+        .await
+        .map_err(|(err, _exit_code)| err)?;
+
+    // Resolve the peer
+    let peer_info = resolve_node(&client, peer_addr).await?;
+    let peer_id = peer_info.peer_id;
+
+    println!(
+        "Requesting quote from peer {} for address {}...",
+        peer_id,
+        hex::encode(xorname)
+    );
+    println!("  Data type: {data_type_enum:?} (index {data_type})");
+    println!("  Data size: {data_size} bytes");
+    println!();
+
+    // Get the quote
+    match client
+        .get_raw_quote_from_peer(xorname, peer_info, data_type_enum, data_size)
+        .await
+    {
+        Ok(Some((quote_peer_id, addrs, quote))) => {
+            display_quote(&quote_peer_id, &addrs.0, &quote);
+        }
+        Ok(None) => {
+            println!("Record already exists at this address - no payment needed.");
+        }
+        Err(e) => {
+            return Err(eyre!("Failed to get quote: {e}"));
+        }
+    }
+
+    Ok(())
+}
+
+/// Parse an address string to XorName.
+fn parse_address_to_xorname(address: &str) -> Result<XorName> {
+    let hex_str = address.strip_prefix("0x").unwrap_or(address);
+
+    // Try parsing as ChunkAddress first
+    if let Ok(chunk_addr) = ChunkAddress::from_hex(address) {
+        return Ok(*chunk_addr.xorname());
+    }
+
+    // Try parsing from NetworkAddress debug format
+    if let Some(start) = address.find('"')
+        && let Some(end) = address[start + 1..].find('"')
+    {
+        let extracted_hex = &address[start + 1..start + 1 + end];
+        if let Ok(chunk_addr) = ChunkAddress::from_hex(extracted_hex) {
+            return Ok(*chunk_addr.xorname());
+        }
+    }
+
+    // Try to parse as raw hex bytes (xor_name)
+    if let Ok(bytes) = hex::decode(hex_str)
+        && bytes.len() == 32
+    {
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&bytes);
+        return Ok(XorName(arr));
+    }
+
+    Err(eyre!(
+        "Invalid address. Expected ChunkAddress, 32-byte hex XorName, or NetworkAddress debug format. Got: {address}"
+    ))
+}
+
+/// Display a quote's information.
+fn display_quote(peer_id: &PeerId, addrs: &[Multiaddr], quote: &PaymentQuote) {
+    use std::time::UNIX_EPOCH;
+
+    println!("Quote received:");
+    println!("{}", "=".repeat(60));
+    println!();
+
+    // Peer info
+    println!("Peer Information:");
+    println!("  PeerId:          {peer_id}");
+    if !addrs.is_empty() {
+        println!("  Addresses:");
+        for addr in addrs {
+            println!("                   {addr}");
+        }
+    }
+    println!("  Rewards Address: {:?}", quote.rewards_address);
+    println!();
+
+    // Quote metadata
+    println!("Quote Details:");
+    println!("  Content:         {}", hex::encode(quote.content));
+    if let Ok(duration) = quote.timestamp.duration_since(UNIX_EPOCH) {
+        let secs: u64 = duration.as_secs();
+        println!("  Timestamp:       {secs} (unix)");
+    }
+    println!();
+
+    // Quoting metrics
+    let metrics = &quote.quoting_metrics;
+    println!("Quoting Metrics:");
+    println!(
+        "  Data Type:             {} ({:?})",
+        metrics.data_type,
+        data_type_name(metrics.data_type)
+    );
+    println!("  Data Size:             {} bytes", metrics.data_size);
+    println!("  Close Records Stored:  {}", metrics.close_records_stored);
+    println!("  Max Records:           {}", metrics.max_records);
+    println!(
+        "  Received Payment Count:{}",
+        metrics.received_payment_count
+    );
+    println!("  Live Time:             {} seconds", metrics.live_time);
+
+    // Records per type
+    if !metrics.records_per_type.is_empty() {
+        println!("  Records Per Type:");
+        for (dtype, count) in &metrics.records_per_type {
+            println!("    {:?}: {}", data_type_name(*dtype), count);
+        }
+    }
+
+    // Network metrics
+    if let Some(size) = metrics.network_size {
+        println!("  Network Size:          {size} nodes (estimated)");
+    }
+    if let Some(density) = &metrics.network_density {
+        println!("  Network Density:       {}", hex::encode(density));
+    }
+}
+
+/// Convert data type index to name.
+fn data_type_name(index: u32) -> &'static str {
+    match index {
+        0 => "Chunk",
+        1 => "GraphEntry",
+        2 => "Pointer",
+        3 => "Scratchpad",
+        _ => "Unknown",
+    }
 }
 
 /// Display results for the standard (non-comparison) mode.
@@ -146,9 +319,18 @@ fn display_comparison(
 
     let client_peer_ids: HashSet<PeerId> = client_peers.iter().map(|p| p.peer_id).collect();
 
-    let common: HashSet<PeerId> = node_peer_ids.intersection(&client_peer_ids).copied().collect();
-    let node_only: HashSet<PeerId> = node_peer_ids.difference(&client_peer_ids).copied().collect();
-    let client_only: HashSet<PeerId> = client_peer_ids.difference(&node_peer_ids).copied().collect();
+    let common: HashSet<PeerId> = node_peer_ids
+        .intersection(&client_peer_ids)
+        .copied()
+        .collect();
+    let node_only: HashSet<PeerId> = node_peer_ids
+        .difference(&client_peer_ids)
+        .copied()
+        .collect();
+    let client_only: HashSet<PeerId> = client_peer_ids
+        .difference(&node_peer_ids)
+        .copied()
+        .collect();
 
     println!("Comparison of closest peers to {target}");
     println!("{}", "=".repeat(100));
@@ -167,14 +349,8 @@ fn display_comparison(
     println!();
 
     // Node's perspective
-    println!(
-        "NODE'S PERSPECTIVE (from {}):",
-        node_response.queried_node
-    );
-    println!(
-        "  {:<4} {:<54} {:<10} Status",
-        "#", "PeerId", "Distance"
-    );
+    println!("NODE'S PERSPECTIVE (from {}):", node_response.queried_node);
+    println!("  {:<4} {:<54} {:<10} Status", "#", "PeerId", "Distance");
     println!("  {}", "-".repeat(80));
 
     for (i, (peer_addr, _)) in node_response.peers.iter().enumerate() {
@@ -210,10 +386,7 @@ fn display_comparison(
 
     // Client's perspective
     println!("CLIENT'S PERSPECTIVE:");
-    println!(
-        "  {:<4} {:<54} {:<10} Status",
-        "#", "PeerId", "Distance"
-    );
+    println!("  {:<4} {:<54} {:<10} Status", "#", "PeerId", "Distance");
     println!("  {}", "-".repeat(85));
 
     // Sort client peers by distance

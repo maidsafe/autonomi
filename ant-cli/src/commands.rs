@@ -505,6 +505,31 @@ pub enum DeveloperCmd {
         #[arg(long)]
         compare: bool,
     },
+
+    /// Get a storage quote from a specific peer.
+    ///
+    /// This queries a specific node to get a quote for storing data at a given address.
+    /// The quote contains pricing metrics and node information.
+    GetQuote {
+        /// Peer to query: either a PeerId or full multiaddr.
+        ///
+        /// Examples:
+        ///   - PeerId: 12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE
+        ///   - Multiaddr: /ip4/127.0.0.1/udp/12000/quic-v1/p2p/12D3KooW...
+        ///
+        /// When only a PeerId is provided, the peer's address is discovered via the network.
+        #[arg(name = "peer")]
+        peer_addr: String,
+        /// Target address for the quote (hex string, ChunkAddress, or XorName).
+        #[arg(name = "address")]
+        address: String,
+        /// Data type index (default: 0 for Chunk).
+        #[arg(short = 't', long, default_value = "0")]
+        data_type: u32,
+        /// Data size in bytes (default: 1048576 = 1MB).
+        #[arg(short = 's', long, default_value = "1048576")]
+        data_size: usize,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -758,6 +783,15 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 compare,
             } => {
                 developer::closest_peers(&node_addr, &target, num_peers, compare, network_context)
+                    .await
+            }
+            DeveloperCmd::GetQuote {
+                peer_addr,
+                address,
+                data_type,
+                data_size,
+            } => {
+                developer::get_quote(&peer_addr, &address, data_type, data_size, network_context)
                     .await
             }
         },
