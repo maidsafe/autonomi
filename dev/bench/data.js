@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767796129099,
+  "lastUpdate": 1767812555044,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5498,6 +5498,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.652349534584162,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4925c254aebed4faf2aa725b348300ef89fb59e7",
+          "message": "Merge pull request #3385 from mickvandijke/feat-analytical-tools-node-version\n\nfeat(ant): add `developer node-version` command",
+          "timestamp": "2026-01-07T17:42:06Z",
+          "tree_id": "10f77f924ea2b2fd379d770aeaedb779105999a9",
+          "url": "https://github.com/maidsafe/autonomi/commit/4925c254aebed4faf2aa725b348300ef89fb59e7"
+        },
+        "date": 1767812544341,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 0.9252978990826117,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.0161518373639185,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.47968510127846,
             "unit": "MiB/s"
           }
         ]
