@@ -1088,6 +1088,7 @@ name = "ant-node-nodejs"
 version = "0.1.5"
 dependencies = [
  "ant-node",
+ "evmlib",
  "hex",
  "napi",
  "napi-build",
