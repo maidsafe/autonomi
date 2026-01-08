@@ -13,19 +13,31 @@ export interface BootstrapConfigFields {
   first?: boolean
   initialPeers?: Array<string>
   local?: boolean
-  maxPeers?: number
-  maxAddrsPerPeer?: number
+  maxCachedPeers?: number
+  maxAddrsPerCachedPeer?: number
   minCacheSaveDurationMs?: number
   maxCacheSaveDurationMs?: number
   networkContactsUrl?: Array<string>
 }
 export interface NetworkSpawnerFields {
+  /**
+   * NOTE: Currently dead code - not read by constructor.
+   * The EVM network is passed via a separate `network` parameter.
+   * TODO: Future cleanup should read this field instead for consistency.
+   */
+  evmNetwork?: string
+  rewardsAddress?: string
   noUpnp?: boolean
   rootDir?: string | undefined | null
   size?: number
   bootstrapConfig?: BootstrapConfigFields
 }
 export interface NodeSpawnerFields {
+  /**
+   * NOTE: Currently dead code - not read by constructor.
+   * The EVM network is passed via a separate `network` parameter.
+   * TODO: Future cleanup should read this field instead for consistency.
+   */
   evmNetwork?: string
   socketAddr?: string
   rewardsAddress?: string
@@ -79,7 +91,7 @@ export declare class RunningNetwork {
 }
 /** A spawner for creating local SAFE networks for testing and development. */
 export declare class NetworkSpawner {
-  constructor(args?: NetworkSpawnerFields | undefined | null)
+  constructor(args?: NetworkSpawnerFields | undefined | null, network?: Network | undefined | null)
   /** Spawns the network with the configured parameters. */
   spawn(): Promise<RunningNetwork>
 }
@@ -92,4 +104,33 @@ export declare class NodeSpawner {
 export declare class Network {
   constructor(local: boolean)
   static fromString(name: string): Network
+}
+/**
+ * A local EVM testnet for development and testing.
+ *
+ * Starts an Anvil node and deploys the required smart contracts.
+ * Requires Anvil to be installed (via Foundry).
+ */
+export declare class Testnet {
+  /**
+   * Creates and starts a new local EVM testnet.
+   *
+   * This starts an Anvil node and deploys:
+   * - Network token contract
+   * - Data payments contract
+   * - Merkle payments contract
+   */
+  static new(): Promise<Testnet>
+  /**
+   * Returns the Network configuration for this testnet.
+   * Use this with NetworkSpawner to spawn nodes connected to this EVM.
+   */
+  toNetwork(): Network
+  /**
+   * Returns the default wallet private key (from Anvil's first account).
+   * This wallet has pre-funded ETH for testing.
+   */
+  defaultWalletPrivateKey(): string
+  /** Returns the RPC URL of the local Anvil node. */
+  rpcUrl(): string
 }
