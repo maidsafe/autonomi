@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767812677712,
+  "lastUpdate": 1767995024378,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5537,6 +5537,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.47968510127846,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1f7bbd8ecd90be0d2d6a4e1f71ce53f0e7819613",
+          "message": "Merge pull request #3399 from maidsafe/rc-2025.12.3-hotfix\n\nchore(release): stable release 2025.12.3.2",
+          "timestamp": "2026-01-09T21:22:37Z",
+          "tree_id": "090a6b478d044487bc3115a3ce70f53d36fc52f8",
+          "url": "https://github.com/maidsafe/autonomi/commit/1f7bbd8ecd90be0d2d6a4e1f71ce53f0e7819613"
+        },
+        "date": 1767995016539,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0802519591487476,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.930186053510174,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.651978135241701,
             "unit": "MiB/s"
           }
         ]
