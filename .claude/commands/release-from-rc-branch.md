@@ -21,10 +21,10 @@ There are 9 phases:
 
 ## Slack Updates
 
-Before we start the process, I just to inform you how I want you to post any messages into Slack.
+Before we start the process, I want to inform you how to post any messages to Slack.
 
 You should use the `slack_post_message` operation from the currently configured MCP server to post
-messages to the #releases channel. All messages should be prefixed with `<release-year>.<release-month>.<release-cycle>.<release-cycle-counter>: `, which you can obtain from the `release-cycle-info` file.
+messages to the #releases channel. All messages should be prefixed with `[timestamp] <release-year>.<release-month>.<release-cycle>.<release-cycle-counter>: `, which you can obtain from the `release-cycle-info` file.
 
 ## Phase 1: Reviewing Secrets
 
@@ -127,10 +127,11 @@ it with.
 Post a message to Slack indicating that the workflow has been dispatched. A link to the workflow run
 would be useful in the message.
 
-We need to wait for it to complete. If it was not successful, wait for my signal before continuing.
+We need to wait for it to complete. Monitor the run yourself, then when it completes, prompt me to
+confirm on moving to the next phase.
 
 Post a message to Slack indicating that the workflow has completed either successfully or with an
-error. The message should indicate that the release is now available.
+error. If successful, the message should indicate that the release is now available.
 
 Once it's been done, check the output of the `s3 release` job to make sure it only uploaded the
 binary that was chosen. The others should have retained their current copy.

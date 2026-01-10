@@ -2,7 +2,7 @@
 authors = ["MaidSafe Developers <dev@maidsafe.net>"]
 description = "The Autonomi node binary"
 name = "ant-node"
-version = "0.4.12"
+version = "0.4.13"
 edition = "2024"
 license = "GPL-3.0"
 homepage = "https://maidsafe.net"

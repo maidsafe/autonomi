@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2026-01-09
+
+### Network
+
+#### Changed
+
+- The binaries in the automatic upgrade process are now fetched from `autonomi.com` URLs, with the
+  S3 location being used as a fallback.
+
+#### Fixed
+
+- The automatic upgrades process was being confused by the fact that our last release was a
+  client-only release. It was detecting it as a new release and scheduling a restart of the node,
+  although the binary wasn't being replaced. The process has now been changed to only check and
+  compare the sha256 hash of the `antnode` binary rather than the commit hash of the release.
+
 ## 2025-12-23
 
 ### API
