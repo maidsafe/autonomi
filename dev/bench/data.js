@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768047575960,
+  "lastUpdate": 1768047577212,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -14652,6 +14652,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory usage w/ upload",
             "value": 18,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b8e923b7673d9ea4e81b20d49eb0c55bb75f87db",
+          "message": "Merge pull request #3400 from maidsafe/rc-2025.12.3-hotfix2\n\nchore(release): stable release 2025.12.3.3",
+          "timestamp": "2026-01-10T11:57:11Z",
+          "tree_id": "0729221f6a8afbe46ef3015014ff1a3014eb5f93",
+          "url": "https://github.com/maidsafe/autonomi/commit/b8e923b7673d9ea4e81b20d49eb0c55bb75f87db"
+        },
+        "date": 1768047576870,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
             "unit": "MB"
           },
           {
