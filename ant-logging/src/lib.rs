@@ -111,29 +111,80 @@ impl LogFormat {
     }
 }
 
+/// Controls the verbosity level of logging output.
+///
+/// - `Minimal`: Reduced logging for production use (~50% less logs). Demotes operational
+///   and marker logs to DEBUG level.
+/// - `Standard`: Normal INFO-level logging (default behavior).
+/// - `Verbose`: Comprehensive DEBUG/TRACE logging for development and debugging.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum VerbosityLevel {
+    Minimal,
+    #[default]
+    Standard,
+    Verbose,
+}
+
+impl VerbosityLevel {
+    /// Parse a verbosity level from a string.
+    ///
+    /// Valid values: "minimal", "min", "standard", "std", "verbose", "v", "all"
+    pub fn parse_from_str(val: &str) -> Result<Self> {
+        match val.to_lowercase().as_str() {
+            "minimal" | "min" => Ok(VerbosityLevel::Minimal),
+            "standard" | "std" => Ok(VerbosityLevel::Standard),
+            "verbose" | "v" | "all" => Ok(VerbosityLevel::Verbose),
+            _ => Err(Error::LoggingConfiguration(
+                "Valid verbosity values are: 'minimal', 'standard', or 'verbose'".to_string(),
+            )),
+        }
+    }
+
+    /// Returns the string representation of the verbosity level.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            VerbosityLevel::Minimal => "minimal",
+            VerbosityLevel::Standard => "standard",
+            VerbosityLevel::Verbose => "verbose",
+        }
+    }
+}
+
+impl std::fmt::Display for VerbosityLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 pub struct LogBuilder {
-    default_logging_targets: Vec<(String, Level)>,
+    /// The application's minimal/default logging configuration.
+    /// Used when verbosity is Minimal or when ANT_LOG contains only custom targets.
+    application_log_targets: Vec<(String, Level)>,
     output_dest: LogOutputDest,
     format: LogFormat,
     max_log_files: Option<usize>,
     max_archived_log_files: Option<usize>,
     /// Setting this would print the ant_logging related updates to stdout.
     print_updates_to_stdout: bool,
+    /// Optional verbosity level set via CLI flags
+    verbosity: Option<VerbosityLevel>,
 }
 
 impl LogBuilder {
     /// Create a new builder
-    /// Provide the default_logging_targets that are used if the `ANT_LOG` env variable is not set.
+    /// Provide the application_log_targets that are used for Minimal verbosity
+    /// or when ANT_LOG contains only custom target overrides.
     ///
-    /// By default, we use log to the StdOut with the default format.
-    pub fn new(default_logging_targets: Vec<(String, Level)>) -> Self {
+    /// By default, we log to stderr with the default format.
+    pub fn new(application_log_targets: Vec<(String, Level)>) -> Self {
         Self {
-            default_logging_targets,
+            application_log_targets,
             output_dest: LogOutputDest::Stderr,
             format: LogFormat::Default,
             max_log_files: None,
             max_archived_log_files: None,
             print_updates_to_stdout: true,
+            verbosity: None,
         }
     }
 
@@ -145,6 +196,11 @@ impl LogBuilder {
     /// Set the logging format
     pub fn format(&mut self, format: LogFormat) {
         self.format = format
+    }
+
+    /// Set the verbosity level for logging
+    pub fn verbosity(&mut self, level: VerbosityLevel) {
+        self.verbosity = Some(level);
     }
 
     /// The max number of uncompressed log files to store
@@ -170,18 +226,19 @@ impl LogBuilder {
         let mut layers = TracingLayers::default();
 
         let reload_handle = layers.fmt_layer(
-            self.default_logging_targets.clone(),
+            self.application_log_targets.clone(),
             &self.output_dest,
             self.format,
             self.max_log_files,
             self.max_archived_log_files,
             self.print_updates_to_stdout,
+            self.verbosity,
         )?;
 
         #[cfg(feature = "otlp")]
         {
             match std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
-                Ok(_) => layers.otlp_layer(self.default_logging_targets)?,
+                Ok(_) => layers.otlp_layer(self.application_log_targets)?,
                 Err(_) => println!(
                     "The OTLP feature is enabled but the OTEL_EXPORTER_OTLP_ENDPOINT variable is not \
                 set, so traces will not be submitted."
@@ -384,7 +441,15 @@ impl LogBuilder {
         let mut layers = TracingLayers::default();
 
         let _reload_handle = layers
-            .fmt_layer(vec![], &output_dest, LogFormat::Default, None, None, false)
+            .fmt_layer(
+                vec![],
+                &output_dest,
+                LogFormat::Default,
+                None,
+                None,
+                false,
+                None,
+            )
             .expect("Failed to get TracingLayers");
         layers
     }

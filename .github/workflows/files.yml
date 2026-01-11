@@ -270,7 +270,7 @@ jobs:
             echo "🎉 All tests passed!"
           fi
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 45
 
       - name: Stop the local network and upload logs
@@ -588,7 +588,7 @@ jobs:
             Write-Host "🎉 All tests passed!"
           }
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 45
 
       - name: Stop the local network and upload logs
