@@ -281,6 +281,29 @@ jobs:
           log_file_prefix: ant_test_logs_file_upload_download
           build: true
 
+      - name: Clean up disk space for rust-cache
+        if: always()
+        shell: bash
+        run: |
+          echo "Disk usage before cleanup:"
+          df -h
+          echo "Removing test files and large build artifacts..."
+          # Remove test data files we created
+          rm -rf test_upload test_download
+          # Remove release binaries (not cached by rust-cache, rebuilt each run)
+          rm -rf target/release/antnode target/release/ant target/release/antctl
+          rm -rf target/release/deps/*.rlib
+          rm -rf target/release/.fingerprint
+          # Remove node data (chunks stored during test) - logs already uploaded by ant-local-testnet-action
+          # Handle both Linux and macOS paths
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            rm -rf ~/.local/share/autonomi/node
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            rm -rf ~/Library/Application\ Support/autonomi/node
+          fi
+          echo "Disk usage after cleanup:"
+          df -h
+
   file_upload_download_tests_windows:
     name: "File Upload/Download Tests (Windows)"
     runs-on: windows-latest
@@ -598,3 +621,22 @@ jobs:
           action: stop
           log_file_prefix: ant_test_logs_file_upload_download_windows
           build: true
+
+      - name: Clean up disk space for rust-cache
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "Disk usage before cleanup:"
+          Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{N='Used(GB)';E={[math]::Round($_.Used/1GB,2)}}, @{N='Free(GB)';E={[math]::Round($_.Free/1GB,2)}}
+          Write-Host "Removing test files and large build artifacts..."
+          # Remove test data files we created
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue test_upload, test_download
+          # Remove release binaries (not cached by rust-cache, rebuilt each run)
+          Remove-Item -Force -ErrorAction SilentlyContinue target\release\antnode.exe, target\release\ant.exe, target\release\antctl.exe
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue target\release\deps\*.rlib
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue target\release\.fingerprint
+          # Remove node data only (chunks stored during test) - logs already uploaded by ant-local-testnet-action
+          # Windows uses APPDATA (Roaming), not LOCALAPPDATA
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $env:APPDATA\autonomi\node
+          Write-Host "Disk usage after cleanup:"
+          Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{N='Used(GB)';E={[math]::Round($_.Used/1GB,2)}}, @{N='Free(GB)';E={[math]::Round($_.Free/1GB,2)}}
