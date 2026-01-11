@@ -15,8 +15,8 @@ use crate::networking::NetworkError;
 use crate::self_encryption::EncryptionStream;
 use crate::utils::process_tasks_with_max_concurrency;
 use ant_evm::merkle_payments::MerklePaymentProof;
-use ant_protocol::NetworkAddress;
 use ant_protocol::storage::{Chunk, ChunkAddress, DataTypes, RecordKind, try_serialize_record};
+use ant_protocol::{CLOSE_GROUP_SIZE, NetworkAddress};
 use libp2p::kad::Record;
 use std::collections::HashSet;
 use std::fmt;
@@ -219,6 +219,8 @@ impl Client {
     }
 
     /// Upload a record with a Merkle payment proof
+    ///
+    /// On failure, retries with more storage candidates as fallback
     pub async fn upload_record_with_merkle_proof<T: serde::Serialize>(
         &self,
         network_addr: NetworkAddress,
@@ -240,9 +242,30 @@ impl Client {
             expires: None,
         };
 
+        // First attempt with default number of peers
         let storing_nodes = self
             .network
             .get_closest_peers_with_retries(network_addr.clone(), None)
+            .await?;
+
+        let first_err = match self
+            .network
+            .put_record_with_retries(record.clone(), storing_nodes.clone(), &self.config.chunks)
+            .await
+        {
+            Ok(()) => return Ok(()),
+            Err(e) => e,
+        };
+
+        // Fallback: retry with more candidates (CLOSE_GROUP_SIZE * 2)
+        let fallback_count = CLOSE_GROUP_SIZE * 2;
+        debug!(
+            "First upload attempt failed ({first_err}), retrying with {fallback_count} candidates"
+        );
+
+        let storing_nodes = self
+            .network
+            .get_closest_peers_with_retries(network_addr.clone(), Some(fallback_count))
             .await?;
 
         self.network
