@@ -90,7 +90,6 @@ impl PyAntNode {
                 local,
                 ..Default::default()
             })
-            .await
             .map_err(|e| PyRuntimeError::new_err(format!("Failed to initialise bootstrap: {e}")))?;
 
             let mut node_builder = NodeBuilder::new(
