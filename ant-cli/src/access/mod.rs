@@ -9,5 +9,6 @@
 pub mod cached_merkle_payments;
 pub mod cached_payments;
 pub mod data_dir;
+pub mod data_dir_migration;
 pub mod keys;
 pub mod user_data;
