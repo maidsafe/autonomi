@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768236264773,
+  "lastUpdate": 1768236371700,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -9827,6 +9827,35 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/b8e923b7673d9ea4e81b20d49eb0c55bb75f87db"
         },
         "date": 1768047575621,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 191,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e1b84b70c5bff517633f6ba0e3bd4b91335ccacf",
+          "message": "Merge pull request #3402 from maqi/node_approve_merkly_upload_when_lack_of_network_knowledge\n\nnode(feature): approve merkle upload when node lacks network knowledge",
+          "timestamp": "2026-01-12T15:23:25Z",
+          "tree_id": "1a8f534adcccd9df32c162e7be1fc58999bac8c4",
+          "url": "https://github.com/maidsafe/autonomi/commit/e1b84b70c5bff517633f6ba0e3bd4b91335ccacf"
+        },
+        "date": 1768236371378,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
