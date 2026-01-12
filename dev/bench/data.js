@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768047578520,
+  "lastUpdate": 1768236264773,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5615,6 +5615,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.689358314286087,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e1b84b70c5bff517633f6ba0e3bd4b91335ccacf",
+          "message": "Merge pull request #3402 from maqi/node_approve_merkly_upload_when_lack_of_network_knowledge\n\nnode(feature): approve merkle upload when node lacks network knowledge",
+          "timestamp": "2026-01-12T15:23:25Z",
+          "tree_id": "1a8f534adcccd9df32c162e7be1fc58999bac8c4",
+          "url": "https://github.com/maidsafe/autonomi/commit/e1b84b70c5bff517633f6ba0e3bd4b91335ccacf"
+        },
+        "date": 1768236257019,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0064540597683629,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.2379037948067,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.614829135069335,
             "unit": "MiB/s"
           }
         ]
