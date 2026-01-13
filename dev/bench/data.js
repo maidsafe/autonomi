@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768325107701,
+  "lastUpdate": 1768325110224,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -20975,6 +20975,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver average long handling time",
             "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "bzeeman+github@proton.me",
+            "name": "Benno",
+            "username": "b-zee"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "677daf2ebd7b8a62167dbaba8ace9512758d2862",
+          "message": "Merge pull request #3407 from b-zee/fix/3260-normalize-path-double-slash\n\nfix(autonomi): prevent double slashes in normalized archive paths",
+          "timestamp": "2026-01-13T16:07:37Z",
+          "tree_id": "9ef5f6f4e2b8829e7590da08f093c29dd793e0d0",
+          "url": "https://github.com/maidsafe/autonomi/commit/677daf2ebd7b8a62167dbaba8ace9512758d2862"
+        },
+        "date": 1768325109167,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 6775,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 14412,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
             "unit": "ms"
           }
         ]
