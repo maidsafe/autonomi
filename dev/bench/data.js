@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768263005054,
+  "lastUpdate": 1768263007157,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -14851,6 +14851,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/e1b84b70c5bff517633f6ba0e3bd4b91335ccacf"
         },
         "date": 1768236372760,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f838f350de18aee0a25379457f4e4fb17b5e7999",
+          "message": "Merge pull request #3403 from maqi/disk_space_cleanup_during_test\n\nci(fix): add disk space cleanup for Ubuntu CI runners",
+          "timestamp": "2026-01-12T22:52:10Z",
+          "tree_id": "355cbaa555747b09035f1b7143a495764db75772",
+          "url": "https://github.com/maidsafe/autonomi/commit/f838f350de18aee0a25379457f4e4fb17b5e7999"
+        },
+        "date": 1768263006308,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
