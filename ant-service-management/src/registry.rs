@@ -228,7 +228,7 @@ impl NodeRegistry {
 }
 
 pub fn get_local_node_registry_path() -> Result<PathBuf> {
-    let path = dirs_next::data_dir()
+    let path = dirs_next::data_local_dir()
         .ok_or_else(|| {
             error!("Failed to get data_dir");
             Error::UserDataDirectoryNotObtainable

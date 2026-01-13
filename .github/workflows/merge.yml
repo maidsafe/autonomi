@@ -183,7 +183,7 @@ jobs:
           - os: ubuntu-latest
             ant_path: /home/runner/.local/share/autonomi
           - os: windows-latest
-            ant_path: C:\\Users\\runneradmin\\AppData\\Roaming\\autonomi
+            ant_path: C:\\Users\\runneradmin\\AppData\\Local\\autonomi
           - os: macos-latest
             ant_path: /Users/runner/Library/Application\ Support/autonomi
     steps:
@@ -609,8 +609,8 @@ jobs:
             node_data_path: /home/runner/.local/share/autonomi/node
             ant_path: /home/runner/.local/share/autonomi
           - os: windows-latest
-            node_data_path: C:\\Users\\runneradmin\\AppData\\Roaming\\autonomi\\node
-            ant_path: C:\\Users\\runneradmin\\AppData\\Roaming\\autonomi
+            node_data_path: C:\\Users\\runneradmin\\AppData\\Local\\autonomi\\node
+            ant_path: C:\\Users\\runneradmin\\AppData\\Local\\autonomi
           - os: macos-latest
             node_data_path: /Users/runner/Library/Application Support/autonomi/node
             ant_path: /Users/runner/Library/Application Support/autonomi
@@ -770,8 +770,8 @@ jobs:
             node_data_path: /home/runner/.local/share/autonomi/node
             ant_path: /home/runner/.local/share/autonomi
           - os: windows-latest
-            node_data_path: C:\\Users\\runneradmin\\AppData\\Roaming\\autonomi\\node
-            ant_path: C:\\Users\\runneradmin\\AppData\\Roaming\\autonomi
+            node_data_path: C:\\Users\\runneradmin\\AppData\\Local\\autonomi\\node
+            ant_path: C:\\Users\\runneradmin\\AppData\\Local\\autonomi
           - os: macos-latest
             node_data_path: /Users/runner/Library/Application Support/autonomi/node
             ant_path: /Users/runner/Library/Application Support/autonomi

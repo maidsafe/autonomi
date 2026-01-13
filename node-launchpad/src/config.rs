@@ -78,14 +78,14 @@ pub fn get_launchpad_nodes_data_dir_path(
 }
 
 fn get_user_data_dir() -> Result<PathBuf> {
-    dirs_next::data_dir().ok_or_else(|| eyre!("User data directory is not obtainable",))
+    dirs_next::data_local_dir().ok_or_else(|| eyre!("User data directory is not obtainable",))
 }
 
 /// Where to store the Launchpad config & logs.
 ///
 pub fn get_launchpad_data_dir_path() -> Result<PathBuf> {
     let mut home_dirs =
-        dirs_next::data_dir().ok_or_else(|| eyre!("Data directory is not obtainable"))?;
+        dirs_next::data_local_dir().ok_or_else(|| eyre!("Data directory is not obtainable"))?;
     home_dirs.push("autonomi");
     home_dirs.push("launchpad");
     std::fs::create_dir_all(home_dirs.as_path())?;

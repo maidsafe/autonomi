@@ -273,7 +273,7 @@ pub fn is_running_as_root() -> bool {
 }
 
 pub fn get_user_antnode_data_dir() -> Result<PathBuf> {
-    Ok(dirs_next::data_dir()
+    Ok(dirs_next::data_local_dir()
         .ok_or_else(|| {
             error!("Failed to get data_dir");
             eyre!("Could not obtain user data directory")

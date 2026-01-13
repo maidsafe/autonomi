@@ -55,7 +55,7 @@ impl LogOutputDest {
                 let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
 
                 // Get the data directory path and append the timestamp to the log file name
-                let dir = match dirs_next::data_dir() {
+                let dir = match dirs_next::data_local_dir() {
                     Some(dir) => dir
                         .join("autonomi")
                         .join("client")
@@ -359,7 +359,7 @@ impl LogBuilder {
             });
 
         let output_dest = override_dest.unwrap_or_else(|| {
-            match dirs_next::data_dir() {
+            match dirs_next::data_local_dir() {
                 Some(dir) => {
                     // Get the current timestamp and format it to be human readable
                     let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
