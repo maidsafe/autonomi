@@ -109,8 +109,10 @@ impl Client {
             return HashSet::new();
         }
 
+        #[cfg(feature = "loud")]
         let total = addresses.len();
         let mut existing: HashSet<NetworkAddress> = HashSet::new();
+        #[cfg(feature = "loud")]
         let mut checked = 0;
 
         // Process in batches to provide progress feedback
@@ -135,9 +137,11 @@ impl Client {
             let results = process_tasks_with_max_concurrency(tasks, batch_size).await;
             existing.extend(results.into_iter().flatten().cloned());
 
-            checked += batch.len();
             #[cfg(feature = "loud")]
-            println!("Checked {checked}/{total} chunks for existence...");
+            {
+                checked += batch.len();
+                println!("Checked {checked}/{total} chunks for existence...");
+            }
         }
 
         existing
