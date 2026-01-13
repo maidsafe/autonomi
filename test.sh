@@ -5,10 +5,10 @@
 # 
 # Network Management Sequence (per README):
 # 1. Start EVM testnet: cargo run --bin evm-testnet
-# 2. Start local network: cargo run --bin antctl -- local run --build --clean --rewards-address <addr>
-# 3. Verify status: cargo run --bin antctl -- local status (should show 25 nodes RUNNING)
+# 2. Start local network: cargo run --release --bin antctl -- local run --build --clean --rewards-address <addr>
+# 3. Verify status: cargo run --release --bin antctl -- local status (should show 25 nodes RUNNING)
 # 4. Run tests with environment: ANT_PEERS=local SECRET_KEY=<key>
-# 5. Cleanup: cargo run --bin antctl -- local kill
+# 5. Cleanup: cargo run --release --bin antctl -- local kill
 
 set -e
 
@@ -334,14 +334,14 @@ start_network_with_logging() {
         log_message "INFO" "Starting network with logging to $network_log"
         
         # Start network with logging
-        cargo run --bin antctl -- local run --build --clean --rewards-address "$rewards_address" > "$network_log" 2>&1 &
+        cargo run --release --bin antctl -- local run --build --clean --rewards-address "$rewards_address" > "$network_log" 2>&1 &
         NETWORK_PID=$!
         
         log_message "SUCCESS" "Network startup initiated (PID: $NETWORK_PID)"
         return 0
     else
         # Fallback to original method
-        cargo run --bin antctl -- local run --build --clean --rewards-address "$rewards_address" &
+        cargo run --release --bin antctl -- local run --build --clean --rewards-address "$rewards_address" &
         NETWORK_PID=$!
     fi
 }
@@ -353,7 +353,7 @@ get_network_status_with_logging() {
         echo "# Status check at $(date -Iseconds)" >> "$status_log"
         
         # Run status command and capture output (simple approach without timeout for macOS compatibility)
-        if cargo run --bin antctl -- local status >> "$status_log" 2>&1; then
+        if cargo run --release --bin antctl -- local status >> "$status_log" 2>&1; then
             # Extract node count from the captured output
             local node_count=$(tail -30 "$status_log" | grep -c "RUNNING" 2>/dev/null || echo "0")
             # Sanitize the node count to ensure it's a clean integer
@@ -369,9 +369,9 @@ get_network_status_with_logging() {
         fi
     else
         # Fallback to original method
-        if cargo run --bin antctl -- local status > /dev/null 2>&1; then
+        if cargo run --release --bin antctl -- local status > /dev/null 2>&1; then
             local status_output
-            if status_output=$(cargo run --bin antctl -- local status 2>&1); then
+            if status_output=$(cargo run --release --bin antctl -- local status 2>&1); then
                 local node_count=$(echo "$status_output" | grep -c "RUNNING" 2>/dev/null || echo "0")
                 node_count=$(echo "$node_count" | tr -d '\n\r ' | grep -o '[0-9]*' | head -1)
                 node_count=${node_count:-0}
@@ -497,7 +497,7 @@ EOF
     fi
     
     if grep -q -i "failed to connect\|no bootstrap" "$test_log"; then
-        echo "- Verify local network is running with 'cargo run --bin antctl -- local status'" >> "$analysis_file"
+        echo "- Verify local network is running with 'cargo run --release --bin antctl -- local status'" >> "$analysis_file"
         echo "- Check ANT_PEERS=local environment variable is set" >> "$analysis_file"
         echo "- Ensure nodes have had time to establish connections" >> "$analysis_file"
     fi
@@ -1397,7 +1397,7 @@ cleanup_processes() {
     
     # Stop network using antctl (per README)
     print_status "Stopping local network..."
-    cargo run --bin antctl -- local kill > /dev/null 2>&1 || true
+    cargo run --release --bin antctl -- local kill > /dev/null 2>&1 || true
     
     # Wait a moment for graceful shutdown
     sleep 3
