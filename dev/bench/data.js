@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768263007157,
+  "lastUpdate": 1768263009330,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -20547,6 +20547,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 24757,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f838f350de18aee0a25379457f4e4fb17b5e7999",
+          "message": "Merge pull request #3403 from maqi/disk_space_cleanup_during_test\n\nci(fix): add disk space cleanup for Ubuntu CI runners",
+          "timestamp": "2026-01-12T22:52:10Z",
+          "tree_id": "355cbaa555747b09035f1b7143a495764db75772",
+          "url": "https://github.com/maidsafe/autonomi/commit/f838f350de18aee0a25379457f4e4fb17b5e7999"
+        },
+        "date": 1768263008487,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 11617,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 24114,
             "unit": "ms"
           },
           {
