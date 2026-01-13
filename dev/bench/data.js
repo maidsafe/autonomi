@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768312216325,
+  "lastUpdate": 1768312218479,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -15055,6 +15055,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/fc27d88abb9179fd54694ea5eb8680cfa8d986ad"
         },
         "date": 1768302806519,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "af2299504095b42b95772c287d45dec385d18ae7",
+          "message": "Merge pull request #3401 from maqi/cursor_rules\n\ncursor: rules for some skills",
+          "timestamp": "2026-01-13T12:32:58Z",
+          "tree_id": "9e44865dc8322f2376d66ebdfb740269e930de29",
+          "url": "https://github.com/maidsafe/autonomi/commit/af2299504095b42b95772c287d45dec385d18ae7"
+        },
+        "date": 1768312217651,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
