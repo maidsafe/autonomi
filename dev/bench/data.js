@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768263009330,
+  "lastUpdate": 1768302711225,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5693,6 +5693,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.951923126602925,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fc27d88abb9179fd54694ea5eb8680cfa8d986ad",
+          "message": "Merge pull request #3398 from vphongph/fix/ci-disk-space-cleanup\n\nfix(ci): add disk space cleanup step to prevent rust-cache failures",
+          "timestamp": "2026-01-13T09:52:39Z",
+          "tree_id": "200f4565a7029068ca2ee758a0ca2d5570e8c2eb",
+          "url": "https://github.com/maidsafe/autonomi/commit/fc27d88abb9179fd54694ea5eb8680cfa8d986ad"
+        },
+        "date": 1768302703835,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.044205964991991,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.926531808706202,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.614977730918169,
             "unit": "MiB/s"
           }
         ]
