@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768312220767,
+  "lastUpdate": 1768325008961,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5771,6 +5771,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.693136381276184,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "bzeeman+github@proton.me",
+            "name": "Benno",
+            "username": "b-zee"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "677daf2ebd7b8a62167dbaba8ace9512758d2862",
+          "message": "Merge pull request #3407 from b-zee/fix/3260-normalize-path-double-slash\n\nfix(autonomi): prevent double slashes in normalized archive paths",
+          "timestamp": "2026-01-13T16:07:37Z",
+          "tree_id": "9ef5f6f4e2b8829e7590da08f093c29dd793e0d0",
+          "url": "https://github.com/maidsafe/autonomi/commit/677daf2ebd7b8a62167dbaba8ace9512758d2862"
+        },
+        "date": 1768324999363,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 0.9998030390012773,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.862112353264648,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.685145346625354,
             "unit": "MiB/s"
           }
         ]
