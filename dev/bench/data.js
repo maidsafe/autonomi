@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768302806873,
+  "lastUpdate": 1768302808179,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -20688,6 +20688,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 24114,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fc27d88abb9179fd54694ea5eb8680cfa8d986ad",
+          "message": "Merge pull request #3398 from vphongph/fix/ci-disk-space-cleanup\n\nfix(ci): add disk space cleanup step to prevent rust-cache failures",
+          "timestamp": "2026-01-13T09:52:39Z",
+          "tree_id": "200f4565a7029068ca2ee758a0ca2d5570e8c2eb",
+          "url": "https://github.com/maidsafe/autonomi/commit/fc27d88abb9179fd54694ea5eb8680cfa8d986ad"
+        },
+        "date": 1768302807848,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 12034,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 24337,
             "unit": "ms"
           },
           {
