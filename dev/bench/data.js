@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768394066639,
+  "lastUpdate": 1768394160260,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -10172,6 +10172,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 220,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7bd11a38afda44d755c583833f1f8064bd61de5c",
+          "message": "Merge pull request #3409 from grumbach/client_refactors\n\nClient refactors",
+          "timestamp": "2026-01-14T11:16:24Z",
+          "tree_id": "726f67cffbb164a0d858281e3a1ddb7bf5eb53dd",
+          "url": "https://github.com/maidsafe/autonomi/commit/7bd11a38afda44d755c583833f1f8064bd61de5c"
+        },
+        "date": 1768394159191,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 180,
             "unit": "MB"
           }
         ]
