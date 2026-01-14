@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768394165113,
+  "lastUpdate": 1768414164185,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5849,6 +5849,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.718676036016754,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "14d7868e9a0d6c556ae4887b1bf37fbe989598af",
+          "message": "Merge pull request #3406 from maqi/try_more_storage_candidate_and_extend_client_request_timeout\n\nclient(feat): improve merkle upload reliability with extended timeout and Kad fallback",
+          "timestamp": "2026-01-14T17:04:21Z",
+          "tree_id": "370761142f24545deffe14e673e883bd120aa64a",
+          "url": "https://github.com/maidsafe/autonomi/commit/14d7868e9a0d6c556ae4887b1bf37fbe989598af"
+        },
+        "date": 1768414156059,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0239585816650485,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.747439533174556,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.951154143266521,
             "unit": "MiB/s"
           }
         ]
