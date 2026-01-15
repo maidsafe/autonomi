@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768414265185,
+  "lastUpdate": 1768494679360,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5888,6 +5888,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.951154143266521,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "72b9fb091046e3859960972dfd64e197c7324c92",
+          "message": "Merge pull request #3394 from mickvandijke/feat-analytical-tools-get-quote\n\nfeat(ant): add `developer get-quote` command",
+          "timestamp": "2026-01-15T15:14:22Z",
+          "tree_id": "46e64ec2b8955568e55646a6a90d2a28bdfede97",
+          "url": "https://github.com/maidsafe/autonomi/commit/72b9fb091046e3859960972dfd64e197c7324c92"
+        },
+        "date": 1768494669612,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0097915649328908,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.4315179068907415,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.686472243837833,
             "unit": "MiB/s"
           }
         ]
