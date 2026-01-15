@@ -60,7 +60,7 @@ use std::{
 use tokio::sync::mpsc;
 
 // Timeout for requests sent/received through the request_response behaviour.
-const REQUEST_TIMEOUT_DEFAULT_S: Duration = Duration::from_secs(30);
+const REQUEST_TIMEOUT_DEFAULT_S: Duration = Duration::from_secs(120);
 // Sets the keep-alive timeout of idle connections.
 const CONNECTION_KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(10);
 
