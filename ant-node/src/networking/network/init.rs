@@ -120,6 +120,8 @@ pub(super) fn init_driver(
         // How many nodes _should_ store data.
         .set_replication_factor(REPLICATION_FACTOR)
         .set_query_timeout(KAD_QUERY_TIMEOUT_S)
+        // Extend substreams timeout to allow nodes to accept merkle upload requests from a client, which involves certain time to complete a KAD network get_closest query.
+        .set_substreams_timeout(REQUEST_TIMEOUT_DEFAULT_S)
         // may consider to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
         // however, this has the risk of libp2p report back partial-correct result in case of high peer query failure rate.
         // .disjoint_query_paths(true)
