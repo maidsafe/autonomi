@@ -62,6 +62,19 @@ const MAX_RECORDS_CACHE_SIZE: usize = 25;
 /// File name of the recorded historical quoting metrics.
 const HISTORICAL_QUOTING_METRICS_FILENAME: &str = "historic_quoting_metrics";
 
+/// File name of the paid-for list persistence file.
+const PAID_FOR_LIST_FILENAME: &str = "paid_for_list";
+
+/// Maximum entries in the paid-for list.
+/// Matches MAX_RECORDS_COUNT as each paid record should have an entry.
+const MAX_PAID_FOR_ENTRIES: usize = 16 * 1024;
+
+/// Number of closest nodes that track a chunk's paid-for status.
+/// This value is arbitrary and subject to network testing and tuning.
+/// In the RFC proposal, this is referred to as X.
+#[allow(dead_code)]
+const PAID_FOR_TRACKING_RANGE: usize = 16;
+
 /// Defines when the entries inside the cache shall be pruned to free space up.
 /// Shall be two times of the PERIODIC_REPLICATION_INTERVAL_MAX_S
 const CACHE_TIMEOUT: Duration = Duration::from_secs(360);
@@ -179,6 +192,11 @@ pub(crate) struct NodeRecordStore {
     timestamp: SystemTime,
     /// Farthest record to self
     farthest_record: Option<(Key, Distance)>,
+    /// List of XorNames that are known to be paid for.
+    /// Enables nodes to know what data they should store and validates replicated data.
+    paid_for_list: HashMap<XorName, PaidForEntry>,
+    /// Index of paid-for entries by distance for efficient cleanup.
+    paid_for_by_distance: BTreeMap<Distance, XorName>,
 }
 
 /// Configuration for a `DiskBackedRecordStore`.
@@ -227,6 +245,25 @@ fn generate_nonce_for_record(nonce_starter: &[u8; 4], key: &Key) -> Nonce {
 struct HistoricQuotingMetrics {
     received_payment_count: usize,
     timestamp: SystemTime,
+}
+
+/// Entry in the paid-for list tracking XorNames that have been verified as paid.
+/// This enables nodes to know what data they should store and helps prevent
+/// the free data replication loophole.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct PaidForEntry {
+    /// The XorName/address of the paid data
+    pub xor_name: XorName,
+    /// Data type (Chunk, Scratchpad, GraphEntry, Pointer)
+    pub data_type: DataTypes,
+    /// Timestamp when payment was verified
+    pub payment_timestamp: SystemTime,
+}
+
+/// Persisted paid-for list structure
+#[derive(Clone, Serialize, Deserialize)]
+struct PersistedPaidForList {
+    entries: Vec<PaidForEntry>,
 }
 
 impl NodeRecordStore {
@@ -362,6 +399,35 @@ impl NodeRecordStore {
         });
     }
 
+    /// Restore paid-for list from disk if it exists.
+    fn restore_paid_for_list(storage_dir: &Path) -> Option<PersistedPaidForList> {
+        let file_path = storage_dir.join(PAID_FOR_LIST_FILENAME);
+
+        if let Ok(file) = fs::File::open(file_path)
+            && let Ok(paid_for_list) = rmp_serde::from_read(&file)
+        {
+            return Some(paid_for_list);
+        }
+
+        None
+    }
+
+    /// Flush paid-for list to disk asynchronously.
+    fn flush_paid_for_list(&self) {
+        let file_path = self.config.historic_quote_dir.join(PAID_FOR_LIST_FILENAME);
+
+        let entries: Vec<PaidForEntry> = self.paid_for_list.values().cloned().collect();
+        let persisted = PersistedPaidForList { entries };
+
+        #[allow(clippy::let_underscore_future)]
+        let _ = spawn(async move {
+            if let Ok(mut file) = fs::File::create(file_path) {
+                let mut serialiser = rmp_serde::encode::Serializer::new(&mut file);
+                let _ = persisted.serialize(&mut serialiser);
+            }
+        });
+    }
+
     /// Creates a new `DiskBackedStore` with the given configuration.
     pub(crate) fn with_config(
         local_id: PeerId,
@@ -396,6 +462,24 @@ impl NodeRecordStore {
             let _ = records_by_distance.insert(*distance, key.clone());
         }
 
+        // Restore paid-for list from disk
+        let (paid_for_list, paid_for_by_distance) =
+            if let Some(persisted) = Self::restore_paid_for_list(&config.historic_quote_dir) {
+                let mut list = HashMap::new();
+                let mut by_distance = BTreeMap::new();
+                for entry in persisted.entries {
+                    let xor_name = entry.xor_name;
+                    let addr = NetworkAddress::from(xor_name);
+                    let distance = local_address.distance(&addr);
+                    let _ = list.insert(xor_name, entry);
+                    let _ = by_distance.insert(distance, xor_name);
+                }
+                info!("Restored {} paid-for entries from disk", list.len());
+                (list, by_distance)
+            } else {
+                (HashMap::new(), BTreeMap::new())
+            };
+
         let cache_size = config.records_cache_size;
         let mut record_store = NodeRecordStore {
             local_address,
@@ -412,11 +496,14 @@ impl NodeRecordStore {
             encryption_details,
             timestamp,
             farthest_record: None,
+            paid_for_list,
+            paid_for_by_distance,
         };
 
         record_store.farthest_record = record_store.calculate_farthest();
 
         record_store.flush_historic_quoting_metrics();
+        record_store.flush_paid_for_list();
 
         #[cfg(feature = "open-metrics")]
         if let Some(metric) = &record_store.record_count_metric {
@@ -657,6 +744,107 @@ impl NodeRecordStore {
 
     pub(crate) fn count(&self) -> usize {
         self.records.len()
+    }
+
+    /// Returns the count of paid-for entries.
+    /// Used for metrics and future DoYouHave gossip protocol.
+    #[allow(dead_code)]
+    pub(crate) fn paid_for_count(&self) -> usize {
+        self.paid_for_list.len()
+    }
+
+    /// Check if an XorName is in the paid-for list.
+    /// Used for replication validation in future phases.
+    #[allow(dead_code)]
+    pub(crate) fn is_paid_for(&self, xor_name: &XorName) -> bool {
+        self.paid_for_list.contains_key(xor_name)
+    }
+
+    /// Get a paid-for entry if it exists.
+    /// Used for replication validation in future phases.
+    #[allow(dead_code)]
+    pub(crate) fn get_paid_for_entry(&self, xor_name: &XorName) -> Option<&PaidForEntry> {
+        self.paid_for_list.get(xor_name)
+    }
+
+    /// Add an entry to the paid-for list after payment verification.
+    /// This should be called when a payment is verified for a record.
+    pub(crate) fn add_paid_for_entry(&mut self, xor_name: XorName, data_type: DataTypes) {
+        if self.paid_for_list.contains_key(&xor_name) {
+            return;
+        }
+
+        let addr = NetworkAddress::from(xor_name);
+        let distance = self.local_address.distance(&addr);
+
+        let entry = PaidForEntry {
+            xor_name,
+            data_type,
+            payment_timestamp: SystemTime::now(),
+        };
+
+        let _ = self.paid_for_list.insert(xor_name, entry);
+        let _ = self.paid_for_by_distance.insert(distance, xor_name);
+
+        // Cleanup if we exceed max entries
+        if self.paid_for_list.len() > MAX_PAID_FOR_ENTRIES {
+            self.cleanup_paid_for_list();
+        }
+
+        self.flush_paid_for_list();
+    }
+
+    /// Cleanup paid-for list by removing entries beyond the responsible distance range.
+    /// Uses the same conservative pruning scheme as cleanup_irrelevant_records:
+    /// Only removes entries from the farthest 10% that are beyond 10x responsible_distance_range.
+    pub(crate) fn cleanup_paid_for_list(&mut self) {
+        let accumulated_entries = self.paid_for_list.len();
+        if accumulated_entries < MAX_PAID_FOR_ENTRIES / 10 {
+            return;
+        }
+
+        let responsible_distance = if let Some(distance) = self.responsible_distance_range {
+            distance
+        } else {
+            return;
+        };
+
+        // Use 10x distance margin to match cleanup_irrelevant_records
+        let increased_distance = Distance(responsible_distance.0.saturating_mul(U256::from(10)));
+
+        // Calculate 10% of total entries as candidates for removal
+        let target_cleanup_count = accumulated_entries / 10;
+        if target_cleanup_count == 0 {
+            return;
+        }
+
+        // Collect the farthest 10% of entries that are beyond the increased distance
+        let xor_names_to_remove: Vec<XorName> = self
+            .paid_for_by_distance
+            .iter()
+            .rev()
+            .take(target_cleanup_count)
+            .filter(|(distance, _)| **distance >= increased_distance)
+            .map(|(_, xor_name)| *xor_name)
+            .collect();
+
+        let removed_count = xor_names_to_remove.len();
+
+        for xor_name in xor_names_to_remove {
+            if let Some(entry) = self.paid_for_list.remove(&xor_name) {
+                let addr = NetworkAddress::from(entry.xor_name);
+                let distance = self.local_address.distance(&addr);
+                let _ = self.paid_for_by_distance.remove(&distance);
+            }
+        }
+
+        if removed_count > 0 {
+            info!(
+                "Cleaned up {removed_count} paid-for entries (from farthest 10% beyond responsible range), \
+                 among {accumulated_entries} total entries"
+            );
+            self.flush_paid_for_list();
+        }
     }
 
     /// The follow up to `put_verified`, this only registers the RecordKey
@@ -1814,5 +2002,132 @@ mod tests {
 
         // Verify new record is present
         assert!(cache.get(&record5.key).is_some());
+    }
+
+    #[tokio::test]
+    async fn test_paid_for_list_add_and_check() {
+        let temp_dir = std::env::temp_dir();
+        let unique_dir_name = uuid::Uuid::new_v4().to_string();
+        let storage_dir = temp_dir.join(unique_dir_name);
+        fs::create_dir_all(&storage_dir).expect("Failed to create directory");
+
+        let store_config = NodeRecordStoreConfig {
+            storage_dir: storage_dir.clone(),
+            historic_quote_dir: storage_dir,
+            ..Default::default()
+        };
+        let self_id = PeerId::random();
+        let (network_event_sender, _) = mpsc::channel(1);
+        let (swarm_cmd_sender, _) = mpsc::channel(1);
+
+        let mut store = NodeRecordStore::with_config(
+            self_id,
+            store_config,
+            network_event_sender,
+            swarm_cmd_sender,
+            #[cfg(feature = "open-metrics")]
+            None,
+        );
+
+        // Initial state: empty paid-for list
+        assert_eq!(store.paid_for_count(), 0);
+
+        // Add a paid-for entry
+        let xor_name = XorName::random(&mut rand::thread_rng());
+        store.add_paid_for_entry(xor_name, DataTypes::Chunk);
+
+        // Verify it was added
+        assert_eq!(store.paid_for_count(), 1);
+        assert!(store.is_paid_for(&xor_name));
+
+        let entry = store.get_paid_for_entry(&xor_name);
+        assert!(entry.is_some());
+        let entry = entry.unwrap();
+        assert_eq!(entry.xor_name, xor_name);
+        assert!(matches!(entry.data_type, DataTypes::Chunk));
+
+        // Adding the same XorName again should not duplicate
+        store.add_paid_for_entry(xor_name, DataTypes::Chunk);
+        assert_eq!(store.paid_for_count(), 1);
+
+        // Add another entry with different type
+        let xor_name2 = XorName::random(&mut rand::thread_rng());
+        store.add_paid_for_entry(xor_name2, DataTypes::Scratchpad);
+
+        assert_eq!(store.paid_for_count(), 2);
+        assert!(store.is_paid_for(&xor_name2));
+
+        let entry2 = store.get_paid_for_entry(&xor_name2);
+        assert!(entry2.is_some());
+        assert!(matches!(entry2.unwrap().data_type, DataTypes::Scratchpad));
+
+        // Check that unknown XorName is not in the list
+        let unknown = XorName::random(&mut rand::thread_rng());
+        assert!(!store.is_paid_for(&unknown));
+        assert!(store.get_paid_for_entry(&unknown).is_none());
+    }
+
+    #[tokio::test]
+    async fn test_paid_for_list_persistence() -> Result<()> {
+        let temp_dir = std::env::temp_dir();
+        let unique_dir_name = uuid::Uuid::new_v4().to_string();
+        let storage_dir = temp_dir.join(unique_dir_name);
+        fs::create_dir_all(&storage_dir).expect("Failed to create directory");
+
+        let store_config = NodeRecordStoreConfig {
+            storage_dir: storage_dir.clone(),
+            historic_quote_dir: storage_dir,
+            ..Default::default()
+        };
+        let self_id = PeerId::random();
+        let (network_event_sender, _) = mpsc::channel(1);
+        let (swarm_cmd_sender, _) = mpsc::channel(1);
+
+        let mut store = NodeRecordStore::with_config(
+            self_id,
+            store_config.clone(),
+            network_event_sender.clone(),
+            swarm_cmd_sender.clone(),
+            #[cfg(feature = "open-metrics")]
+            None,
+        );
+
+        // Add some paid-for entries
+        let xor_name1 = XorName::random(&mut rand::thread_rng());
+        let xor_name2 = XorName::random(&mut rand::thread_rng());
+        store.add_paid_for_entry(xor_name1, DataTypes::Chunk);
+        store.add_paid_for_entry(xor_name2, DataTypes::GraphEntry);
+
+        assert_eq!(store.paid_for_count(), 2);
+
+        // Wait for async flush to complete
+        sleep(Duration::from_millis(2000)).await;
+
+        // Drop the store and create a new one to test persistence
+        drop(store);
+
+        let new_store = NodeRecordStore::with_config(
+            self_id,
+            store_config,
+            network_event_sender,
+            swarm_cmd_sender,
+            #[cfg(feature = "open-metrics")]
+            None,
+        );
+
+        // Verify entries were restored
+        assert_eq!(new_store.paid_for_count(), 2);
+        assert!(new_store.is_paid_for(&xor_name1));
+        assert!(new_store.is_paid_for(&xor_name2));
+
+        let entry1 = new_store.get_paid_for_entry(&xor_name1);
+        assert!(entry1.is_some());
+        assert!(matches!(entry1.unwrap().data_type, DataTypes::Chunk));
+
+        let entry2 = new_store.get_paid_for_entry(&xor_name2);
+        assert!(entry2.is_some());
+        assert!(matches!(entry2.unwrap().data_type, DataTypes::GraphEntry));
+
+        Ok(())
     }
 }
