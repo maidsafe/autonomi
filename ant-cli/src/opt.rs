@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::commands::SubCmd;
-use ant_logging::{LogFormat, LogOutputDest};
+use ant_logging::{LogFormat, LogOutputDest, VerbosityLevel};
 use autonomi::InitialPeersConfig;
 use autonomi::Network as EvmNetwork;
 use autonomi::get_evm_network;
@@ -130,6 +130,18 @@ pub(crate) struct Opt {
     #[clap(long, value_parser = LogOutputDest::parse_from_str, verbatim_doc_comment, default_value = "data-dir"
     )]
     pub log_output_dest: LogOutputDest,
+
+    /// Set the logging verbosity level.
+    ///
+    /// Valid values are "minimal", "standard", or "verbose".
+    ///
+    /// - minimal: Uses application default log levels (least logging)
+    /// - standard: Sets all crates to INFO level
+    /// - verbose: Sets all crates to TRACE/DEBUG level (most logging)
+    ///
+    /// If not specified, uses application defaults (minimal).
+    #[clap(long, value_parser = VerbosityLevel::parse_from_str, verbatim_doc_comment)]
+    pub verbosity: Option<VerbosityLevel>,
 
     /// Specify the network ID to use. This will allow you to run the CLI on a different network.
     /// Note that this overrides all other network config options (except in the Custom Network case).

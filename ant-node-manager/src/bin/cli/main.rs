@@ -126,7 +126,7 @@ pub enum SubCmd {
         ///
         /// Useful to set log levels. Variables should be comma separated without spaces.
         ///
-        /// Example: --env ANT_LOG=all,RUST_LOG=libp2p=debug
+        /// Example: --env ANT_LOG=verbose,RUST_LOG=libp2p=debug
         #[clap(name = "env", long, use_value_delimiter = false, value_parser = parse_environment_variables)]
         env_variables: Option<Vec<(String, String)>>,
         /// Specify what EVM network to use for payments.
@@ -419,7 +419,7 @@ pub enum SubCmd {
         /// Useful to set antnode's log levels. Variables should be comma separated without
         /// spaces.
         ///
-        /// Example: --env ANT_LOG=all,RUST_LOG=libp2p=debug
+        /// Example: --env ANT_LOG=verbose,RUST_LOG=libp2p=debug
         #[clap(name = "env", long, use_value_delimiter = false, value_parser = parse_environment_variables)]
         env_variables: Option<Vec<(String, String)>>,
         /// Set this flag to force the upgrade command to replace binaries without comparing any
@@ -484,7 +484,7 @@ pub enum DaemonSubCmd {
         ///
         /// Useful to set log levels. Variables should be comma separated without spaces.
         ///
-        /// Example: --env ANT_LOG=all,RUST_LOG=libp2p=debug
+        /// Example: --env ANT_LOG=verbose,RUST_LOG=libp2p=debug
         #[clap(name = "env", long, use_value_delimiter = false, value_parser = parse_environment_variables)]
         env_variables: Option<Vec<(String, String)>>,
         /// Specify a port for the daemon to listen on.
@@ -817,7 +817,9 @@ async fn main() -> Result<()> {
         } else {
             Level::TRACE
         };
-        get_log_builder(level)?.initialize()?.1
+        get_log_builder(level)?
+            .initialize()?
+            .1
     } else {
         None
     };
