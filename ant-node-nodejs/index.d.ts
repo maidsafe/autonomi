@@ -49,7 +49,7 @@ export declare class RunningNode {
    * appended. The default location is platform specific:
    *  - Linux: $HOME/.local/share/autonomi/node/<peer-id>
    *  - macOS: $HOME/Library/Application Support/autonomi/node/<peer-id>
-   *  - Windows: C:\Users\<username>\AppData\Roaming\autonomi
+   *  - Windows: C:\Users\<username>\AppData\Local\autonomi
   ode\<peer-id>
    */
   rootDirPath(): string
