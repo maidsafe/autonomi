@@ -113,7 +113,7 @@ This creates a CSV file with the EVM network params in your data directory.
    `--rewards-address` _is the address where you will receive your node earnings on._
 
 ```bash
-cargo run --bin antctl -- local run --build --clean --rewards-address <YOUR_ETHEREUM_ADDRESS>
+cargo run --release --bin antctl -- local run --build --clean --rewards-address <YOUR_ETHEREUM_ADDRESS>
 ```
 
 The EVM Network parameters are loaded from the CSV file in your data directory automatically when the `local` mode is enabled.
@@ -121,7 +121,7 @@ The EVM Network parameters are loaded from the CSV file in your data directory a
 ##### 4. Verify node status
 
 ```bash
-cargo run --bin antctl -- status
+cargo run --release --bin antctl -- status
 ```
 
 The Antctl `run` command starts the node processes. The `status` command should show twenty-five
@@ -153,7 +153,7 @@ workspace has a client binary that can be used to run commands against these ser
 Run the `status` command with the `--details` flag to get the RPC port for each node:
 
 ```
-$ cargo run --bin antctl -- status --details
+$ cargo run --release --bin antctl -- status --details
 ...
 ===================================
 antctl-local25 - RUNNING
@@ -233,7 +233,7 @@ NOTE: it is preferable to use the node manager to control the node rather than R
 When you're finished experimenting, tear down the network:
 
 ```bash
-cargo run --bin antctl -- local kill
+cargo run --release --bin antctl -- local kill
 ```
 
 ## Metrics Dashboard

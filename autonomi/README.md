@@ -67,7 +67,7 @@ To run the tests, we can run a local network:
 
 2. Run a local network and use the local EVM node.
     ```sh
-    cargo run --bin antctl -- local run --build --clean --rewards-address <ETHEREUM_ADDRESS> evm-local
+    cargo run --release --bin antctl -- local run --build --clean --rewards-address <ETHEREUM_ADDRESS> evm-local
     ```
 
 3. Then run the tests and pass the EVM params again:
@@ -83,7 +83,7 @@ point it to a live network.
 1. Run a local network:
 
 ```sh
-cargo run --bin antctl -- local run --build --clean --rewards-address <ETHEREUM_ADDRESS> evm-arbitrum-one
+cargo run --release --bin antctl -- local run --build --clean --rewards-address <ETHEREUM_ADDRESS> evm-arbitrum-one
 ```
 
 2. Then pass the private key of the wallet, and ensure it has enough gas and payment tokens on the network (in this case
