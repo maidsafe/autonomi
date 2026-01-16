@@ -223,6 +223,17 @@ impl SwarmDriver {
                     .store_mut()
                     .payment_received();
             }
+            LocalSwarmCmd::AddPaidForEntry {
+                xor_name,
+                data_type,
+            } => {
+                cmd_string = "AddPaidForEntry";
+                self.swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .store_mut()
+                    .add_paid_for_entry(xor_name, data_type);
+            }
             LocalSwarmCmd::RecordNotAtTargetLocation => {
                 cmd_string = "RecordNotAtTargetLocation";
                 self.network_wide_replication.set_network_under_load();
