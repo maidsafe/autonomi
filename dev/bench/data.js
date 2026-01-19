@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768846751387,
+  "lastUpdate": 1768846752774,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -21821,6 +21821,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver average long handling time",
             "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2255e28d8d14d011b6c20beb740d349ec73b29a0",
+          "message": "Merge pull request #3410 from mickvandijke/fix-node-req-res-timeout\n\nrefactor(ant-node): increase request timeout to 120 seconds",
+          "timestamp": "2026-01-19T17:00:21Z",
+          "tree_id": "5c164e21926eeb23e3246a48163f8386051e6196",
+          "url": "https://github.com/maidsafe/autonomi/commit/2255e28d8d14d011b6c20beb740d349ec73b29a0"
+        },
+        "date": 1768846752421,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10584,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20837,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
             "unit": "ms"
           }
         ]
