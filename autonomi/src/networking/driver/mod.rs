@@ -58,8 +58,9 @@ const RESEND_IDENTIFY_INVERVAL: Duration = Duration::from_secs(3600); // todo: t
 /// Size of the LRU cache for peers and their addresses.
 /// Libp2p defaults to 100, we use 2k.
 const PEER_CACHE_SIZE: usize = 2_000;
-/// Client with poor connection requires a longer time to transmit large sized recrod to production network, via put_record_to
-const CLIENT_SUBSTREAMS_TIMEOUT_S: Duration = Duration::from_secs(30);
+/// Client with poor connection requires a longer time to transmit large sized record to production network, via put_record_to.
+/// This should match other request timeouts (REQ_TIMEOUT, KAD_QUERY_TIMEOUT) to avoid premature substream termination.
+const CLIENT_SUBSTREAMS_TIMEOUT_S: Duration = Duration::from_secs(120);
 /// Periodically trigger the bootstrap process to try connect to more peers in the network.
 const BOOTSTRAP_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
