@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768834596974,
+  "lastUpdate": 1768834599559,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -15667,6 +15667,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/72da21671ee66d095b7d833aad922ef7ee7f1c5a"
         },
         "date": 1768834352850,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2ff253a1e9e999a85a9b6f78a5d06c1524081c2b",
+          "message": "Merge pull request #3404 from b-zee/fix/1456-consistent-build-types\n\ndocs(fix): use --release flag for antctl in documentation",
+          "timestamp": "2026-01-19T13:38:12Z",
+          "tree_id": "75814d3d4298578cc2505f2fe2f04e33ce75f906",
+          "url": "https://github.com/maidsafe/autonomi/commit/2ff253a1e9e999a85a9b6f78a5d06c1524081c2b"
+        },
+        "date": 1768834598427,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
