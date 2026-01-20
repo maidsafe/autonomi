@@ -44,8 +44,8 @@ static REPLICATION_PEERS_WITHIN_RESPONSIBLE_RANGE: AtomicUsize = AtomicUsize::ne
 static REPLICATION_PEERS_FALLBACK_TO_CLOSEST_K: AtomicUsize = AtomicUsize::new(0);
 
 // Global counters for tracking is_in_range decision paths during replication
-static REPLICATION_IN_RANGE_PRIMARY: AtomicUsize = AtomicUsize::new(0);
-static REPLICATION_IN_RANGE_MIDDLE_FALLBACK: AtomicUsize = AtomicUsize::new(0);
+// Simplified: production uses farthest peer distance comparison, no middle-range fallback
+static REPLICATION_IN_RANGE: AtomicUsize = AtomicUsize::new(0);
 static REPLICATION_OUT_OF_RANGE: AtomicUsize = AtomicUsize::new(0);
 
 // Global counters for tracking payment validation paths during upload
@@ -57,13 +57,17 @@ static UPLOAD_PAYMENT_NO_RESPONSIBLE_RANGE_TRUSTED: AtomicUsize = AtomicUsize::n
 static REPLICATION_MSG_ACCEPTED_FROM_K_CLOSEST: AtomicUsize = AtomicUsize::new(0);
 static REPLICATION_MSG_REJECTED_NOT_IN_K_CLOSEST: AtomicUsize = AtomicUsize::new(0);
 
+// Global counters for tracking majority accumulation (production requires 2+ peers reporting same record)
+static REPLICATION_MAJORITY_REACHED: AtomicUsize = AtomicUsize::new(0);
+static REPLICATION_PENDING_MAJORITY: AtomicUsize = AtomicUsize::new(0);
+
 // ============================================================================
 // Constants (from codebase)
 // ============================================================================
 
 const LIBP2P_K_VALUE: usize = 20; // Max peers per Kademlia bucket (from rust-libp2p)
-const REPLICATION_FACTOR: usize = CLOSE_GROUP_SIZE + 2; // 7
 const MAX_RECORDS_COUNT: usize = 16384;
+const REPLICATION_MAJORITY_THRESHOLD: usize = CLOSE_GROUP_SIZE / 2; // 2 peers required (production uses 3+ but we use 2+ for simulation)
 
 // ============================================================================
 // Simulation Configuration
@@ -127,6 +131,53 @@ enum StoreResult {
     PaymentNotForUs,
     PayeesOutOfRange,
     DistanceTooFar,
+}
+
+/// Accumulator for tracking replication sources - requires majority consensus
+/// Production requires 3+ peers (CLOSE_GROUP_SIZE / 2) reporting same record before accepting
+use std::collections::HashSet;
+
+struct ReplicationAccumulator {
+    pending: HashMap<NetworkAddress, HashSet<PeerId>>,
+}
+
+impl ReplicationAccumulator {
+    fn new() -> Self {
+        Self {
+            pending: HashMap::new(),
+        }
+    }
+
+    /// Add a peer report for a record address and check if majority threshold is reached
+    fn add_and_check_majority(&mut self, addr: &NetworkAddress, peer: PeerId) -> bool {
+        let peers = self.pending.entry(addr.clone()).or_default();
+        peers.insert(peer);
+        peers.len() >= REPLICATION_MAJORITY_THRESHOLD
+    }
+
+    /// Take record if majority threshold was reached, removing it from pending
+    #[allow(dead_code)]
+    fn take_if_majority(&mut self, addr: &NetworkAddress) -> Option<HashSet<PeerId>> {
+        if self
+            .pending
+            .get(addr)
+            .map(|p| p.len())
+            .unwrap_or(0)
+            >= REPLICATION_MAJORITY_THRESHOLD
+        {
+            self.pending.remove(addr)
+        } else {
+            None
+        }
+    }
+
+    /// Get count of pending records that haven't reached majority
+    fn pending_count(&self) -> usize {
+        self.pending
+            .values()
+            .filter(|peers| peers.len() < REPLICATION_MAJORITY_THRESHOLD)
+            .count()
+    }
 }
 
 // ============================================================================
@@ -332,10 +383,11 @@ impl SimulatedNode {
         }
 
         // Check 2: Get K_VALUE (20) closest peers from our routing table to the data address
+        // Production uses get_closest_local_peers_to_target which excludes self
         let closest_k = self.find_closest_local(
             record_addr,
             LIBP2P_K_VALUE,
-            true, // calls get_closest_k_local_peers_to_target which includes self
+            false, // Production excludes self
         );
 
         // Check 3: Filter payees that are NOT in our K closest peers
@@ -398,53 +450,35 @@ impl SimulatedNode {
     }
 
     /// Check if record is in range for replication (from replication_fetcher.rs::in_range_new_keys)
-    fn is_in_range(&self, record_addr: &NetworkAddress, closest_k_peers: &[PeerId]) -> bool {
-        let distance = self.address.distance(record_addr);
+    /// Production logic: Simple comparison against farthest peer distance - NO middle-range fallback
+    fn is_in_range(&self, record_addr: &NetworkAddress, closest_peers: &[PeerId]) -> bool {
+        let self_address = &self.address;
 
-        if let Some(resp_dist) = &self.responsible_distance {
-            let mut is_in_range = distance <= *resp_dist;
+        // Build list with self included, sort by distance to self
+        let mut peers_with_self: Vec<_> = closest_peers.to_vec();
+        peers_with_self.push(self.peer_id);
+        peers_with_self.sort_by_key(|peer| self_address.distance(&NetworkAddress::from(*peer)));
+
+        // Get distance to farthest peer
+        let farthest_distance = peers_with_self
+            .last()
+            .map(|peer| self_address.distance(&NetworkAddress::from(*peer)));
+
+        // Accept if record within farthest peer distance
+        if let Some(max_distance) = farthest_distance {
+            let record_distance = self_address.distance(record_addr);
+            let is_in_range = record_distance <= max_distance;
 
             if is_in_range {
-                // Track: in primary responsible range
-                REPLICATION_IN_RANGE_PRIMARY.fetch_add(1, Ordering::Relaxed);
-                return true;
+                REPLICATION_IN_RANGE.fetch_add(1, Ordering::Relaxed);
+            } else {
+                REPLICATION_OUT_OF_RANGE.fetch_add(1, Ordering::Relaxed);
             }
 
-            // Middle-range check: if not in primary range, check if among REPLICATION_FACTOR (7) closest
-            // BUT only if within 2x responsible distance (from replication_fetcher.rs::in_range_new_keys, middle-range check)
-            if distance.0 - resp_dist.0 < resp_dist.0 {
-                // Check if SELF among REPLICATION_FACTOR closest
-                let mut distances: Vec<_> = closest_k_peers
-                    .iter()
-                    .map(|peer| {
-                        let addr = NetworkAddress::from(*peer);
-                        (peer, addr.distance(record_addr))
-                    })
-                    .collect();
-                distances.sort_by_key(|(_, dist)| *dist);
-
-                is_in_range = distances
-                    .iter()
-                    .take(REPLICATION_FACTOR)
-                    .any(|(peer, _)| **peer == self.peer_id);
-
-                if is_in_range {
-                    // Track: accepted via middle-range fallback
-                    REPLICATION_IN_RANGE_MIDDLE_FALLBACK.fetch_add(1, Ordering::Relaxed);
-                } else {
-                    // Track: out of range
-                    REPLICATION_OUT_OF_RANGE.fetch_add(1, Ordering::Relaxed);
-                }
-
-                return is_in_range;
-            }
-
-            // Track: out of range (beyond 2x responsible distance)
-            REPLICATION_OUT_OF_RANGE.fetch_add(1, Ordering::Relaxed);
-            return false;
+            is_in_range
+        } else {
+            false
         }
-
-        false
     }
 
     /// Get replicate candidates with responsible_distance filtering (from cmd.rs::get_replicate_candidates)
@@ -896,10 +930,11 @@ fn test_replication_simulation() {
                 let recipient_node = nodes.get(recipient)?;
 
                 // Accept replication requests only from K_VALUE peers away (from add_keys_to_replication_fetcher)
+                // Production uses get_closest_local_peers_to_target which excludes self
                 let recipient_closest_k = recipient_node.find_closest_local(
                     &recipient_node.address,
                     LIBP2P_K_VALUE,
-                    true, // as defined inside get_closest_k_local_peers_to_self
+                    false, // Production excludes self - is_in_range adds self internally
                 );
                 if !recipient_closest_k.contains(sender) || sender == recipient {
                     // Reject if sender not in K closest OR sender is self
@@ -943,23 +978,66 @@ fn test_replication_simulation() {
             })
             .collect();
 
-        // Sequential phase 2: Apply stores (fast since pre-computed)
+        // Sequential phase 2: Apply stores with majority accumulation
+        // Production requires multiple peers (CLOSE_GROUP_SIZE / 2) to report the same record
+        // before accepting it for storage
 
-        for (recipient, _sender, records) in records_to_store {
-            let recipient_node = nodes.get_mut(&recipient).unwrap();
+        // Group records by recipient and accumulate peer reports
+        let mut accumulators: HashMap<PeerId, ReplicationAccumulator> = HashMap::new();
+        let mut record_metadata: HashMap<(PeerId, NetworkAddress), (RecordKind, usize)> =
+            HashMap::new();
+
+        for (recipient, sender, records) in &records_to_store {
+            let accumulator = accumulators
+                .entry(*recipient)
+                .or_insert_with(ReplicationAccumulator::new);
 
             for (addr, record_kind, data_size) in records {
-                let record = StoredRecord {
-                    address: addr,
-                    record_kind,
-                    data_size,
-                    payment: None, // Replicated records have no payment
-                };
+                accumulator.add_and_check_majority(addr, *sender);
+                record_metadata
+                    .entry((*recipient, addr.clone()))
+                    .or_insert((*record_kind, *data_size));
+            }
+        }
 
-                if recipient_node.store_record(record) == StoreResult::Stored {
-                    total_replications += 1;
+        // Now store only records that reached majority threshold
+        for (recipient, accumulator) in accumulators {
+            let recipient_node = nodes.get_mut(&recipient).unwrap();
+
+            // Get all addresses that reached majority
+            let addresses_with_majority: Vec<_> = accumulator
+                .pending
+                .iter()
+                .filter(|(_, peers)| peers.len() >= REPLICATION_MAJORITY_THRESHOLD)
+                .map(|(addr, _)| addr.clone())
+                .collect();
+
+            for addr in addresses_with_majority {
+                if let Some((record_kind, data_size)) =
+                    record_metadata.get(&(recipient, addr.clone()))
+                {
+                    // Skip if already stored
+                    if recipient_node.stored_records.contains_key(&addr) {
+                        continue;
+                    }
+
+                    let record = StoredRecord {
+                        address: addr.clone(),
+                        record_kind: *record_kind,
+                        data_size: *data_size,
+                        payment: None, // Replicated records have no payment
+                    };
+
+                    if recipient_node.store_record(record) == StoreResult::Stored {
+                        total_replications += 1;
+                        REPLICATION_MAJORITY_REACHED.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
             }
+
+            // Track pending records that didn't reach majority
+            REPLICATION_PENDING_MAJORITY
+                .fetch_add(accumulator.pending_count(), Ordering::Relaxed);
         }
 
         let total_records: usize = nodes.values().map(|n| n.stored_records.len()).sum();
@@ -1200,23 +1278,18 @@ fn test_replication_simulation() {
     }
     println!();
 
-    // Replication In-Range Check statistics
-    let primary_range = REPLICATION_IN_RANGE_PRIMARY.load(Ordering::Relaxed);
-    let middle_fallback = REPLICATION_IN_RANGE_MIDDLE_FALLBACK.load(Ordering::Relaxed);
+    // Replication In-Range Check statistics (simplified - matches production)
+    let in_range = REPLICATION_IN_RANGE.load(Ordering::Relaxed);
     let out_of_range = REPLICATION_OUT_OF_RANGE.load(Ordering::Relaxed);
-    let total_in_range_checks = primary_range + middle_fallback + out_of_range;
+    let total_in_range_checks = in_range + out_of_range;
 
     println!("Replication In-Range Decision Paths:");
     if total_in_range_checks > 0 {
-        let primary_percent = 100.0 * primary_range as f64 / total_in_range_checks as f64;
-        let middle_percent = 100.0 * middle_fallback as f64 / total_in_range_checks as f64;
+        let in_range_percent = 100.0 * in_range as f64 / total_in_range_checks as f64;
         let out_percent = 100.0 * out_of_range as f64 / total_in_range_checks as f64;
 
-        println!("  - Within primary responsible range: {primary_range} ({primary_percent:.1}%)");
-        println!(
-            "  - Within middle range (among top 7 closest): {middle_fallback} ({middle_percent:.1}%)"
-        );
-        println!("  - Out of range (rejected): {out_of_range} ({out_percent:.1}%)");
+        println!("  - Within farthest peer distance (accepted): {in_range} ({in_range_percent:.1}%)");
+        println!("  - Beyond farthest peer distance (rejected): {out_of_range} ({out_percent:.1}%)");
         println!("  - Total checks: {total_in_range_checks}");
     } else {
         println!("  - No in-range checks recorded");
@@ -1263,6 +1336,26 @@ fn test_replication_simulation() {
         println!("  - Total messages: {total_replication_msgs}");
     } else {
         println!("  - No replication messages recorded");
+    }
+    println!();
+
+    // Majority Accumulation statistics (production requires 2+ peers reporting same record)
+    let majority_reached = REPLICATION_MAJORITY_REACHED.load(Ordering::Relaxed);
+    let pending_majority = REPLICATION_PENDING_MAJORITY.load(Ordering::Relaxed);
+    let total_majority_checks = majority_reached + pending_majority;
+
+    println!("Majority Accumulation (requires {REPLICATION_MAJORITY_THRESHOLD}+ peer reports):");
+    if total_majority_checks > 0 {
+        let majority_percent = 100.0 * majority_reached as f64 / total_majority_checks as f64;
+        let pending_percent = 100.0 * pending_majority as f64 / total_majority_checks as f64;
+
+        println!("  - Records reaching majority (stored): {majority_reached} ({majority_percent:.1}%)");
+        println!(
+            "  - Records pending majority (not stored): {pending_majority} ({pending_percent:.1}%)"
+        );
+        println!("  - Total candidate records: {total_majority_checks}");
+    } else {
+        println!("  - No majority accumulation recorded");
     }
     println!();
 }
