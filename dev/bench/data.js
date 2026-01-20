@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768909965680,
+  "lastUpdate": 1768909967306,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -15871,6 +15871,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/2255e28d8d14d011b6c20beb740d349ec73b29a0"
         },
         "date": 1768846751052,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b046ce98ee4cf96f29c0a843be5d0610a6870f91",
+          "message": "Merge pull request #3414 from maidsafe/dependabot/npm_and_yarn/ant-node-nodejs/tar-7.5.3\n\nchore(deps-dev): bump tar from 7.4.3 to 7.5.3 in /ant-node-nodejs",
+          "timestamp": "2026-01-20T10:32:45Z",
+          "tree_id": "145cadf651173a78dc8bd5f8f7a96a8684a9c445",
+          "url": "https://github.com/maidsafe/autonomi/commit/b046ce98ee4cf96f29c0a843be5d0610a6870f91"
+        },
+        "date": 1768909966793,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
