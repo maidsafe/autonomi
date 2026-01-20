@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768929691121,
+  "lastUpdate": 1768929693304,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -22098,6 +22098,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 21896,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2e65559e45bef8e42b6ea77f8f213d7b8ec66121",
+          "message": "Merge pull request #3355 from Nic-dorman/cli-docs-edits\n\ndocs: improve ant-cli README with industry best practices",
+          "timestamp": "2026-01-20T16:02:34Z",
+          "tree_id": "3ab67746c6ea147fcc4821518feb4eb989d5aead",
+          "url": "https://github.com/maidsafe/autonomi/commit/2e65559e45bef8e42b6ea77f8f213d7b8ec66121"
+        },
+        "date": 1768929692473,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10438,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20128,
             "unit": "ms"
           },
           {
