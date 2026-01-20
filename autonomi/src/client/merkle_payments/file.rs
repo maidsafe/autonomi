@@ -83,87 +83,6 @@ pub enum MerkleUploadError {
 }
 
 impl Client {
-    /// Estimate the cost of uploading a directory of files with Merkle batch payments
-    ///
-    /// This calls the smart contract's view function (0 gas) which runs the exact same
-    /// pricing logic as the actual payment, ensuring accurate cost estimation.
-    ///
-    /// # Arguments
-    /// * `path` - The path to the directory
-    /// * `is_public` - Whether the files will be uploaded as public
-    /// * `wallet` - The EVM wallet (needed for network checking)
-    ///
-    /// # Returns
-    /// * `AttoTokens` - Estimated total cost
-    pub async fn file_cost_merkle(
-        &self,
-        path: PathBuf,
-        is_public: bool,
-        wallet: &EvmWallet,
-    ) -> Result<AttoTokens, MerkleUploadError> {
-        debug!(
-            "merkle payment: file_cost_merkle starting for path: {path:?}, is_public: {is_public}"
-        );
-
-        // Check if the wallet uses the same network as the client
-        if wallet.network() != self.evm_network() {
-            return Err(MerkleUploadError::Payment(
-                MerklePaymentError::EvmWalletNetworkMismatch,
-            ));
-        }
-
-        crate::loud_info!("Encrypting files to calculate cost...");
-
-        // Collect all XorNames
-        let (all_xor_names, _file_chunk_counts, _file_results) = self
-            .collect_xornames_from_dir(path, is_public)
-            .await
-            .map_err(MerkleUploadError::Encryption)?;
-
-        let total_chunks = all_xor_names.len();
-        crate::loud_info!("Encrypted into {total_chunks} chunks");
-
-        // Split into batches of MAX_LEAVES
-        let batches: Vec<Vec<XorName>> = all_xor_names
-            .chunks(MAX_LEAVES)
-            .map(|c| c.to_vec())
-            .collect();
-        let num_batches = batches.len();
-
-        crate::loud_info!("Estimating cost for {num_batches} batch(es)...");
-
-        // Estimate cost for each batch and sum
-        let mut total_cost = ant_evm::U256::ZERO;
-
-        for (batch_idx, batch_xornames) in batches.into_iter().enumerate() {
-            let batch_num = batch_idx + 1;
-            debug!("Estimating batch {batch_num}/{num_batches}");
-
-            // Prepare batch (build tree, query pools)
-            let (tree, _candidate_pools, pool_commitments, merkle_payment_timestamp) = self
-                .prepare_merkle_batch(DataTypes::Chunk, batch_xornames, MAX_CHUNK_SIZE)
-                .await
-                .map_err(MerkleUploadError::Payment)?;
-
-            // Estimate cost for this batch
-            let batch_cost = wallet
-                .estimate_merkle_payment_cost(
-                    tree.depth(),
-                    &pool_commitments,
-                    merkle_payment_timestamp,
-                )
-                .await
-                .map_err(|e| MerkleUploadError::Payment(MerklePaymentError::EvmWalletError(e)))?;
-
-            total_cost = total_cost.saturating_add(batch_cost);
-        }
-
-        let estimated_cost = AttoTokens::from_atto(total_cost);
-        crate::loud_info!("Total estimated cost: {estimated_cost}");
-
-        Ok(estimated_cost)
-    }
-
     /// Helper function to pay for a directory of files with Merkle batch payments
     async fn files_put_with_merkle_payment_internal(
         &self,
@@ -359,7 +278,11 @@ impl Client {
         Ok((receipt.amount_paid, results))
     }
 
-    /// Upload a directory of files with Merkle batch payments
+    /// Upload a directory of files with Merkle batch payments (internal API).
+    ///
+    /// **Note**: This is an internal API. Public users should use `dir_content_upload()` or
+    /// `file_content_upload()` which automatically select the optimal payment method.
+    ///
     /// It is very important that the files are not changed while they are being uploaded as it could invalidate the Merkle payment.
     ///
     /// # Arguments
@@ -375,7 +298,7 @@ impl Client {
     /// # Errors
     /// On error, check `error.receipt` for any payments made before the failure.
     /// If `Some(receipt)`, payments were made and can be reused via [`MerklePaymentOption::ContinueWithReceipt`].
-    pub async fn files_put_with_merkle_payment(
+    pub(crate) async fn files_put_with_merkle_payment(
         &self,
         path: PathBuf,
         is_public: bool,

@@ -117,6 +117,11 @@ pub(crate) const UPLOAD_MAX_RETRIES: usize = 3;
 /// Pause duration in seconds between retry attempts for failed uploads.
 pub(crate) const UPLOAD_RETRY_PAUSE_SECS: u64 = 60;
 
+/// Minimum number of chunks to use merkle payments instead of regular payments.
+/// Merkle payments are more efficient for larger uploads (single tree payment vs per-batch).
+/// Below this threshold, regular per-batch payments are used.
+pub(crate) const MERKLE_PAYMENT_THRESHOLD: usize = 64;
+
 /// Pause before retrying failed uploads with consistent logging.
 pub(crate) async fn upload_retry_pause() {
     crate::loud_info!(

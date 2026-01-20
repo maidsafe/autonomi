@@ -79,6 +79,8 @@ pub enum MerklePaymentError {
     EvmWalletNetworkMismatch,
     #[error("Wallet error: {0:?}")]
     EvmWalletError(#[from] ant_evm::EvmWalletError),
+    #[error("Merkle payment vault error: {0}")]
+    MerklePaymentVault(#[from] ant_evm::merkle_payment_vault::error::Error),
     #[error("Failed to get timestamp: {0}")]
     TimestampError(#[from] std::time::SystemTimeError),
     #[error("Candidate pool verification failed: {0}")]

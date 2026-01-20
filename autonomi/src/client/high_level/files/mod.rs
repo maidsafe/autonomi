@@ -15,14 +15,18 @@ use std::{
 use thiserror::Error;
 use tracing::info;
 
+use crate::client::config::MERKLE_PAYMENT_THRESHOLD;
 use crate::client::data_types::chunk::ChunkAddress;
+use crate::client::merkle_payments::{
+    MerklePaymentError, MerklePaymentOption, MerkleUploadErrorWithReceipt,
+};
 use crate::client::{GetError, PutError, quote::CostError};
-use crate::self_encryption::EncryptionStream;
+use crate::self_encryption::{EncryptionStream, MAX_CHUNK_SIZE};
 use crate::utils::process_tasks_with_max_concurrency;
 use crate::{
     Client,
     chunk::DataMapChunk,
-    client::payment::{PaymentOption, Receipt},
+    client::payment::{BulkPaymentOption, PaymentOption},
 };
 use ant_evm::AttoTokens;
 use bytes::Bytes;
@@ -31,11 +35,146 @@ use xor_name::XorName;
 
 pub mod archive_private;
 pub mod archive_public;
+mod cost;
 pub mod fs_private;
 pub mod fs_public;
 
 pub use archive_private::PrivateArchive;
 pub use archive_public::PublicArchive;
+
+/// Estimate chunk count for a directory or file.
+/// Returns at least 3 chunks per file (self-encryption minimum).
+pub(crate) fn estimate_directory_chunks(dir_path: &PathBuf) -> Result<usize, std::io::Error> {
+    let mut total_chunks = 0;
+
+    // Handle single file case
+    if dir_path.is_file() {
+        let size = std::fs::metadata(dir_path)?.len() as usize;
+        return Ok(std::cmp::max(3, size.div_ceil(MAX_CHUNK_SIZE)));
+    }
+
+    // Walk directory
+    for entry in walkdir::WalkDir::new(dir_path)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if entry.file_type().is_file() {
+            let size = entry.metadata().map(|m| m.len() as usize).unwrap_or(0);
+            // Each file produces at least 3 chunks (self-encryption minimum)
+            total_chunks += std::cmp::max(3, size.div_ceil(MAX_CHUNK_SIZE));
+        }
+    }
+
+    Ok(total_chunks)
+}
+
+/// Convert encryption streams to file results (path, datamap, metadata).
+pub(crate) fn streams_to_file_results(
+    streams: Vec<EncryptionStream>,
+) -> Result<Vec<(PathBuf, DataMapChunk, Metadata)>, UploadError> {
+    let mut results = Vec::with_capacity(streams.len());
+    for stream in streams {
+        let datamap = stream.data_map_chunk().ok_or_else(|| {
+            UploadError::Encryption(format!(
+                "Datamap chunk not found for file: {:?}",
+                stream.file_path
+            ))
+        })?;
+        results.push((stream.relative_path, datamap, stream.metadata));
+    }
+    Ok(results)
+}
+
+/// Internal bulk upload handler - routes to regular or merkle flow based on payment option.
+/// Returns (cost, archive) from either regular or merkle flow.
+///
+/// The `build_archive` function converts file results into the appropriate archive type.
+pub(crate) async fn bulk_upload_internal<A, F>(
+    client: &Client,
+    dir_path: PathBuf,
+    payment_option: BulkPaymentOption,
+    is_public: bool,
+    build_archive: F,
+) -> Result<(AttoTokens, A), UploadError>
+where
+    F: FnOnce(Vec<(PathBuf, DataMapChunk, Metadata)>) -> A,
+{
+    match payment_option {
+        BulkPaymentOption::Wallet(wallet) => {
+            let estimated_chunks = estimate_directory_chunks(&dir_path)?;
+            if estimated_chunks >= MERKLE_PAYMENT_THRESHOLD {
+                crate::loud_info!(
+                    "Using merkle payments for ~{estimated_chunks} chunks (threshold: {MERKLE_PAYMENT_THRESHOLD})"
+                );
+                let (cost, results) = client
+                    .files_put_with_merkle_payment(
+                        dir_path,
+                        is_public,
+                        MerklePaymentOption::Wallet(&wallet),
+                    )
+                    .await?;
+                Ok((cost, build_archive(results)))
+            } else {
+                crate::loud_info!(
+                    "Using regular payments for ~{estimated_chunks} chunks (threshold: {MERKLE_PAYMENT_THRESHOLD})"
+                );
+                let (cost, streams) = client
+                    .dir_content_upload_internal(dir_path, PaymentOption::Wallet(wallet), is_public)
+                    .await?;
+                let results = streams_to_file_results(streams)?;
+                Ok((cost, build_archive(results)))
+            }
+        }
+        BulkPaymentOption::Receipt(receipt) => {
+            let (cost, streams) = client
+                .dir_content_upload_internal(dir_path, PaymentOption::Receipt(receipt), is_public)
+                .await?;
+            let results = streams_to_file_results(streams)?;
+            Ok((cost, build_archive(results)))
+        }
+        BulkPaymentOption::MerkleReceipt(receipt) => {
+            let (cost, results) = client
+                .files_put_with_merkle_payment(
+                    dir_path,
+                    is_public,
+                    MerklePaymentOption::Receipt(receipt),
+                )
+                .await?;
+            Ok((cost, build_archive(results)))
+        }
+        BulkPaymentOption::ContinueMerkle(wallet, receipt) => {
+            let (cost, results) = client
+                .files_put_with_merkle_payment(
+                    dir_path,
+                    is_public,
+                    MerklePaymentOption::ContinueWithReceipt(&wallet, receipt),
+                )
+                .await?;
+            Ok((cost, build_archive(results)))
+        }
+    }
+}
+
+/// Internal single file upload handler - routes to regular or merkle flow based on payment option.
+/// Returns (cost, datamap) from either regular or merkle flow.
+pub(crate) async fn file_upload_internal(
+    client: &Client,
+    path: PathBuf,
+    payment_option: BulkPaymentOption,
+    is_public: bool,
+) -> Result<(AttoTokens, DataMapChunk), UploadError> {
+    let (cost, results) =
+        bulk_upload_internal(client, path, payment_option, is_public, |r| r).await?;
+
+    let datamap = results
+        .into_iter()
+        .next()
+        .map(|(_, dm, _)| dm)
+        .ok_or_else(|| UploadError::Encryption("No file results from upload".to_string()))?;
+
+    Ok((cost, datamap))
+}
 
 /// Metadata for a file in an archive. Time values are UNIX timestamps (UTC).
 ///
@@ -97,6 +236,25 @@ pub enum RenameError {
 }
 
 /// Errors that can occur during the file upload operation.
+///
+/// # Receipt Preservation
+///
+/// When merkle uploads fail, the `MerkleUpload` variant preserves any payment receipts
+/// that were created before the error occurred. This allows you to resume uploads without
+/// losing funds:
+///
+/// ```ignore
+/// match client.dir_content_upload(path, payment).await {
+///     Ok((cost, archive)) => { /* success */ }
+///     Err(UploadError::MerkleUpload(err)) => {
+///         if let Some(receipt) = err.receipt {
+///             // Save the receipt - it contains valid merkle proofs
+///             // Resume with: BulkPaymentOption::ContinueMerkle(wallet, receipt)
+///         }
+///     }
+///     Err(e) => { /* other error */ }
+/// }
+/// ```
 #[derive(Debug, thiserror::Error)]
 pub enum UploadError {
     #[error("Failed to recursively traverse directory")]
@@ -107,6 +265,8 @@ pub enum UploadError {
     PutError(#[from] PutError),
     #[error("Encryption error")]
     Encryption(String),
+    #[error("Merkle upload error: {0}")]
+    MerkleUpload(#[from] MerkleUploadErrorWithReceipt),
 }
 
 /// Errors that can occur during the download operation.
@@ -127,10 +287,12 @@ pub enum FileCostError {
     IoError(#[from] std::io::Error),
     #[error("Serialization error")]
     Serialization(#[from] rmp_serde::encode::Error),
-    #[error("Self encryption error")]
-    SelfEncryption(#[from] crate::self_encryption::Error),
     #[error("Walkdir error")]
     WalkDir(#[from] walkdir::Error),
+    #[error("Merkle payment error: {0}")]
+    MerklePayment(#[from] MerklePaymentError),
+    #[error("Encryption error: {0}")]
+    Encryption(String),
 }
 
 /// Normalize a path to use forward slashes, regardless of the operating system.
@@ -291,69 +453,6 @@ impl Client {
             .await?;
 
         Ok((total_cost, chunk_iterators))
-    }
-
-    /// Internal helper for uploading a single file.
-    /// Used by both `file_content_upload` (private) and `file_content_upload_public`.
-    pub(crate) async fn file_content_upload_internal(
-        &self,
-        path: PathBuf,
-        payment_option: PaymentOption,
-        is_public: bool,
-    ) -> Result<(AttoTokens, DataMapChunk), UploadError> {
-        let (data_map_chunk, processed_chunks, free_chunks, receipts) = self
-            .stream_upload_file(path, payment_option, is_public)
-            .await?;
-        let total_cost = self
-            .calculate_total_cost(processed_chunks, receipts, free_chunks)
-            .await;
-        Ok((total_cost, data_map_chunk))
-    }
-
-    async fn stream_upload_file(
-        &self,
-        path: PathBuf,
-        payment_option: PaymentOption,
-        is_public: bool,
-    ) -> Result<(DataMapChunk, usize, usize, Vec<Receipt>), UploadError> {
-        crate::loud_info!("Uploading file: {path:?}");
-
-        // encrypt
-        let file_size = std::fs::metadata(&path)?.len() as usize;
-        let meta = Metadata::new_with_size(file_size as u64);
-        let encryption_result = crate::self_encryption::encrypt_file(
-            path.clone(),
-            path.clone(),
-            file_size,
-            meta,
-            is_public,
-        )
-        .await;
-        let mut encryption_stream = match encryption_result {
-            Ok(s) => s,
-            Err(err) => {
-                crate::loud_error!("Error during file encryption: {err}");
-                return Err(UploadError::Encryption(err.to_string()));
-            }
-        };
-
-        // pay and upload
-        let (processed_chunks, free_chunks, receipts) = self
-            .pay_and_upload_file(payment_option, &mut encryption_stream)
-            .await?;
-
-        // gather results
-        let data_map_chunk = match encryption_stream.data_map_chunk() {
-            Some(chunk) => chunk,
-            None => {
-                error!("Data map chunk not found for file: {path:?}, this is a BUG");
-                return Err(UploadError::Encryption(
-                    "Data map chunk not found after encryption, this is a BUG".to_string(),
-                ));
-            }
-        };
-
-        Ok((data_map_chunk, processed_chunks, free_chunks, receipts))
     }
 }
 

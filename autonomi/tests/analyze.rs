@@ -207,10 +207,9 @@ async fn test_analyze_private_dir() -> Result<()> {
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
-    let payment_option = PaymentOption::from(&wallet);
 
     let path = "tests/file/test_dir/".into();
-    let (_cost, archive_datamap) = client.dir_upload(path, payment_option.clone()).await?;
+    let (_cost, archive_datamap) = client.dir_upload(path, &wallet).await?;
     let archive_datamap_addr = archive_datamap.to_hex();
     println!("Private Archive (DataMap): {archive_datamap_addr}");
 
@@ -230,10 +229,9 @@ async fn test_analyze_public_dir() -> Result<()> {
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
-    let payment_option = PaymentOption::from(&wallet);
 
     let path = "tests/file/test_dir/".into();
-    let (_cost, archive_addr) = client.dir_upload_public(path, payment_option).await?;
+    let (_cost, archive_addr) = client.dir_upload_public(path, &wallet).await?;
     let archive_addr_str = archive_addr.to_hex();
     println!("Public Archive (XorName): {archive_addr_str}");
 

@@ -700,12 +700,27 @@ impl PyClient {
     }
 
     /// Get the cost to upload a file/dir to the network.
-    fn file_cost<'a>(&self, py: Python<'a>, path: PathBuf) -> PyResult<Bound<'a, PyAny>> {
+    ///
+    /// Args:
+    ///     path: Path to the file or directory to estimate cost for
+    ///     is_public: Whether the upload will be public (datamaps uploaded) or private (datamaps kept local)
+    ///     include_archive: Whether to include archive metadata cost in the estimate
+    ///
+    /// Returns:
+    ///     str: The estimated cost in AttoTokens as a string
+    #[pyo3(signature = (path, is_public=true, include_archive=true))]
+    fn file_cost<'a>(
+        &self,
+        py: Python<'a>,
+        path: PathBuf,
+        is_public: bool,
+        include_archive: bool,
+    ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
 
         future_into_py(py, async move {
             let cost = client
-                .file_cost(&path)
+                .file_cost(&path, is_public, include_archive)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get file cost: {e}")))?;
 
@@ -764,7 +779,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let (cost, archive) = client
-                .dir_content_upload(dir_path, payment.inner)
+                .dir_content_upload(dir_path, payment.inner.into())
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), PyPrivateArchive { inner: archive }))
@@ -800,13 +815,13 @@ impl PyClient {
         &self,
         py: Python<'a>,
         dir_path: PathBuf,
-        payment: PyPaymentOption,
+        wallet: PyWallet,
     ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
 
         future_into_py(py, async move {
             let (cost, data_map) = client
-                .dir_upload(dir_path, payment.inner)
+                .dir_upload(dir_path, &wallet.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((
@@ -828,7 +843,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let (cost, data_map) = client
-                .file_content_upload(path, payment.inner)
+                .file_content_upload(path, payment.inner.into())
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload file: {e}")))?;
             Ok((cost.to_string(), PyDataMapChunk { inner: data_map }))
@@ -847,7 +862,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let (cost, data_addr) = client
-                .file_content_upload_public(path, payment.inner)
+                .file_content_upload_public(path, payment.inner.into())
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload file: {e}")))?;
             Ok((cost.to_string(), PyDataAddress { inner: data_addr }))
@@ -987,14 +1002,13 @@ impl PyClient {
         &self,
         py: Python<'a>,
         dir_path: PathBuf,
-        payment: &PyPaymentOption,
+        wallet: PyWallet,
     ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
-        let payment = payment.inner.clone();
 
         future_into_py(py, async move {
             let (cost, addr) = client
-                .dir_upload_public(dir_path, payment)
+                .dir_upload_public(dir_path, &wallet.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), PyArchiveAddress { inner: addr }))
@@ -1037,7 +1051,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let (cost, archive) = client
-                .dir_content_upload_public(dir_path, payment.inner)
+                .dir_content_upload_public(dir_path, payment.inner.into())
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), PyPublicArchive { inner: archive }))

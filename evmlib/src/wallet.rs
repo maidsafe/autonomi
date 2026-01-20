@@ -256,26 +256,11 @@ impl Wallet {
         pool_commitments: &[PoolCommitment],
         merkle_payment_timestamp: u64,
     ) -> Result<Amount, Error> {
-        if pool_commitments.is_empty() {
-            return Ok(Amount::ZERO);
-        }
-
-        // Create provider (no wallet needed for view calls)
-        let provider = http_provider(self.network.rpc_url().clone());
-
-        // Create Merkle payment vault handler
-        let merkle_vault_address = *self
-            .network
-            .merkle_payments_address()
-            .ok_or_else(|| Error::MerklePayment("Merkle payments address not configured for this network. Set MERKLE_PAYMENTS_ADDRESS environment variable.".to_string()))?;
-        let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
-
-        // Call the contract's view function for accurate cost estimation
-        let total_amount = handler
-            .estimate_merkle_tree_cost(depth, pool_commitments.to_vec(), merkle_payment_timestamp)
-            .await?;
-
-        Ok(total_amount)
+        // Delegate to Network method (no wallet needed for view calls)
+        self.network
+            .estimate_merkle_payment_cost(depth, pool_commitments, merkle_payment_timestamp)
+            .await
+            .map_err(Error::from)
     }
 
     /// Build a provider using this wallet.

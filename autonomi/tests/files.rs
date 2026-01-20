@@ -32,7 +32,7 @@ async fn dir_upload_download() -> Result<()> {
     let wallet = get_funded_wallet();
 
     let (_cost, addr) = client
-        .dir_upload_public("tests/file/test_dir".into(), wallet.into())
+        .dir_upload_public("tests/file/test_dir".into(), &wallet)
         .await?;
 
     sleep(Duration::from_secs(10)).await;
@@ -88,7 +88,7 @@ async fn file_into_vault() -> Result<()> {
     let client_sk = bls::SecretKey::random();
 
     let (_cost, addr) = client
-        .dir_upload_public("tests/file/test_dir".into(), wallet.clone().into())
+        .dir_upload_public("tests/file/test_dir".into(), &wallet)
         .await?;
     sleep(Duration::from_secs(2)).await;
 
@@ -125,7 +125,10 @@ async fn file_advanced_use() -> Result<()> {
 
     // upload a directory
     let (cost, mut archive) = client
-        .dir_content_upload("tests/file/test_dir/dir_a".into(), payment_option.clone())
+        .dir_content_upload(
+            "tests/file/test_dir/dir_a".into(),
+            payment_option.clone().into(),
+        )
         .await?;
     println!("cost to upload private directory: {cost:?}");
     println!("archive: {archive:#?}");
@@ -134,7 +137,7 @@ async fn file_advanced_use() -> Result<()> {
     let (cost, file_datamap) = client
         .file_content_upload(
             "tests/file/test_dir/example_file_b".into(),
-            payment_option.clone(),
+            payment_option.clone().into(),
         )
         .await?;
     println!("cost to upload additional file: {cost:?}");
@@ -152,7 +155,7 @@ async fn file_advanced_use() -> Result<()> {
     let (cost, file_datamap) = client
         .file_content_upload(
             "tests/file/test_dir/example_file_a".into(),
-            payment_option.clone(),
+            payment_option.clone().into(),
         )
         .await?;
     println!("cost to upload additional file: {cost:?}");

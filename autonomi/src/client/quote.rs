@@ -106,6 +106,8 @@ pub enum CostError {
     Network(#[from] crate::networking::NetworkError),
     #[error("Total cost overflow when adding {0} and {1}")]
     TotalCostOverflow(AttoTokens, AttoTokens),
+    #[error("No content addresses generated for file")]
+    NoAddressesForContent,
 }
 
 /// Add two costs together, returning an error on overflow.
