@@ -187,6 +187,8 @@ pub async fn upload(
     max_fee_per_gas_param: Option<MaxFeePerGasParam>,
     retry_failed: u64,
     use_standard_payment: bool,
+    force_merkle: bool,
+    force_regular: bool,
 ) -> Result<(), ExitCodeError> {
     let config = ClientOperatingStrategy::new();
 
@@ -239,6 +241,8 @@ pub async fn upload(
         no_archive,
         file,
         wallet,
+        force_merkle,
+        force_regular,
     )
     .await
     {
@@ -350,6 +354,7 @@ pub async fn upload(
 /// The no_archive argument can be used to skip the archive upload.
 /// Returns the archive address if any and the address to access the data.
 /// If more than [`MAX_ADDRESSES_TO_PRINT`] addresses are found, returns "multiple addresses" as a placeholder instead.
+#[allow(clippy::too_many_arguments)]
 async fn upload_dir_standard(
     client: &Client,
     dir_path: PathBuf,
@@ -357,17 +362,45 @@ async fn upload_dir_standard(
     no_archive: bool,
     file: &str,
     wallet: autonomi::Wallet,
+    force_merkle: bool,
+    force_regular: bool,
 ) -> Result<(String, String), UploadError> {
     let is_single_file = dir_path.is_file();
 
-    // Try to load cached payment (regular or merkle), otherwise use wallet
-    let payment_option = if let Ok(Some(receipt)) = cached_payments::load_payment_for_file(file) {
-        println!("Using cached regular payment: no need to re-pay");
+    // Load cached receipts
+    let cached_regular = cached_payments::load_payment_for_file(file).ok().flatten();
+    let cached_merkle = cached_merkle_payments::load_merkle_payment_for_file(file)
+        .ok()
+        .flatten();
+
+    // Determine payment option based on flags and cached receipts
+    let payment_option = if force_merkle {
+        if cached_regular.is_some() {
+            println!("Ignoring cached regular payment (--merkle specified)");
+        }
+        if let Some(merkle_receipt) = cached_merkle {
+            println!("Using cached merkle payment");
+            BulkPaymentOption::ContinueMerkle(wallet.clone(), merkle_receipt)
+        } else {
+            println!("Using merkle payments (forced)");
+            BulkPaymentOption::ForceMerkle(wallet.clone())
+        }
+    } else if force_regular {
+        if cached_merkle.is_some() {
+            println!("Ignoring cached merkle payment (--regular specified)");
+        }
+        if let Some(receipt) = cached_regular {
+            println!("Using cached regular payment");
+            BulkPaymentOption::Receipt(receipt)
+        } else {
+            println!("Using regular payments (forced)");
+            BulkPaymentOption::ForceRegular(wallet.clone())
+        }
+    } else if let Some(receipt) = cached_regular {
+        println!("Using cached regular payment");
         BulkPaymentOption::Receipt(receipt)
-    } else if let Ok(Some(merkle_receipt)) =
-        cached_merkle_payments::load_merkle_payment_for_file(file)
-    {
-        println!("Continuing merkle upload with cached payment");
+    } else if let Some(merkle_receipt) = cached_merkle {
+        println!("Using cached merkle payment");
         BulkPaymentOption::ContinueMerkle(wallet.clone(), merkle_receipt)
     } else {
         BulkPaymentOption::Wallet(wallet.clone())

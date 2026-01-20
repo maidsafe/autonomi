@@ -126,6 +126,25 @@ where
                 Ok((cost, build_archive(results)))
             }
         }
+        BulkPaymentOption::ForceMerkle(wallet) => {
+            crate::loud_info!("Using merkle payments (forced)");
+            let (cost, results) = client
+                .files_put_with_merkle_payment(
+                    dir_path,
+                    is_public,
+                    MerklePaymentOption::Wallet(&wallet),
+                )
+                .await?;
+            Ok((cost, build_archive(results)))
+        }
+        BulkPaymentOption::ForceRegular(wallet) => {
+            crate::loud_info!("Using regular payments (forced)");
+            let (cost, streams) = client
+                .dir_content_upload_internal(dir_path, PaymentOption::Wallet(wallet), is_public)
+                .await?;
+            let results = streams_to_file_results(streams)?;
+            Ok((cost, build_archive(results)))
+        }
         BulkPaymentOption::Receipt(receipt) => {
             let (cost, streams) = client
                 .dir_content_upload_internal(dir_path, PaymentOption::Receipt(receipt), is_public)

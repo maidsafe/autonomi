@@ -122,6 +122,12 @@ impl From<Receipt> for PaymentOption {
 /// This auto-selection applies to both file and directory uploads when using `file_content_upload`,
 /// `file_content_upload_public`, `dir_content_upload`, and `dir_content_upload_public`.
 ///
+/// # Forced Method Selection
+///
+/// Use `ForceMerkle` or `ForceRegular` to override auto-selection:
+/// - `ForceMerkle`: Always use merkle tree payments regardless of chunk count
+/// - `ForceRegular`: Always use regular per-batch payments regardless of chunk count
+///
 /// # Resume Support
 ///
 /// All variants support resuming failed uploads:
@@ -135,6 +141,10 @@ impl From<Receipt> for PaymentOption {
 pub enum BulkPaymentOption {
     /// Pay using an EVM wallet - auto-selects merkle vs regular based on chunk count threshold (64)
     Wallet(EvmWallet),
+    /// Force merkle tree payments regardless of chunk count
+    ForceMerkle(EvmWallet),
+    /// Force regular per-batch payments regardless of chunk count
+    ForceRegular(EvmWallet),
     /// Resume upload with existing regular payment receipt (from non-merkle upload)
     Receipt(Receipt),
     /// Resume upload with existing merkle payment receipt - assumes all chunks paid (fails if not)
@@ -185,6 +195,8 @@ impl BulkPaymentOption {
     pub fn wallet(&self) -> Option<&EvmWallet> {
         match self {
             BulkPaymentOption::Wallet(w) => Some(w),
+            BulkPaymentOption::ForceMerkle(w) => Some(w),
+            BulkPaymentOption::ForceRegular(w) => Some(w),
             BulkPaymentOption::Receipt(_) => None,
             BulkPaymentOption::MerkleReceipt(_) => None,
             BulkPaymentOption::ContinueMerkle(w, _) => Some(w),
@@ -198,10 +210,22 @@ impl BulkPaymentOption {
     pub fn to_payment_option(&self) -> Option<PaymentOption> {
         match self {
             BulkPaymentOption::Wallet(w) => Some(PaymentOption::Wallet(w.clone())),
+            BulkPaymentOption::ForceMerkle(w) => Some(PaymentOption::Wallet(w.clone())),
+            BulkPaymentOption::ForceRegular(w) => Some(PaymentOption::Wallet(w.clone())),
             BulkPaymentOption::Receipt(_) => None,
             BulkPaymentOption::MerkleReceipt(_) => None,
             BulkPaymentOption::ContinueMerkle(w, _) => Some(PaymentOption::Wallet(w.clone())),
         }
+    }
+
+    /// Returns true if this option forces merkle payment.
+    pub fn is_force_merkle(&self) -> bool {
+        matches!(self, BulkPaymentOption::ForceMerkle(_))
+    }
+
+    /// Returns true if this option forces regular payment.
+    pub fn is_force_regular(&self) -> bool {
+        matches!(self, BulkPaymentOption::ForceRegular(_))
     }
 }
 

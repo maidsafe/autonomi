@@ -127,11 +127,12 @@ pub enum FileCmd {
         /// Use standard payment mode instead of single-node payment (default).
         /// Standard mode pays 3 nodes individually, which costs more in gas fees.
         /// Single-node payment (default) pays only one node with 3x that amount, saving gas fees.
-        #[arg(long)]
+        /// Note: This only applies to regular payments, not merkle payments.
+        #[arg(long, conflicts_with = "merkle")]
         disable_single_node_payment: bool,
         /// Force merkle payment estimation (batched payments via smart contract).
-        /// Better for large uploads with many chunks. Mutually exclusive with --regular.
-        #[arg(long, conflicts_with = "regular")]
+        /// Better for large uploads with many chunks. Mutually exclusive with --regular and --disable-single-node-payment.
+        #[arg(long, conflicts_with_all = ["regular", "disable_single_node_payment"])]
         merkle: bool,
         /// Force regular payment estimation (individual chunk quotes).
         /// Better for small uploads with few chunks. Mutually exclusive with --merkle.
@@ -161,8 +162,17 @@ pub enum FileCmd {
         /// Standard mode pays 3 nodes individually, which costs more in gas fees.
         /// Single-node payment (default) pays only one node with 3x that amount, saving gas fees.
         /// Data is stored on 5 nodes regardless of payment mode.
-        #[arg(long)]
+        /// Note: This only applies to regular payments, not merkle payments.
+        #[arg(long, conflicts_with = "merkle")]
         disable_single_node_payment: bool,
+        /// Force merkle tree payments regardless of chunk count.
+        /// By default, merkle payments are used for >= 64 chunks. Mutually exclusive with --regular and --disable-single-node-payment.
+        #[arg(long, conflicts_with_all = ["regular", "disable_single_node_payment"])]
+        merkle: bool,
+        /// Force regular per-batch payments regardless of chunk count.
+        /// By default, regular payments are used for < 64 chunks. Mutually exclusive with --merkle.
+        #[arg(long, conflicts_with = "merkle")]
+        regular: bool,
         #[command(flatten)]
         transaction_opt: TransactionOpt,
     },
@@ -602,6 +612,8 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 no_archive,
                 retry_failed,
                 disable_single_node_payment,
+                merkle,
+                regular,
                 transaction_opt,
             } => {
                 if let Err((err, exit_code)) = file::upload(
@@ -612,6 +624,8 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                     transaction_opt.max_fee_per_gas,
                     retry_failed,
                     disable_single_node_payment,
+                    merkle,
+                    regular,
                 )
                 .await
                 {
