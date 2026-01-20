@@ -49,3 +49,18 @@ pub fn increment(counter: &AtomicUsize) {
 pub fn add(counter: &AtomicUsize, val: usize) {
     counter.fetch_add(val, Ordering::Relaxed);
 }
+
+/// Reset all counters to zero (for Monte Carlo trials)
+pub fn reset_counters() {
+    REPLICATION_PEERS_WITHIN_RESPONSIBLE_RANGE.store(0, Ordering::Relaxed);
+    REPLICATION_PEERS_FALLBACK_TO_CLOSEST_K.store(0, Ordering::Relaxed);
+    REPLICATION_IN_RANGE.store(0, Ordering::Relaxed);
+    REPLICATION_OUT_OF_RANGE.store(0, Ordering::Relaxed);
+    UPLOAD_PAYMENT_ALL_PAYEES_IN_K_CLOSEST.store(0, Ordering::Relaxed);
+    UPLOAD_PAYMENT_VALIDATED_VIA_RESPONSIBLE_RANGE.store(0, Ordering::Relaxed);
+    UPLOAD_PAYMENT_NO_RESPONSIBLE_RANGE_TRUSTED.store(0, Ordering::Relaxed);
+    REPLICATION_MSG_ACCEPTED_FROM_K_CLOSEST.store(0, Ordering::Relaxed);
+    REPLICATION_MSG_REJECTED_NOT_IN_K_CLOSEST.store(0, Ordering::Relaxed);
+    REPLICATION_MAJORITY_REACHED.store(0, Ordering::Relaxed);
+    REPLICATION_PENDING_MAJORITY.store(0, Ordering::Relaxed);
+}

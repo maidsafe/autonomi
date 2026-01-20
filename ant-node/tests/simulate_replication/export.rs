@@ -55,7 +55,7 @@ pub struct ChunkTimeline {
     pub final_coverage: usize,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Default)]
 pub struct FaultToleranceMetrics {
     pub data_loss_rate: f64,
     pub critical_risk_rate: f64,
@@ -63,4 +63,77 @@ pub struct FaultToleranceMetrics {
     pub coverage_std_dev: f64,
     pub p99_coverage: usize,
     pub survival_probability: f64,
+}
+
+// ============================================================================
+// Monte Carlo Results
+// ============================================================================
+
+#[derive(Serialize)]
+pub struct MonteCarloExport {
+    pub num_trials: usize,
+    pub config: SimulationConfig,
+    pub summary: MonteCarloSummary,
+    pub trials: Vec<TrialResult>,
+}
+
+#[derive(Serialize)]
+pub struct MonteCarloSummary {
+    pub data_loss_rate: ConfidenceInterval,
+    pub critical_risk_rate: ConfidenceInterval,
+    pub mean_coverage: ConfidenceInterval,
+    pub survival_probability: ConfidenceInterval,
+}
+
+#[derive(Serialize)]
+pub struct ConfidenceInterval {
+    pub mean: f64,
+    pub std_dev: f64,
+    pub ci_95_lower: f64,
+    pub ci_95_upper: f64,
+    pub min: f64,
+    pub max: f64,
+}
+
+impl ConfidenceInterval {
+    pub fn from_samples(samples: &[f64]) -> Self {
+        let n = samples.len() as f64;
+        if n == 0.0 {
+            return Self {
+                mean: 0.0,
+                std_dev: 0.0,
+                ci_95_lower: 0.0,
+                ci_95_upper: 0.0,
+                min: 0.0,
+                max: 0.0,
+            };
+        }
+
+        let mean = samples.iter().sum::<f64>() / n;
+        let variance = samples.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n;
+        let std_dev = variance.sqrt();
+
+        // 95% CI: mean ± 1.96 * (std_dev / sqrt(n))
+        let std_error = std_dev / n.sqrt();
+        let ci_margin = 1.96 * std_error;
+
+        let min = samples.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = samples.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+
+        Self {
+            mean,
+            std_dev,
+            ci_95_lower: mean - ci_margin,
+            ci_95_upper: mean + ci_margin,
+            min,
+            max,
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct TrialResult {
+    pub trial_number: usize,
+    pub fault_tolerance: FaultToleranceMetrics,
+    pub coverage_percent: f64,
 }

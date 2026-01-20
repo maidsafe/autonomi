@@ -19,11 +19,17 @@
 //! The goal is to verify that data is properly replicated to the closest nodes
 //! and that the network maintains good coverage (chunks stored by their close group).
 
+#[path = "simulate_replication/config.rs"]
 pub mod config;
+#[path = "simulate_replication/counters.rs"]
 pub mod counters;
+#[path = "simulate_replication/export.rs"]
 pub mod export;
+#[path = "simulate_replication/node.rs"]
 pub mod node;
+#[path = "simulate_replication/stats.rs"]
 pub mod stats;
+#[path = "simulate_replication/types.rs"]
 pub mod types;
 
 use ant_protocol::{CLOSE_GROUP_SIZE, NetworkAddress, storage::{DataTypes, RecordKind}};
@@ -44,11 +50,39 @@ use stats::*;
 use types::*;
 
 // ============================================================================
+// Trial Result for Monte Carlo
+// ============================================================================
+
+#[allow(dead_code)]
+struct SingleTrialResult {
+    fault_metrics: FaultToleranceMetrics,
+    coverage_percent: f64,
+    round_data: Vec<RoundData>,
+    coverage_stats: CoverageStats,
+    nodes: HashMap<PeerId, SimulatedNode>,
+    upload_stats: UploadStats,
+    avg_records_after_upload: f64,
+    min_records: usize,
+    max_records: usize,
+    total_records_after_upload: usize,
+    chunk_addresses: Vec<NetworkAddress>,
+}
+
+// ============================================================================
 // Main Simulation Test
 // ============================================================================
 
 #[test]
 fn test_replication_simulation() {
+    if MONTE_CARLO_ENABLED {
+        run_monte_carlo_simulation();
+    } else {
+        run_single_simulation_with_report();
+    }
+}
+
+/// Run a single simulation with full reporting
+fn run_single_simulation_with_report() {
     println!("\n=== Network Replication Simulation ===\n");
 
     let num_nodes = SIMULATION_NUM_NODES;
@@ -839,4 +873,484 @@ fn print_counter_statistics() {
         println!("  - No majority accumulation recorded");
     }
     println!();
+}
+
+// ============================================================================
+// Monte Carlo Simulation
+// ============================================================================
+
+/// Run Monte Carlo simulation with multiple trials for statistical confidence
+fn run_monte_carlo_simulation() {
+    println!("\n=== Monte Carlo Replication Simulation ===\n");
+    println!("Configuration:");
+    println!("  - Trials: {}", MONTE_CARLO_TRIALS);
+    println!("  - Nodes: {}", SIMULATION_NUM_NODES);
+    println!("  - Chunks: {}", SIMULATION_NUM_CHUNKS);
+    println!("  - Replication Rounds: {}", SIMULATION_REPLICATION_ROUNDS);
+    println!("  - Failure Rate: {:.1}%\n", SIMULATION_FAILURE_RATE * 100.0);
+
+    let mut trial_results: Vec<TrialResult> = Vec::with_capacity(MONTE_CARLO_TRIALS);
+    let start_time = std::time::Instant::now();
+
+    for trial in 1..=MONTE_CARLO_TRIALS {
+        print!("Running trial {}/{}...", trial, MONTE_CARLO_TRIALS);
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+
+        let trial_start = std::time::Instant::now();
+
+        // Reset counters for each trial
+        reset_counters();
+
+        let result = run_single_trial(false);
+
+        trial_results.push(TrialResult {
+            trial_number: trial,
+            fault_tolerance: result.fault_metrics,
+            coverage_percent: result.coverage_percent,
+        });
+
+        println!(" done ({:.2}s)", trial_start.elapsed().as_secs_f64());
+    }
+
+    let total_duration = start_time.elapsed();
+    println!("\nAll {} trials completed in {:.2}s\n", MONTE_CARLO_TRIALS, total_duration.as_secs_f64());
+
+    // Calculate statistics
+    let data_loss_rates: Vec<f64> = trial_results.iter().map(|t| t.fault_tolerance.data_loss_rate).collect();
+    let critical_risk_rates: Vec<f64> = trial_results.iter().map(|t| t.fault_tolerance.critical_risk_rate).collect();
+    let mean_coverages: Vec<f64> = trial_results.iter().map(|t| t.fault_tolerance.mean_coverage).collect();
+    let survival_probs: Vec<f64> = trial_results.iter().map(|t| t.fault_tolerance.survival_probability).collect();
+    let coverage_percents: Vec<f64> = trial_results.iter().map(|t| t.coverage_percent).collect();
+
+    let data_loss_ci = ConfidenceInterval::from_samples(&data_loss_rates);
+    let critical_risk_ci = ConfidenceInterval::from_samples(&critical_risk_rates);
+    let mean_coverage_ci = ConfidenceInterval::from_samples(&mean_coverages);
+    let survival_ci = ConfidenceInterval::from_samples(&survival_probs);
+    let coverage_percent_ci = ConfidenceInterval::from_samples(&coverage_percents);
+
+    // Print summary
+    println!("=== Monte Carlo Results (95% Confidence Intervals) ===\n");
+
+    println!("Data Loss Rate:");
+    println!("  Mean: {:.4}%", data_loss_ci.mean);
+    println!("  95% CI: [{:.4}%, {:.4}%]", data_loss_ci.ci_95_lower, data_loss_ci.ci_95_upper);
+    println!("  Range: [{:.4}%, {:.4}%]\n", data_loss_ci.min, data_loss_ci.max);
+
+    println!("Critical Risk Rate (<3 holders):");
+    println!("  Mean: {:.4}%", critical_risk_ci.mean);
+    println!("  95% CI: [{:.4}%, {:.4}%]", critical_risk_ci.ci_95_lower, critical_risk_ci.ci_95_upper);
+    println!("  Range: [{:.4}%, {:.4}%]\n", critical_risk_ci.min, critical_risk_ci.max);
+
+    println!("Mean Coverage (holders/chunk):");
+    println!("  Mean: {:.2}", mean_coverage_ci.mean);
+    println!("  95% CI: [{:.2}, {:.2}]", mean_coverage_ci.ci_95_lower, mean_coverage_ci.ci_95_upper);
+    println!("  Range: [{:.2}, {:.2}]\n", mean_coverage_ci.min, mean_coverage_ci.max);
+
+    println!("Survival Probability:");
+    println!("  Mean: {:.4}%", survival_ci.mean);
+    println!("  95% CI: [{:.4}%, {:.4}%]", survival_ci.ci_95_lower, survival_ci.ci_95_upper);
+    println!("  Range: [{:.4}%, {:.4}%]\n", survival_ci.min, survival_ci.max);
+
+    println!("Overall Coverage Percentage:");
+    println!("  Mean: {:.2}%", coverage_percent_ci.mean);
+    println!("  95% CI: [{:.2}%, {:.2}%]", coverage_percent_ci.ci_95_lower, coverage_percent_ci.ci_95_upper);
+    println!("  Range: [{:.2}%, {:.2}%]\n", coverage_percent_ci.min, coverage_percent_ci.max);
+
+    // Export to JSON
+    let summary = MonteCarloSummary {
+        data_loss_rate: data_loss_ci,
+        critical_risk_rate: critical_risk_ci,
+        mean_coverage: mean_coverage_ci,
+        survival_probability: survival_ci,
+    };
+
+    let export = MonteCarloExport {
+        num_trials: MONTE_CARLO_TRIALS,
+        config: SimulationConfig {
+            num_nodes: SIMULATION_NUM_NODES,
+            num_chunks: SIMULATION_NUM_CHUNKS,
+            replication_rounds: SIMULATION_REPLICATION_ROUNDS,
+            close_group_size: CLOSE_GROUP_SIZE,
+            k_value: LIBP2P_K_VALUE,
+            majority_threshold: REPLICATION_MAJORITY_THRESHOLD,
+        },
+        summary,
+        trials: trial_results,
+    };
+
+    let json_output = serde_json::to_string_pretty(&export).expect("Failed to serialize to JSON");
+    let output_path = std::path::Path::new("monte_carlo_results.json");
+    std::fs::write(output_path, &json_output).expect("Failed to write JSON file");
+    println!("Exported Monte Carlo results to {}", output_path.display());
+}
+
+/// Run a single simulation trial (can be silent for Monte Carlo mode)
+fn run_single_trial(verbose: bool) -> SingleTrialResult {
+    let num_nodes = SIMULATION_NUM_NODES;
+    let num_chunks = SIMULATION_NUM_CHUNKS;
+    let replication_rounds = SIMULATION_REPLICATION_ROUNDS;
+
+    // Phase 1: Setup Network
+    let mut nodes: HashMap<PeerId, SimulatedNode> = (0..num_nodes)
+        .into_par_iter()
+        .map(|_| {
+            let peer_id = PeerId::random();
+            let node = SimulatedNode::new(peer_id);
+            (peer_id, node)
+        })
+        .collect();
+
+    let all_peer_ids: Vec<_> = nodes.keys().copied().collect();
+
+    // Build routing tables
+    nodes.par_iter_mut().for_each(|(_, node)| {
+        use std::collections::BTreeMap;
+        let mut bucket_candidates: BTreeMap<u32, Vec<PeerId>> = BTreeMap::new();
+
+        for other_peer in &all_peer_ids {
+            if *other_peer == node.peer_id {
+                continue;
+            }
+            let other_addr = NetworkAddress::from(*other_peer);
+            let bucket_index = node.address.distance(&other_addr).ilog2().unwrap_or(0);
+            bucket_candidates
+                .entry(bucket_index)
+                .or_default()
+                .push(*other_peer);
+        }
+
+        let mut rng = rand::thread_rng();
+        for (bucket_index, peers) in bucket_candidates {
+            let bucket = node.routing_table.entry(bucket_index).or_default();
+            let k = LIBP2P_K_VALUE.min(peers.len());
+            let random_indices = sample(&mut rng, peers.len(), k);
+            for idx in random_indices {
+                bucket.push(peers[idx]);
+            }
+        }
+    });
+
+    // Estimate network size and calculate responsible distances
+    nodes.par_iter_mut().for_each(|(_, node)| {
+        node.estimate_network_size();
+    });
+
+    nodes.par_iter_mut().for_each(|(_, node)| {
+        node.calculate_responsible_distance();
+    });
+
+    // Phase 2: Client Upload
+    let chunk_addresses = Mutex::new(Vec::new());
+    let upload_stats = Mutex::new(UploadStats::new());
+    let nodes = Mutex::new(nodes);
+
+    (0..num_chunks).into_par_iter().for_each(|_| {
+        let chunk_addr = NetworkAddress::ChunkAddress(ChunkAddress::new(XorName::random(
+            &mut rand::thread_rng(),
+        )));
+        let chunk_size = 1024 * 1024;
+
+        chunk_addresses.lock().unwrap().push(chunk_addr.clone());
+
+        let mut closest_5: Vec<_> = all_peer_ids
+            .iter()
+            .map(|peer| {
+                let addr = NetworkAddress::from(*peer);
+                (*peer, chunk_addr.distance(&addr))
+            })
+            .collect();
+        closest_5.sort_by_key(|(_, dist)| *dist);
+        let closest_5: Vec<_> = closest_5.into_iter().take(CLOSE_GROUP_SIZE).collect();
+
+        let mut quotes: Vec<_> = {
+            let nodes_guard = nodes.lock().unwrap();
+            closest_5
+                .iter()
+                .map(|(peer, _)| (*peer, nodes_guard[peer].generate_quote(chunk_size)))
+                .collect()
+        };
+        quotes.sort_by_key(|(_, price)| *price);
+
+        let payment = SimulatedPayment {
+            payees: quotes.iter().map(|(peer, _)| *peer).collect(),
+            data_type: DataTypes::Chunk,
+        };
+
+        let mut stored_count = 0;
+        let mut payment_not_for_us = 0;
+        let mut payees_out_of_range = 0;
+        let mut distance_too_far = 0;
+
+        {
+            let mut nodes_guard = nodes.lock().unwrap();
+            for (peer_id, _) in &closest_5 {
+                let record = StoredRecord {
+                    address: chunk_addr.clone(),
+                    record_kind: RecordKind::DataOnly(DataTypes::Chunk),
+                    data_size: chunk_size,
+                    payment: Some(payment.clone()),
+                };
+
+                match nodes_guard.get_mut(peer_id).unwrap().store_record(record) {
+                    StoreResult::Stored => stored_count += 1,
+                    StoreResult::PaymentNotForUs => payment_not_for_us += 1,
+                    StoreResult::PayeesOutOfRange => payees_out_of_range += 1,
+                    StoreResult::DistanceTooFar => distance_too_far += 1,
+                }
+            }
+        }
+
+        upload_stats.lock().unwrap().add_upload(
+            stored_count,
+            payment_not_for_us,
+            payees_out_of_range,
+            distance_too_far,
+        );
+    });
+
+    let chunk_addresses = chunk_addresses.into_inner().unwrap();
+    let upload_stats = upload_stats.into_inner().unwrap();
+    let mut nodes = nodes.into_inner().unwrap();
+
+    let total_records_after_upload: usize = nodes.values().map(|n| n.stored_records.len()).sum();
+    let avg_records_after_upload = total_records_after_upload as f64 / nodes.len() as f64;
+    let min_records = nodes.values().map(|n| n.stored_records.len()).min().unwrap_or(0);
+    let max_records = nodes.values().map(|n| n.stored_records.len()).max().unwrap_or(0);
+
+    // Phase 3: Periodic Replication
+    let mut round_data_vec: Vec<RoundData> = Vec::new();
+
+    for round in 1..=replication_rounds {
+        if verbose {
+            println!("  Starting round {round}...");
+        }
+        let mut total_replications = 0;
+
+        let replication_messages: Vec<_> = nodes
+            .par_iter()
+            .flat_map(|(node_id, node)| {
+                let keys: Vec<_> = node
+                    .stored_records
+                    .iter()
+                    .map(|(addr, record)| (addr.clone(), record.record_kind))
+                    .collect();
+
+                if keys.is_empty() {
+                    return vec![];
+                }
+
+                let targets = node.get_replicate_candidates(&node.address.clone(), true);
+
+                targets
+                    .into_iter()
+                    .map(|target| (target, *node_id, keys.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        let records_to_store: Vec<_> = replication_messages
+            .par_iter()
+            .filter_map(|(recipient, sender, keys)| {
+                let recipient_node = nodes.get(recipient)?;
+
+                let recipient_closest_k = recipient_node.find_closest_local(
+                    &recipient_node.address,
+                    LIBP2P_K_VALUE,
+                    false,
+                );
+                if !recipient_closest_k.contains(sender) || sender == recipient {
+                    REPLICATION_MSG_REJECTED_NOT_IN_K_CLOSEST.fetch_add(1, Ordering::Relaxed);
+                    return None;
+                }
+
+                REPLICATION_MSG_ACCEPTED_FROM_K_CLOSEST.fetch_add(1, Ordering::Relaxed);
+
+                let mut records_to_fetch = Vec::new();
+
+                for (addr, record_kind) in keys {
+                    if recipient_node.stored_records.contains_key(addr) {
+                        continue;
+                    }
+
+                    if !recipient_node.is_in_range(addr, &recipient_closest_k) {
+                        continue;
+                    }
+
+                    if let Some(sender_node) = nodes.get(sender)
+                        && let Some(original_record) = sender_node.stored_records.get(addr)
+                    {
+                        records_to_fetch.push((
+                            addr.clone(),
+                            *record_kind,
+                            original_record.data_size,
+                        ));
+                    }
+                }
+
+                if records_to_fetch.is_empty() {
+                    None
+                } else {
+                    Some((*recipient, *sender, records_to_fetch))
+                }
+            })
+            .collect();
+
+        // Apply stores with majority accumulation
+        let mut accumulators: HashMap<PeerId, ReplicationAccumulator> = HashMap::new();
+        let mut record_metadata: HashMap<(PeerId, NetworkAddress), (RecordKind, usize)> = HashMap::new();
+
+        for (recipient, sender, records) in &records_to_store {
+            let accumulator = accumulators
+                .entry(*recipient)
+                .or_insert_with(ReplicationAccumulator::new);
+
+            for (addr, record_kind, data_size) in records {
+                accumulator.add_and_check_majority(addr, *sender);
+                record_metadata
+                    .entry((*recipient, addr.clone()))
+                    .or_insert((*record_kind, *data_size));
+            }
+        }
+
+        for (recipient, accumulator) in accumulators {
+            let recipient_node = nodes.get_mut(&recipient).unwrap();
+
+            let addresses_with_majority: Vec<_> = accumulator
+                .pending
+                .iter()
+                .filter(|(_, peers)| peers.len() >= REPLICATION_MAJORITY_THRESHOLD)
+                .map(|(addr, _)| addr.clone())
+                .collect();
+
+            for addr in addresses_with_majority {
+                if let Some((record_kind, data_size)) = record_metadata.get(&(recipient, addr.clone())) {
+                    if recipient_node.stored_records.contains_key(&addr) {
+                        continue;
+                    }
+
+                    let record = StoredRecord {
+                        address: addr.clone(),
+                        record_kind: *record_kind,
+                        data_size: *data_size,
+                        payment: None,
+                    };
+
+                    if recipient_node.store_record(record) == StoreResult::Stored {
+                        total_replications += 1;
+                        REPLICATION_MAJORITY_REACHED.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            }
+
+            REPLICATION_PENDING_MAJORITY.fetch_add(accumulator.pending_count(), Ordering::Relaxed);
+        }
+
+        let total_records: usize = nodes.values().map(|n| n.stored_records.len()).sum();
+        let avg_per_node = total_records as f64 / nodes.len() as f64;
+
+        round_data_vec.push(RoundData {
+            round_number: round,
+            total_records,
+            replications: total_replications,
+            avg_records_per_node: avg_per_node,
+        });
+
+        if total_replications == 0 && round > 1 {
+            break;
+        }
+    }
+
+    // Phase 3.5: Node Failure Injection
+    let num_failures = (nodes.len() as f64 * SIMULATION_FAILURE_RATE) as usize;
+    let mut rng = rand::thread_rng();
+
+    let node_ids: Vec<PeerId> = nodes.keys().copied().collect();
+    let failed_nodes: Vec<PeerId> = node_ids
+        .choose_multiple(&mut rng, num_failures)
+        .copied()
+        .collect();
+
+    for peer_id in &failed_nodes {
+        nodes.remove(peer_id);
+    }
+
+    let all_peer_ids: Vec<PeerId> = nodes.keys().copied().collect();
+
+    // Phase 4: Verification (Post-Failure)
+    let coverage_stats = Mutex::new(CoverageStats::new());
+    let per_chunk_holders = Mutex::new(Vec::new());
+
+    chunk_addresses.par_iter().for_each(|chunk_addr| {
+        let mut closest_7: Vec<_> = all_peer_ids
+            .iter()
+            .map(|peer| {
+                let addr = NetworkAddress::from(*peer);
+                (*peer, chunk_addr.distance(&addr))
+            })
+            .collect();
+        closest_7.sort_by_key(|(_, dist)| *dist);
+        let expected_holders: Vec<_> = closest_7
+            .into_iter()
+            .take(CLOSE_GROUP_SIZE + 2)
+            .map(|(peer, _)| peer)
+            .collect();
+
+        let stored_count = expected_holders
+            .iter()
+            .filter(|peer| nodes[peer].stored_records.contains_key(chunk_addr))
+            .count();
+
+        coverage_stats.lock().unwrap().add_chunk(stored_count);
+        per_chunk_holders.lock().unwrap().push(stored_count);
+    });
+
+    let coverage_stats = coverage_stats.into_inner().unwrap();
+    let mut per_chunk_holders = per_chunk_holders.into_inner().unwrap();
+    per_chunk_holders.sort();
+
+    // Calculate fault tolerance metrics
+    let total_chunks = per_chunk_holders.len();
+    let data_loss_count = per_chunk_holders.iter().filter(|&&c| c == 0).count();
+    let critical_risk_count = per_chunk_holders.iter().filter(|&&c| c < 3).count();
+    let sum_holders: usize = per_chunk_holders.iter().sum();
+    let mean_coverage = sum_holders as f64 / total_chunks as f64;
+
+    let variance: f64 = per_chunk_holders
+        .iter()
+        .map(|&c| {
+            let diff = c as f64 - mean_coverage;
+            diff * diff
+        })
+        .sum::<f64>()
+        / total_chunks as f64;
+    let coverage_std_dev = variance.sqrt();
+
+    let p99_idx = (total_chunks as f64 * 0.01).floor() as usize;
+    let p99_coverage = per_chunk_holders.get(p99_idx).copied().unwrap_or(0);
+
+    let avg_replication = mean_coverage.round() as i32;
+    let survival_probability = 1.0 - SIMULATION_FAILURE_RATE.powi(avg_replication.max(1));
+
+    let fault_metrics = FaultToleranceMetrics {
+        data_loss_rate: data_loss_count as f64 / total_chunks as f64 * 100.0,
+        critical_risk_rate: critical_risk_count as f64 / total_chunks as f64 * 100.0,
+        mean_coverage,
+        coverage_std_dev,
+        p99_coverage,
+        survival_probability: survival_probability * 100.0,
+    };
+
+    SingleTrialResult {
+        fault_metrics,
+        coverage_percent: coverage_stats.average_percent(),
+        round_data: round_data_vec,
+        coverage_stats,
+        nodes,
+        upload_stats,
+        avg_records_after_upload,
+        min_records,
+        max_records,
+        total_records_after_upload,
+        chunk_addresses,
+    }
 }

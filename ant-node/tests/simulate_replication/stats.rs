@@ -8,7 +8,7 @@
 
 //! Statistics helpers for tracking simulation results.
 
-use crate::simulate_replication::export::CoverageExport;
+use crate::export::CoverageExport;
 
 // ============================================================================
 // Statistics Helpers

@@ -14,9 +14,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crate::simulate_replication::config::{LIBP2P_K_VALUE, MAX_RECORDS_COUNT};
-use crate::simulate_replication::counters::*;
-use crate::simulate_replication::types::{SimulatedNode, SimulatedPayment, StoredRecord, StoreResult};
+use crate::config::{LIBP2P_K_VALUE, MAX_RECORDS_COUNT};
+use crate::counters::*;
+use crate::types::{SimulatedNode, SimulatedPayment, StoredRecord, StoreResult};
 
 impl SimulatedNode {
     pub fn new(peer_id: PeerId) -> Self {

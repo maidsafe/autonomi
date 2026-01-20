@@ -27,6 +27,13 @@ pub const SIMULATION_NUM_CHUNKS: usize = 1000;
 pub const SIMULATION_REPLICATION_ROUNDS: usize = 10;
 pub const SIMULATION_FAILURE_RATE: f64 = 0.10; // 10% of nodes fail after replication
 
+// ============================================================================
+// Monte Carlo Configuration
+// ============================================================================
+
+pub const MONTE_CARLO_TRIALS: usize = 10; // Number of simulation trials for statistical confidence
+pub const MONTE_CARLO_ENABLED: bool = false; // Set to true to run Monte Carlo mode
+
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum PaymentMode {

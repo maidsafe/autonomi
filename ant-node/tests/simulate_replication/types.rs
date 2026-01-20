@@ -13,7 +13,7 @@ use libp2p::{PeerId, kad::KBucketDistance as Distance};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
 
-use crate::simulate_replication::config::REPLICATION_MAJORITY_THRESHOLD;
+use crate::config::REPLICATION_MAJORITY_THRESHOLD;
 
 // ============================================================================
 // Core Data Structures
