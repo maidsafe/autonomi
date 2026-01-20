@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768929688926,
+  "lastUpdate": 1768929691121,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -15973,6 +15973,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/b046ce98ee4cf96f29c0a843be5d0610a6870f91"
         },
         "date": 1768909966793,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2e65559e45bef8e42b6ea77f8f213d7b8ec66121",
+          "message": "Merge pull request #3355 from Nic-dorman/cli-docs-edits\n\ndocs: improve ant-cli README with industry best practices",
+          "timestamp": "2026-01-20T16:02:34Z",
+          "tree_id": "3ab67746c6ea147fcc4821518feb4eb989d5aead",
+          "url": "https://github.com/maidsafe/autonomi/commit/2e65559e45bef8e42b6ea77f8f213d7b8ec66121"
+        },
+        "date": 1768929690298,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
