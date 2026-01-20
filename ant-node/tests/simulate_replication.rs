@@ -28,6 +28,7 @@ use libp2p::{
     kad::{KBucketDistance as Distance, U256},
 };
 use rand::seq::index::sample;
+use rand::seq::SliceRandom;
 use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
@@ -78,6 +79,7 @@ const SIMULATION_NUM_NODES: usize = 1000;
 const SIMULATION_NUM_CHUNKS: usize = 1000;
 const SIMULATION_REPLICATION_ROUNDS: usize = 10;
 const SIMULATION_PAYMENT_MODE: PaymentMode = PaymentMode::Standard;
+const SIMULATION_FAILURE_RATE: f64 = 0.10; // 10% of nodes fail after replication
 
 // ============================================================================
 // Core Data Structures
@@ -143,6 +145,7 @@ struct SimulationExport {
     config: SimulationConfig,
     rounds: Vec<RoundData>,
     final_coverage: CoverageExport,
+    fault_tolerance: FaultToleranceMetrics,
     chunk_timelines: Vec<ChunkTimeline>,
 }
 
@@ -176,6 +179,16 @@ struct ChunkTimeline {
     address: String,
     holders_per_round: Vec<usize>,
     final_coverage: usize,
+}
+
+#[derive(Serialize, Clone)]
+struct FaultToleranceMetrics {
+    data_loss_rate: f64,      // % chunks with 0 holders
+    critical_risk_rate: f64,  // % chunks with < 3 holders
+    mean_coverage: f64,       // Average holders per chunk
+    coverage_std_dev: f64,    // Standard deviation
+    p99_coverage: usize,      // 99th percentile holders
+    survival_probability: f64, // Theoretical survival probability
 }
 
 /// Accumulator for tracking replication sources - requires majority consensus
@@ -1128,12 +1141,48 @@ fn test_replication_simulation() {
     );
 
     // ========================================================================
-    // Phase 4: Verification
+    // Phase 3.5: Node Failure Injection
     // ========================================================================
-    println!("Phase 4: Verifying replication coverage...");
+    println!("Phase 3.5: Simulating node failures...");
+    let phase35_start = std::time::Instant::now();
+
+    let num_failures = (nodes.len() as f64 * SIMULATION_FAILURE_RATE) as usize;
+    let mut rng = rand::thread_rng();
+
+    // Select random nodes to fail
+    let node_ids: Vec<PeerId> = nodes.keys().copied().collect();
+    let failed_nodes: Vec<PeerId> = node_ids
+        .choose_multiple(&mut rng, num_failures)
+        .copied()
+        .collect();
+
+    // Remove failed nodes from the network
+    for peer_id in &failed_nodes {
+        nodes.remove(peer_id);
+    }
+
+    // Update all_peer_ids to reflect surviving nodes
+    let all_peer_ids: Vec<PeerId> = nodes.keys().copied().collect();
+
+    println!(
+        "  ✓ Removed {} nodes ({:.1}% failure rate), {} nodes remaining",
+        failed_nodes.len(),
+        SIMULATION_FAILURE_RATE * 100.0,
+        nodes.len()
+    );
+    println!(
+        "Phase 3.5 complete - {:.2}s\n",
+        phase35_start.elapsed().as_secs_f64()
+    );
+
+    // ========================================================================
+    // Phase 4: Verification (Post-Failure)
+    // ========================================================================
+    println!("Phase 4: Verifying replication coverage after node failures...");
     let phase4_start = std::time::Instant::now();
 
     let coverage_stats = Mutex::new(CoverageStats::new());
+    let per_chunk_holders = Mutex::new(Vec::new());
 
     chunk_addresses.par_iter().for_each(|chunk_addr| {
         // Find true 7 closest nodes (pure computation)
@@ -1159,9 +1208,46 @@ fn test_replication_simulation() {
 
         // Update stats (synchronized)
         coverage_stats.lock().unwrap().add_chunk(stored_count);
+        per_chunk_holders.lock().unwrap().push(stored_count);
     });
 
     let coverage_stats = coverage_stats.into_inner().unwrap();
+    let mut per_chunk_holders = per_chunk_holders.into_inner().unwrap();
+    per_chunk_holders.sort();
+
+    // Calculate fault tolerance metrics
+    let total_chunks = per_chunk_holders.len();
+    let data_loss_count = per_chunk_holders.iter().filter(|&&c| c == 0).count();
+    let critical_risk_count = per_chunk_holders.iter().filter(|&&c| c < 3).count();
+    let sum_holders: usize = per_chunk_holders.iter().sum();
+    let mean_coverage = sum_holders as f64 / total_chunks as f64;
+
+    let variance: f64 = per_chunk_holders
+        .iter()
+        .map(|&c| {
+            let diff = c as f64 - mean_coverage;
+            diff * diff
+        })
+        .sum::<f64>()
+        / total_chunks as f64;
+    let coverage_std_dev = variance.sqrt();
+
+    let p99_idx = (total_chunks as f64 * 0.01).floor() as usize;
+    let p99_coverage = per_chunk_holders.get(p99_idx).copied().unwrap_or(0);
+
+    // Theoretical survival probability: P(survive) = 1 - failure_rate^replication_factor
+    let avg_replication = mean_coverage.round() as i32;
+    let survival_probability = 1.0 - SIMULATION_FAILURE_RATE.powi(avg_replication.max(1));
+
+    let fault_metrics = FaultToleranceMetrics {
+        data_loss_rate: data_loss_count as f64 / total_chunks as f64 * 100.0,
+        critical_risk_rate: critical_risk_count as f64 / total_chunks as f64 * 100.0,
+        mean_coverage,
+        coverage_std_dev,
+        p99_coverage,
+        survival_probability: survival_probability * 100.0,
+    };
+
     println!(
         "Phase 4 complete - {:.2}s\n",
         phase4_start.elapsed().as_secs_f64()
@@ -1172,10 +1258,23 @@ fn test_replication_simulation() {
     // ========================================================================
     println!("=== Simulation Results ===\n");
     println!("Network Configuration:");
-    println!("  - Nodes: {num_nodes}");
+    println!("  - Nodes: {num_nodes} (initial), {} (after failures)", nodes.len());
     println!("  - Chunks: {num_chunks}");
     println!("  - Payment Mode: {payment_mode:?}");
-    println!("  - Replication Rounds: {replication_rounds}\n");
+    println!("  - Replication Rounds: {replication_rounds}");
+    println!("  - Failure Rate: {:.1}%\n", SIMULATION_FAILURE_RATE * 100.0);
+
+    // Fault Tolerance Analysis
+    println!("Fault Tolerance Analysis (post-failure):");
+    println!("  - Data loss rate: {:.4}% ({} chunks with 0 holders)",
+        fault_metrics.data_loss_rate, data_loss_count);
+    println!("  - Critical risk rate: {:.4}% ({} chunks with <3 holders)",
+        fault_metrics.critical_risk_rate, critical_risk_count);
+    println!("  - Mean coverage: {:.2} holders/chunk", fault_metrics.mean_coverage);
+    println!("  - Coverage std dev: {:.2}", fault_metrics.coverage_std_dev);
+    println!("  - P1 coverage (worst 1%): {} holders", fault_metrics.p99_coverage);
+    println!("  - Theoretical survival: {:.4}% (with {:.0} avg replication)\n",
+        fault_metrics.survival_probability, fault_metrics.mean_coverage);
 
     // Upload statistics
     println!("Upload Phase Results:");
@@ -1516,6 +1615,7 @@ fn test_replication_simulation() {
         },
         rounds: round_data_vec,
         final_coverage: coverage_stats.to_export(),
+        fault_tolerance: fault_metrics,
         chunk_timelines,
     };
 
