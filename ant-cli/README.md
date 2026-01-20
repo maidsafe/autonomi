@@ -280,6 +280,44 @@ This section provides detailed documentation for all available commands and opti
 
 These options can be used with any command:
 
+### Network Selection
+```
+--alpha
+```
+Connect to the alpha network instead of mainnet.
+
+```
+--network-id <ID>
+```
+Specify the network ID to use. This allows you to run the CLI on different networks.
+
+Valid values:
+- `0`: Local Network
+- `1`: Mainnet (default)
+- `2`: Alpha Network
+- `3-255`: Custom Networks (configured via environment variables and other network config flags)
+
+### Version Information
+```
+--version
+```
+Print version information.
+
+```
+--crate-version
+```
+Print the crate version.
+
+```
+--package-version
+```
+Print the package version.
+
+```
+--protocol-version
+```
+Print the network protocol version.
+
 ### Specify the logging output destination.
 ```
 --log-output-dest <LOG_OUTPUT_DEST>
@@ -326,7 +364,7 @@ This may increase operation speed, but offers no guarantees that operations were
 
 #### Get a cost estimate for storing a file
 ```
-file cost <file>
+file cost <file> [--merkle] [--disable-single-node-payment]
 ```
 
 Gets a cost estimate for uploading a file to the network.
@@ -335,10 +373,14 @@ This returns both the storage costs and gas fees for the file.
 Expected value: 
 - `<file>`: File path (accessible by current user)
 
+The following flags can be applied:
+- `--merkle` (Optional) Use Merkle batch payment mode instead of standard payment. Merkle mode pays for all chunks in a single transaction, saving gas fees.
+- `--disable-single-node-payment` (Optional) Use standard payment mode instead of single-node payment. Standard mode pays 3 nodes individually, which costs more in gas fees. Single-node payment (default) pays only one node with 3x that amount, saving gas fees. This flag only applies to standard payment mode (not Merkle).
+
 
 #### Upload a file
 ```
-file upload <file> [--public] [--no-archive] [--retry-failed 3]
+file upload <file> [--public] [--no-archive] [--retry-failed <N>] [--merkle] [--disable-single-node-payment] [--max-fee-per-gas <value>]
 ```
 Uploads a file to the network.
 
@@ -348,7 +390,10 @@ Expected value:
 The following flags can be added:
 - `--public` (Optional) Specifying this will make this file publicly available to anyone on the network
 - `--no-archive` (Optional) Skip creating local archive after upload. Only upload files without saving archive information. Note that --no-archive is the default behaviour for single file uploads (folk can still upload a single file as an archive by putting it in a directory)
-- `--retry-failed` (Optional) Automatically retry failed uploads. This is particularly useful for handling gas fee errors when the network base fee exceeds your --max-fee-per-gas setting. The retry mechanism works at the batch level, so only failed chunks are retried, not the entire file upload process. Being the `times` of the original chunks, default is `0` for not carrying out retry.
+- `--retry-failed <N>` (Optional) Automatically retry failed uploads. This is particularly useful for handling gas fee errors when the network base fee exceeds your --max-fee-per-gas setting. The retry mechanism works at the batch level, so only failed chunks are retried, not the entire file upload process. Default is `0` for no retry.
+- `--merkle` (Optional) Use Merkle batch payment mode instead of standard payment. Merkle mode pays for all chunks in a single transaction, saving gas fees.
+- `--disable-single-node-payment` (Optional) Use standard payment mode instead of single-node payment. Standard mode pays 3 nodes individually, which costs more gas. Single-node payment (default) pays only one node with 3x that amount. Data is stored on 5 nodes regardless of payment mode. This flag only applies to standard payment mode (not Merkle).
+- `--max-fee-per-gas <value>` (Optional) Maximum fee per gas / gas price bid. Options: `low`, `market` (default), `auto`, `limited-auto:<WEI>`, `unlimited`, or a specific `<WEI AMOUNT>`.
 
 Example usage with retry functionality:
 ```
@@ -358,7 +403,7 @@ This will upload the file publicly and automatically retry if the base fee is hi
 
 #### Download a file
 ```
-file download <addr> <dest_path>
+file download <addr> <dest_path> [-q, --quorum <QUORUM>] [-r, --retries <N>] [--disable-cache] [--cache-dir <PATH>]
 ```
 Download a file from network address to output path
 
@@ -366,12 +411,20 @@ Expected values:
 - `<addr>`: The network address of a file
 - `<dest_path>`: The output path to download the file to
 
+The following flags can be applied:
+- `-q, --quorum <QUORUM>` (Optional, Experimental) Specify the quorum for the download (ensures we have n copies for each chunk). Possible values: `one`, `majority`, `all`, or a number greater than 0.
+- `-r, --retries <N>` (Optional, Experimental) Specify the number of retries for the download.
+- `--disable-cache` (Optional) Disable chunk caching. By default, chunks are cached to enable resuming downloads.
+- `--cache-dir <PATH>` (Optional) Custom cache directory for chunk caching. If not specified, uses the default Autonomi client data directory. Only applies when cache is enabled (default).
 
 #### List the files in a vault
 ```
-file list
+file list [-v, --verbose]
 ```
 Lists all files (both public and private) in a vault.
+
+The following flag can be applied:
+- `-v, --verbose` (Optional) List files with network details (requires network connection).
 
 
 ### Register Operations
@@ -395,7 +448,7 @@ This returns both the storage costs and gas fees.
 
 #### Create a new register and upload to the network
 ```
-register create <name> <value>
+register create <name> <value> [--hex] [--max-fee-per-gas <value>]
 ```
 Create a new register with the given name and value.
 Note: that anyone with the register address can read its value.
@@ -404,9 +457,13 @@ Expected values:
 - `<name>`: The name of the register
 - `<value>`: The value to store in the register
 
+The following flags can be applied:
+- `--hex` (Optional) Treat the value as a hex string and convert it to binary before storing.
+- `--max-fee-per-gas <value>` (Optional) Maximum fee per gas / gas price bid.
+
 #### Edit an existing register
 ```
-register edit [--name] <address> <value>
+register edit [--name] <address> <value> [--hex] [--max-fee-per-gas <value>]
 ```
 Edit an existing register
 
@@ -414,22 +471,23 @@ Expected values:
 - `<address>`: The address of the register to edit
 - `<value>`: The new value to store in the register
 
-The following flag can be applied:
-`--name`:bool (Optional) Adding this flag will use the name of the register instead of the address
-Note: that only the owner of the register can use this shorthand as the address can be generated from the name and register key.
+The following flags can be applied:
+- `--name` (Optional) Use the name of the register instead of the address. Note: only the owner of the register can use this shorthand as the address can be generated from the name and register key.
+- `--hex` (Optional) Treat the value as a hex string and convert it to binary before storing.
+- `--max-fee-per-gas <value>` (Optional) Maximum fee per gas / gas price bid.
 
 #### Get a register
 ```
-register get [--name] <address>
+register get [--name] <address> [--hex]
 ```
 Get a register from the network
 
 Expected values: 
 - `<address>`: The address of the register
 
-The following flag can be applied:
-`--name`:bool (Optional) Adding this flag will use the name of the register instead of the address
-Note: that only the owner of the register can use this shorthand as the address can be generated from the name and register key.
+The following flags can be applied:
+- `--name` (Optional) Use the name of the register instead of the address. Note: only the owner of the register can use this shorthand as the address can be generated from the name and register key.
+- `--hex` (Optional) Display the value as a hex string instead of raw bytes.
 
 #### Get register history
 ```
@@ -457,17 +515,23 @@ List local registers
 
 #### Get a cost estimate for storing a vault on the network
 ```
-vault cost
+vault cost [expected_max_size]
 ```
 Gets a cost estimate for uploading a vault to the network.
 This returns both the storage costs and gas fees for the vault.
 
+Expected value:
+- `[expected_max_size]` (Optional) Expected maximum size of a vault, only for cost estimation. Default: `3145728` (3MB).
+
 #### Create a new vault and upload to the network
 ```
-vault create
+vault create [--max-fee-per-gas <value>]
 ```
 Creates a new vault and uploads it to the network.
 This will initialise a new vault in the local storage and then upload it to the network.
+
+The following flag can be applied:
+- `--max-fee-per-gas <value>` (Optional) Maximum fee per gas / gas price bid.
 
 #### Load vault from the network
 ```
@@ -530,8 +594,21 @@ This will display both the address and private key of the wallet.
 Analyze an address to get the address type, and visualize the content.
 
 ```
-analyze <address>
+analyze <address> [--closest-nodes] [--holders] [--nodes-health] [--repair] [--addr-range <HEX>] [-r, --recursive] [-v, --verbose] [--json <PATH>]
 ```
+
+Expected value:
+- `<address>`: The address of the data to analyse
+
+The following flags can be applied:
+- `--closest-nodes` (Optional) Show closest nodes to this address instead of analyzing it.
+- `--holders` (Optional) Show all holders of the record at this address.
+- `--nodes-health` (Optional) Check health of closest nodes by requesting storage proofs for the target chunk address.
+- `--repair` (Optional) Repair records with insufficient copies in closest group. When analyzing with --closest-nodes, automatically re-upload records that have less than 3 holders among the closest 7 nodes.
+- `--addr-range <HEX>` (Optional) Filter network scan to only target addresses starting with this hex character (0-9, a-f). Only applies when using --nodes-health with a number of rounds.
+- `-r, --recursive` (Optional) Recursively analyze all discovered addresses (chunks, pointers, etc.)
+- `-v, --verbose` (Optional) Verbose output with detailed description of the analysis.
+- `--json <PATH>` (Optional) Output results as JSON to a file with append-only writing. If path is a file, appends to that file. If path is a directory, enables file rotations (50MB max per file, 10 files max).
 
 ### Scratchpad Operations
 
