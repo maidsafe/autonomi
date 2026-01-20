@@ -37,20 +37,6 @@ pub enum PayError {
     Cost(#[from] CostError),
 }
 
-/// Error with partial receipt for retry support.
-///
-/// When a payment fails partway through batch processing, the successful payments
-/// are preserved in `partial_receipt`. This allows users to resume uploads without
-/// losing funds by using `PaymentOption::Receipt(partial_receipt)`.
-#[derive(Debug, thiserror::Error)]
-#[error("Payment failed after partial success: {error}")]
-pub struct PayErrorWithReceipt {
-    /// The underlying error that caused the payment to fail
-    pub error: PayError,
-    /// Receipt containing any successful payments made before the error
-    pub partial_receipt: Receipt,
-}
-
 pub fn receipt_from_store_quotes(quotes: StoreQuote) -> Receipt {
     receipt_from_store_quotes_filtered(&quotes, None)
 }
@@ -221,9 +207,6 @@ impl BulkPaymentOption {
 
 impl Client {
     /// Pay for content addresses using regular (non-merkle) payment flow.
-    ///
-    /// On partial failure, logs a warning about the partial receipt but currently
-    /// does not propagate it. Use `pay()` directly if you need partial receipt preservation.
     pub(crate) async fn pay_for_content_addrs(
         &self,
         data_type: DataTypes,
@@ -231,51 +214,25 @@ impl Client {
         payment_option: PaymentOption,
     ) -> Result<(Receipt, AlreadyPaidAddressesCount), PayError> {
         match payment_option {
-            PaymentOption::Wallet(wallet) => {
-                match self.pay(data_type, content_addrs, &wallet).await {
-                    Ok((receipt, skipped)) => Ok((receipt, skipped)),
-                    Err(err_with_receipt) => {
-                        if !err_with_receipt.partial_receipt.is_empty() {
-                            warn!(
-                                "Payment failed with {} partial payments. These can be recovered by retrying with the receipt.",
-                                err_with_receipt.partial_receipt.len()
-                            );
-                        }
-                        Err(err_with_receipt.error)
-                    }
-                }
-            }
+            PaymentOption::Wallet(wallet) => self.pay(data_type, content_addrs, &wallet).await,
             PaymentOption::Receipt(receipt) => Ok((receipt, 0)),
         }
     }
 
     /// Pay for the content addrs and get the proof of payment.
-    ///
-    /// On partial failure (some payments succeed, then an error occurs), returns
-    /// `PayErrorWithReceipt` containing both the error and a partial receipt of
-    /// successful payments that can be used for retry.
     pub(crate) async fn pay(
         &self,
         data_type: DataTypes,
         content_addrs: impl Iterator<Item = (XorName, usize)> + Clone,
         wallet: &EvmWallet,
-    ) -> Result<(Receipt, AlreadyPaidAddressesCount), PayErrorWithReceipt> {
+    ) -> Result<(Receipt, AlreadyPaidAddressesCount), PayError> {
         // Check if the wallet uses the same network as the client
         if wallet.network() != self.evm_network() {
-            return Err(PayErrorWithReceipt {
-                error: PayError::EvmWalletNetworkMismatch,
-                partial_receipt: Receipt::default(),
-            });
+            return Err(PayError::EvmWalletNetworkMismatch);
         }
 
         let number_of_content_addrs = content_addrs.clone().count();
-        let quotes = self
-            .get_store_quotes(data_type, content_addrs)
-            .await
-            .map_err(|e| PayErrorWithReceipt {
-                error: PayError::from(e),
-                partial_receipt: Receipt::default(),
-            })?;
+        let quotes = self.get_store_quotes(data_type, content_addrs).await?;
 
         crate::loud_info!("Paying for {} addresses..", quotes.len());
 
@@ -285,29 +242,12 @@ impl Client {
             let lock_guard = wallet.lock().await;
             debug!("Locked wallet");
 
-            // Execute payments - preserve partial receipt on failure
+            // Execute payments
             if let Err(pay_err) = wallet.pay_for_quotes(quotes.payments()).await {
                 // payment failed, unlock the wallet for other threads
                 drop(lock_guard);
                 debug!("Unlocked wallet after payment error");
-
-                // Create partial receipt from successfully paid quotes
-                let paid_hashes: std::collections::BTreeSet<_> =
-                    pay_err.1.keys().copied().collect();
-                let partial_receipt = if paid_hashes.is_empty() {
-                    Receipt::default()
-                } else {
-                    crate::loud_info!(
-                        "Payment partially failed. {} quotes were paid successfully.",
-                        paid_hashes.len()
-                    );
-                    receipt_from_store_quotes_filtered(&quotes, Some(&paid_hashes))
-                };
-
-                return Err(PayErrorWithReceipt {
-                    error: PayError::from(pay_err.0),
-                    partial_receipt,
-                });
+                return Err(PayError::from(pay_err.0));
             }
 
             // payment is done, unlock the wallet for other threads

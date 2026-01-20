@@ -24,12 +24,18 @@ use std::path::PathBuf;
 
 const MAX_ADDRESSES_TO_PRINT: usize = 3;
 
+/// Threshold for auto-selecting merkle vs regular payment estimation.
+/// Must match MERKLE_PAYMENT_THRESHOLD in autonomi crate.
+const MERKLE_PAYMENT_THRESHOLD: usize = 64;
+
 pub async fn cost(
     file: &str,
     is_public: bool,
     include_archive: bool,
     network_context: NetworkContext,
     use_standard_payment: bool,
+    force_merkle: bool,
+    force_regular: bool,
 ) -> Result<()> {
     let mut client = crate::actions::connect_to_network(network_context)
         .await
@@ -43,28 +49,136 @@ pub async fn cost(
         println!("🎯 Estimating cost with single node payment mode (default - saves gas fees)");
     }
 
+    let path = PathBuf::from(file);
     let visibility = if is_public { "public" } else { "private" };
-    let archive_info = if include_archive {
-        "with archive"
-    } else {
-        "without archive"
-    };
-    println!("Getting upload cost ({visibility}, {archive_info})...");
-    info!(
-        "Calculating cost for file: {file} (public={is_public}, include_archive={include_archive})"
-    );
-    let cost = client
-        .file_cost(&PathBuf::from(file), is_public, include_archive)
-        .await
-        .wrap_err("Failed to calculate cost for file")?;
 
-    println!("Estimate cost to upload file: {file}");
-    println!("Total cost: {cost}");
-    println!(
-        "Note: Payment method (merkle vs regular) is automatically selected based on file size."
-    );
-    info!("Total cost: {cost} for file: {file}");
+    if force_merkle {
+        // Forced merkle estimation
+        let archive_info = if include_archive {
+            "with archive"
+        } else {
+            "without archive"
+        };
+        println!("Getting upload cost ({visibility}, {archive_info})...");
+        info!(
+            "Calculating cost for file: {file} (public={is_public}, include_archive={include_archive}, method=merkle forced)"
+        );
+
+        let content_cost = client
+            .file_cost_merkle(path.clone(), is_public)
+            .await
+            .wrap_err("Failed to calculate merkle cost for file")?;
+
+        let total_cost = if include_archive {
+            let archive_cost = client
+                .estimate_archive_cost(&path, is_public)
+                .await
+                .wrap_err("Failed to calculate archive cost")?;
+            content_cost
+                .checked_add(archive_cost)
+                .ok_or_else(|| eyre!("Cost overflow when adding archive cost"))?
+        } else {
+            content_cost
+        };
+
+        println!("Estimate cost to upload file: {file}");
+        println!("Total cost: {total_cost}");
+        println!("Method: merkle (forced)");
+        info!("Total cost: {total_cost} for file: {file}");
+    } else if force_regular {
+        // Forced regular estimation
+        let archive_info = if include_archive {
+            "with archive"
+        } else {
+            "without archive"
+        };
+        println!("Getting upload cost ({visibility}, {archive_info})...");
+        info!(
+            "Calculating cost for file: {file} (public={is_public}, include_archive={include_archive}, method=regular forced)"
+        );
+
+        let content_cost = client
+            .file_cost_regular(&path, is_public)
+            .await
+            .wrap_err("Failed to calculate regular cost for file")?;
+
+        let total_cost = if include_archive {
+            let archive_cost = client
+                .estimate_archive_cost(&path, is_public)
+                .await
+                .wrap_err("Failed to calculate archive cost")?;
+            content_cost
+                .checked_add(archive_cost)
+                .ok_or_else(|| eyre!("Cost overflow when adding archive cost"))?
+        } else {
+            content_cost
+        };
+
+        println!("Estimate cost to upload file: {file}");
+        println!("Total cost: {total_cost}");
+        println!("Method: regular (forced)");
+        info!("Total cost: {total_cost} for file: {file}");
+    } else {
+        // Auto-select method based on chunk count
+        let archive_info = if include_archive {
+            "with archive"
+        } else {
+            "without archive"
+        };
+        println!("Getting upload cost ({visibility}, {archive_info})...");
+        info!(
+            "Calculating cost for file: {file} (public={is_public}, include_archive={include_archive}, method=auto)"
+        );
+
+        let cost = client
+            .file_cost(&path, is_public, include_archive)
+            .await
+            .wrap_err("Failed to calculate cost for file")?;
+
+        // Estimate chunk count to determine which method was used
+        let estimated_chunks = estimate_chunks(&path);
+        let method_info = if estimated_chunks >= MERKLE_PAYMENT_THRESHOLD {
+            format!(
+                "merkle (auto-selected: ~{estimated_chunks} chunks >= {MERKLE_PAYMENT_THRESHOLD} threshold)"
+            )
+        } else {
+            format!(
+                "regular (auto-selected: ~{estimated_chunks} chunks < {MERKLE_PAYMENT_THRESHOLD} threshold)"
+            )
+        };
+
+        println!("Estimate cost to upload file: {file}");
+        println!("Total cost: {cost}");
+        println!("Method: {method_info}");
+        info!("Total cost: {cost} for file: {file}");
+    }
+
     Ok(())
+}
+
+/// Estimate chunk count for a file or directory.
+fn estimate_chunks(path: &PathBuf) -> usize {
+    const MAX_CHUNK_SIZE: usize = 1024 * 1024; // 1 MiB
+
+    if path.is_file() {
+        let size = std::fs::metadata(path)
+            .map(|m| m.len() as usize)
+            .unwrap_or(0);
+        std::cmp::max(3, size.div_ceil(MAX_CHUNK_SIZE))
+    } else {
+        let mut total = 0;
+        for entry in walkdir::WalkDir::new(path)
+            .follow_links(true)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                let size = entry.metadata().map(|m| m.len() as usize).unwrap_or(0);
+                total += std::cmp::max(3, size.div_ceil(MAX_CHUNK_SIZE));
+            }
+        }
+        total
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

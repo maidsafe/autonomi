@@ -249,7 +249,9 @@ impl Client {
         {
             Ok(peers) => peers,
             Err(e) => {
-                warn!("Failed to get verified closest peers for {network_addr:?}: {e:?}, trying Kad-only fallback");
+                warn!(
+                    "Failed to get verified closest peers for {network_addr:?}: {e:?}, trying Kad-only fallback"
+                );
                 // Fallback to Kad-only query if verification fails
                 self.network
                     .get_closest_peers_kad_only(network_addr.clone(), None)

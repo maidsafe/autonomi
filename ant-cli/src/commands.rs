@@ -129,6 +129,14 @@ pub enum FileCmd {
         /// Single-node payment (default) pays only one node with 3x that amount, saving gas fees.
         #[arg(long)]
         disable_single_node_payment: bool,
+        /// Force merkle payment estimation (batched payments via smart contract).
+        /// Better for large uploads with many chunks. Mutually exclusive with --regular.
+        #[arg(long, conflicts_with = "regular")]
+        merkle: bool,
+        /// Force regular payment estimation (individual chunk quotes).
+        /// Better for small uploads with few chunks. Mutually exclusive with --merkle.
+        #[arg(long, conflicts_with = "merkle")]
+        regular: bool,
     },
 
     /// Upload a file and pay for it. Data on the Network is private by default.
@@ -574,6 +582,8 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 public,
                 no_archive,
                 disable_single_node_payment,
+                merkle,
+                regular,
             } => {
                 file::cost(
                     &file,
@@ -581,6 +591,8 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                     !no_archive,
                     network_context,
                     disable_single_node_payment,
+                    merkle,
+                    regular,
                 )
                 .await
             }

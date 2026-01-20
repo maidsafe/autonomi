@@ -482,10 +482,7 @@ impl Network {
                         peers,
                     });
                 }
-                debug!(
-                    "Kad-only query returned {} peers for {addr:?}",
-                    peers.len()
-                );
+                debug!("Kad-only query returned {} peers for {addr:?}", peers.len());
                 Ok(peers)
             }
             Err(e) => Err(e),

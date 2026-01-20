@@ -74,9 +74,7 @@ impl Client {
         // Add archive cost if requested and path is a directory
         // Single file uploads don't create archives, so skip archive cost for files
         if include_archive && !path.is_file() {
-            let archive_cost = self
-                .estimate_archive_cost_from_path(path, is_public)
-                .await?;
+            let archive_cost = self.estimate_archive_cost(path, is_public).await?;
             let total_cost = add_costs(content_cost, archive_cost)?;
             debug!("Total cost (content + archive): {total_cost:?}");
             Ok(total_cost)
@@ -228,13 +226,23 @@ impl Client {
 
     /// Estimate the cost of uploading an archive for the given directory path.
     ///
+    /// This is useful when you want to estimate archive cost separately from content cost,
+    /// for example when using `file_cost_merkle` or `file_cost_regular` directly.
+    ///
     /// For public archives: estimates based on file paths + addresses + metadata.
     /// For private archives: estimates based on file paths + placeholder datamaps + metadata.
-    async fn estimate_archive_cost_from_path(
+    ///
+    /// Note: Returns zero cost for single files since they don't create archives.
+    pub async fn estimate_archive_cost(
         &self,
         path: &PathBuf,
         is_public: bool,
     ) -> Result<AttoTokens, FileCostError> {
+        // Single files don't create archives
+        if path.is_file() {
+            return Ok(AttoTokens::zero());
+        }
+
         let mut public_archive = PublicArchive::new();
         let mut private_archive = PrivateArchive::new();
 
