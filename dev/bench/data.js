@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768909968960,
+  "lastUpdate": 1768929594064,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -6083,6 +6083,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.014372023762055,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2e65559e45bef8e42b6ea77f8f213d7b8ec66121",
+          "message": "Merge pull request #3355 from Nic-dorman/cli-docs-edits\n\ndocs: improve ant-cli README with industry best practices",
+          "timestamp": "2026-01-20T16:02:34Z",
+          "tree_id": "3ab67746c6ea147fcc4821518feb4eb989d5aead",
+          "url": "https://github.com/maidsafe/autonomi/commit/2e65559e45bef8e42b6ea77f8f213d7b8ec66121"
+        },
+        "date": 1768929585968,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0464830965066547,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.813320009876666,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.6924504130856235,
             "unit": "MiB/s"
           }
         ]
