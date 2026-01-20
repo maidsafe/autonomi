@@ -14,6 +14,7 @@ use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::PutError;
 use autonomi::client::analyze::Analysis;
+use autonomi::client::config::MERKLE_PAYMENT_THRESHOLD;
 use autonomi::client::payment::{BulkPaymentOption, PaymentOption};
 use autonomi::files::UploadError;
 use autonomi::networking::{Quorum, RetryStrategy};
@@ -23,10 +24,6 @@ use color_eyre::eyre::{Context, Result, eyre};
 use std::path::PathBuf;
 
 const MAX_ADDRESSES_TO_PRINT: usize = 3;
-
-/// Threshold for auto-selecting merkle vs regular payment estimation.
-/// Must match MERKLE_PAYMENT_THRESHOLD in autonomi crate.
-const MERKLE_PAYMENT_THRESHOLD: usize = 64;
 
 pub async fn cost(
     file: &str,
