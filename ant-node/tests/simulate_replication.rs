@@ -29,6 +29,7 @@ use libp2p::{
 };
 use rand::seq::index::sample;
 use rayon::prelude::*;
+use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -131,6 +132,50 @@ enum StoreResult {
     PaymentNotForUs,
     PayeesOutOfRange,
     DistanceTooFar,
+}
+
+// ============================================================================
+// JSON Export Structures
+// ============================================================================
+
+#[derive(Serialize)]
+struct SimulationExport {
+    config: SimulationConfig,
+    rounds: Vec<RoundData>,
+    final_coverage: CoverageExport,
+    chunk_timelines: Vec<ChunkTimeline>,
+}
+
+#[derive(Serialize)]
+struct SimulationConfig {
+    num_nodes: usize,
+    num_chunks: usize,
+    replication_rounds: usize,
+    close_group_size: usize,
+    k_value: usize,
+    majority_threshold: usize,
+}
+
+#[derive(Serialize)]
+struct RoundData {
+    round_number: usize,
+    total_records: usize,
+    replications: usize,
+    avg_records_per_node: f64,
+}
+
+#[derive(Serialize)]
+struct CoverageExport {
+    total_chunks: usize,
+    distribution: [usize; 8], // 0/7 through 7/7
+    average_percent: f64,
+}
+
+#[derive(Serialize)]
+struct ChunkTimeline {
+    address: String,
+    holders_per_round: Vec<usize>,
+    final_coverage: usize,
 }
 
 /// Accumulator for tracking replication sources - requires majority consensus
@@ -856,6 +901,9 @@ fn test_replication_simulation() {
     println!("Phase 3: Running {replication_rounds} replication rounds...");
     let phase3_start = std::time::Instant::now();
 
+    // Track round data for JSON export
+    let mut round_data_vec: Vec<RoundData> = Vec::new();
+
     for round in 1..=replication_rounds {
         println!("  Starting round {round}...");
         let round_start = std::time::Instant::now();
@@ -1059,6 +1107,14 @@ fn test_replication_simulation() {
             round_duration.as_secs_f64()
         );
 
+        // Track round data for JSON export
+        round_data_vec.push(RoundData {
+            round_number: round,
+            total_records,
+            replications: total_replications,
+            avg_records_per_node: avg_per_node,
+        });
+
         // Early termination if no new replications
         if total_replications == 0 && round > 1 {
             println!("  No new replications in round {round}, stopping early\n");
@@ -1260,6 +1316,72 @@ fn test_replication_simulation() {
         coverage_stats.average_percent()
     );
 
+    // ASCII Visualization
+    println!("=== ASCII Visualization ===\n");
+
+    // Coverage bar chart
+    println!("Overall Coverage: {} {:.1}%", coverage_stats.ascii_bar(20), coverage_stats.average_percent());
+
+    // Coverage distribution histogram
+    println!("\nCoverage Distribution:");
+    let max_count = [
+        coverage_stats.holders_0,
+        coverage_stats.holders_1,
+        coverage_stats.holders_2,
+        coverage_stats.holders_3,
+        coverage_stats.holders_4,
+        coverage_stats.holders_5,
+        coverage_stats.holders_6,
+        coverage_stats.holders_7,
+    ]
+    .iter()
+    .max()
+    .copied()
+    .unwrap_or(1);
+
+    let bar_width = 30;
+    for (i, count) in [
+        coverage_stats.holders_0,
+        coverage_stats.holders_1,
+        coverage_stats.holders_2,
+        coverage_stats.holders_3,
+        coverage_stats.holders_4,
+        coverage_stats.holders_5,
+        coverage_stats.holders_6,
+        coverage_stats.holders_7,
+    ]
+    .iter()
+    .enumerate()
+    {
+        let bar_len = (*count as f64 / max_count as f64 * bar_width as f64).round() as usize;
+        let bar = "█".repeat(bar_len);
+        println!("  {}/7: {:>5} {}", i, count, bar);
+    }
+
+    // Storage distribution visualization
+    println!("\nStorage Distribution (records per node):");
+    let mut record_counts: Vec<usize> = nodes.values().map(|n| n.stored_records.len()).collect();
+    record_counts.sort();
+
+    let p0 = record_counts.first().copied().unwrap_or(0);
+    let p25 = record_counts.get(record_counts.len() / 4).copied().unwrap_or(0);
+    let p50 = record_counts.get(record_counts.len() / 2).copied().unwrap_or(0);
+    let p75 = record_counts.get(record_counts.len() * 3 / 4).copied().unwrap_or(0);
+    let p100 = record_counts.last().copied().unwrap_or(0);
+
+    let storage_max = p100.max(1);
+    let storage_bar = |val: usize| {
+        let len = (val as f64 / storage_max as f64 * 20.0).round() as usize;
+        "█".repeat(len)
+    };
+
+    println!("  max:    {:>5} {}", p100, storage_bar(p100));
+    println!("  p75:    {:>5} {}", p75, storage_bar(p75));
+    println!("  median: {:>5} {}", p50, storage_bar(p50));
+    println!("  p25:    {:>5} {}", p25, storage_bar(p25));
+    println!("  min:    {:>5} {}", p0, storage_bar(p0));
+    println!();
+
     // Replication Candidate Selection statistics
     let within_range = REPLICATION_PEERS_WITHIN_RESPONSIBLE_RANGE.load(Ordering::Relaxed);
     let fallback = REPLICATION_PEERS_FALLBACK_TO_CLOSEST_K.load(Ordering::Relaxed);
@@ -1358,6 +1480,50 @@ fn test_replication_simulation() {
         println!("  - No majority accumulation recorded");
     }
     println!();
+
+    // ========================================================================
+    // Phase 6: JSON Export
+    // ========================================================================
+    println!("Phase 6: Exporting simulation results to JSON...");
+
+    // Build chunk timelines (simplified - just final coverage)
+    let chunk_timelines: Vec<ChunkTimeline> = chunk_addresses
+        .iter()
+        .take(100) // Limit to first 100 chunks to keep export manageable
+        .map(|chunk_addr| {
+            let holders_count = all_peer_ids
+                .iter()
+                .take(CLOSE_GROUP_SIZE + 2)
+                .filter(|peer| nodes[peer].stored_records.contains_key(chunk_addr))
+                .count();
+
+            ChunkTimeline {
+                address: format!("{:?}", chunk_addr),
+                holders_per_round: vec![], // Would require tracking during simulation
+                final_coverage: holders_count,
+            }
+        })
+        .collect();
+
+    let export = SimulationExport {
+        config: SimulationConfig {
+            num_nodes,
+            num_chunks,
+            replication_rounds,
+            close_group_size: CLOSE_GROUP_SIZE,
+            k_value: LIBP2P_K_VALUE,
+            majority_threshold: REPLICATION_MAJORITY_THRESHOLD,
+        },
+        rounds: round_data_vec,
+        final_coverage: coverage_stats.to_export(),
+        chunk_timelines,
+    };
+
+    // Write to file
+    let json_output = serde_json::to_string_pretty(&export).expect("Failed to serialize to JSON");
+    let output_path = std::path::Path::new("simulation_results.json");
+    std::fs::write(output_path, &json_output).expect("Failed to write JSON file");
+    println!("  ✓ Exported results to {}", output_path.display());
 }
 
 // ============================================================================
@@ -1450,6 +1616,31 @@ impl CoverageStats {
 
     fn percent(&self, count: usize) -> f64 {
         100.0 * count as f64 / self.total_chunks as f64
+    }
+
+    fn to_export(&self) -> CoverageExport {
+        CoverageExport {
+            total_chunks: self.total_chunks,
+            distribution: [
+                self.holders_0,
+                self.holders_1,
+                self.holders_2,
+                self.holders_3,
+                self.holders_4,
+                self.holders_5,
+                self.holders_6,
+                self.holders_7,
+            ],
+            average_percent: self.average_percent(),
+        }
+    }
+
+    /// Generate ASCII bar for coverage visualization
+    fn ascii_bar(&self, width: usize) -> String {
+        let pct = self.average_percent() / 100.0;
+        let filled = (pct * width as f64).round() as usize;
+        let empty = width.saturating_sub(filled);
+        format!("[{}{}]", "█".repeat(filled), "░".repeat(empty))
     }
 
     fn average_percent(&self) -> f64 {
