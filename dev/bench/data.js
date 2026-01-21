@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768971164851,
+  "lastUpdate": 1768971166379,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -16075,6 +16075,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/2e65559e45bef8e42b6ea77f8f213d7b8ec66121"
         },
         "date": 1768929690298,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "anselmega@gmail.com",
+            "name": "Anselme",
+            "username": "grumbach"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "59eff0260c81f42f1496fb63a6f13e333da63cf2",
+          "message": "Merge pull request #3415 from grumbach/upload_flow_refactor\n\nrefactor: upload flow",
+          "timestamp": "2026-01-21T03:31:37Z",
+          "tree_id": "d2a6772aff10ad3e2fcb4865fe87a789c7eb8670",
+          "url": "https://github.com/maidsafe/autonomi/commit/59eff0260c81f42f1496fb63a6f13e333da63cf2"
+        },
+        "date": 1768971165888,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
