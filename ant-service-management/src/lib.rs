@@ -49,13 +49,6 @@ pub enum ServiceStatus {
     Removed,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum NatDetectionStatus {
-    Public,
-    UPnP,
-    Private,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum UpgradeResult {
     Forced(String, String),

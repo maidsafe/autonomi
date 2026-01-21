@@ -11,7 +11,6 @@ use crate::connection_mode::ConnectionMode;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_node_manager::{VerbosityLevel, add_services::config::PortRange};
-use ant_releases::{self, AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{NodeRegistryManager, ServiceStatus};
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
@@ -171,7 +170,6 @@ async fn stop_nodes(
                 Action::StatusActions(StatusActions::StopNodesCompleted {
                     service_name: service,
                     all_nodes_data: node_registry.get_node_service_data().await,
-                    is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
                 }),
             );
         }
@@ -190,15 +188,11 @@ pub struct MaintainNodesArgs {
     pub init_peers_config: InitialPeersConfig,
     pub port_range: Option<PortRange>,
     pub rewards_address: String,
-    pub run_nat_detection: bool,
 }
 
 /// Maintain the specified number of nodes
 async fn maintain_n_running_nodes(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
     debug!("Maintaining {} nodes", args.count);
-    if args.run_nat_detection {
-        run_nat_detection(&args.action_sender).await;
-    }
 
     let config = prepare_node_config(&args);
     debug_log_config(&config, &args);
@@ -238,7 +232,6 @@ async fn maintain_n_running_nodes(args: MaintainNodesArgs, node_registry: NodeRe
         Action::StatusActions(StatusActions::StartNodesCompleted {
             service_name: NODES_ALL.to_string(),
             all_nodes_data: node_registry.get_node_service_data().await,
-            is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
         }),
     );
 }
@@ -267,7 +260,6 @@ async fn reset_nodes(
             Action::StatusActions(StatusActions::ResetNodesCompleted {
                 trigger_start_node: start_nodes_after_reset,
                 all_nodes_data: node_registry.get_node_service_data().await,
-                is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
             }),
         );
     }
@@ -337,7 +329,6 @@ async fn upgrade_nodes(args: UpgradeNodesArgs, node_registry: NodeRegistryManage
             args.action_sender,
             Action::StatusActions(StatusActions::UpdateNodesCompleted {
                 all_nodes_data: node_registry.get_node_service_data().await,
-                is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
             }),
         );
     }
@@ -393,7 +384,6 @@ async fn remove_nodes(
                 Action::StatusActions(StatusActions::RemoveNodesCompleted {
                     service_name: service,
                     all_nodes_data: node_registry.get_node_service_data().await,
-                    is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
                 }),
             );
         }
@@ -402,10 +392,6 @@ async fn remove_nodes(
 
 async fn add_node(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
     debug!("Adding node");
-
-    if args.run_nat_detection {
-        run_nat_detection(&args.action_sender).await;
-    }
 
     let config = prepare_node_config(&args);
 
@@ -432,7 +418,6 @@ async fn add_node(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
     match ant_node_manager::cmd::node::add(
         false, // alpha,
         false, // auto_restart,
-        config.auto_set_nat_flags,
         Some(config.count),
         config.data_dir_path,
         true,       // enable_metrics_server,
@@ -479,7 +464,6 @@ async fn add_node(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
                     Action::StatusActions(StatusActions::AddNodesCompleted {
                         service_name: service,
                         all_nodes_data: node_registry.get_node_service_data().await,
-                        is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
                     }),
                 );
             }
@@ -519,7 +503,6 @@ async fn start_nodes(
                 Action::StatusActions(StatusActions::StartNodesCompleted {
                     service_name: service,
                     all_nodes_data: node_registry.get_node_service_data().await,
-                    is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
                 }),
             );
         }
@@ -547,7 +530,6 @@ fn send_action(action_sender: UnboundedSender<Action>, action: Action) {
 
 struct NodeConfig {
     antnode_path: Option<PathBuf>,
-    auto_set_nat_flags: bool,
     count: u16,
     custom_ports: Option<PortRange>,
     data_dir_path: Option<PathBuf>,
@@ -558,62 +540,9 @@ struct NodeConfig {
     upnp: bool,
 }
 
-/// Run the NAT detection process
-async fn run_nat_detection(action_sender: &UnboundedSender<Action>) {
-    info!("Running nat detection....");
-
-    // Notify that NAT detection is starting
-    if let Err(err) = action_sender.send(Action::StatusActions(StatusActions::NatDetectionStarted))
-    {
-        error!("Error while sending action: {err:?}");
-    }
-
-    let release_repo = <dyn AntReleaseRepoActions>::default_config();
-    let version = match release_repo
-        .get_latest_version(&ReleaseType::NatDetection)
-        .await
-    {
-        Ok(v) => {
-            info!("Using NAT detection version {}", v.to_string());
-            v.to_string()
-        }
-        Err(err) => {
-            info!("No NAT detection release found, using fallback version 0.1.0");
-            info!("Error: {err}");
-            "0.1.0".to_string()
-        }
-    };
-
-    if let Err(err) = ant_node_manager::cmd::nat_detection::run_nat_detection(
-        None,
-        true,
-        None,
-        None,
-        Some(version),
-        VerbosityLevel::Minimal,
-    )
-    .await
-    {
-        error!("Error while running nat detection {err:?}. Registering the error.");
-        if let Err(err) = action_sender.send(Action::StatusActions(
-            StatusActions::ErrorWhileRunningNatDetection,
-        )) {
-            error!("Error while sending action: {err:?}");
-        }
-    } else {
-        info!("Successfully ran nat detection.");
-        if let Err(err) = action_sender.send(Action::StatusActions(
-            StatusActions::SuccessfullyDetectedNatStatus,
-        )) {
-            error!("Error while sending action: {err:?}");
-        }
-    }
-}
-
 fn prepare_node_config(args: &MaintainNodesArgs) -> NodeConfig {
     NodeConfig {
         antnode_path: args.antnode_path.clone(),
-        auto_set_nat_flags: args.connection_mode == ConnectionMode::Automatic,
         data_dir_path: args.data_dir_path.clone(),
         count: args.count,
         custom_ports: if args.connection_mode == ConnectionMode::CustomPorts {
@@ -648,10 +577,6 @@ fn debug_log_config(config: &NodeConfig, args: &MaintainNodesArgs) {
         " data_dir_path: {:?}, connection_mode: {:?}",
         config.data_dir_path, args.connection_mode
     );
-    debug!(
-        " auto_set_nat_flags: {:?}, custom_ports: {:?}, upnp: {}",
-        config.auto_set_nat_flags, config.custom_ports, config.upnp
-    );
 }
 
 /// Get the currently used ports from the node registry
@@ -681,7 +606,6 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16, node_registry: NodeRe
     match ant_node_manager::cmd::node::maintain_n_running_nodes(
         false,
         false,
-        config.auto_set_nat_flags,
         CONNECTION_TIMEOUT_START,
         count,
         config.data_dir_path.clone(),
@@ -757,7 +681,6 @@ async fn add_nodes(
         match ant_node_manager::cmd::node::maintain_n_running_nodes(
             false,
             false,
-            config.auto_set_nat_flags,
             CONNECTION_TIMEOUT_START,
             config.count,
             config.data_dir_path.clone(),
