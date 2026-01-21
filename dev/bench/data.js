@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768971167926,
+  "lastUpdate": 1769012703109,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -6161,6 +6161,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.012005253451469,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1a792944c2714a1c0c83d363637f58d8cfdf6f62",
+          "message": "Merge pull request #3417 from mickvandijke/fix-query-termination-get-version\n\nfix(autonomi): catch error for `GetVersion` query",
+          "timestamp": "2026-01-21T15:07:59Z",
+          "tree_id": "077db5f9348ca28b6c6ca4f7a0e2eedd3a671665",
+          "url": "https://github.com/maidsafe/autonomi/commit/1a792944c2714a1c0c83d363637f58d8cfdf6f62"
+        },
+        "date": 1769012695203,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1076551942292876,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.498302106549982,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.983437255249162,
             "unit": "MiB/s"
           }
         ]
