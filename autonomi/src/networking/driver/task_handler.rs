@@ -666,6 +666,14 @@ impl TaskHandler {
             responder
                 .send(Err(NetworkError::GetQuoteError(error.to_string())))
                 .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
+        // Get version case
+        } else if let Some(responder) = self.get_version.remove(&id) {
+            trace!(
+                "OutboundRequestId({id}): get version got fatal error from peer {peer:?}: {error:?}"
+            );
+            responder
+                .send(Err(NetworkError::GetVersionError(error.to_string())))
+                .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
         } else {
             trace!(
                 "OutboundRequestId({id}): trying to terminate unknown query, maybe it was already removed"

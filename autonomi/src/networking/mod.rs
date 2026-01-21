@@ -241,6 +241,10 @@ pub enum NetworkError {
     #[error("Failed to get record: {0}")]
     GetRecordError(String),
 
+    /// Error getting version
+    #[error("Failed to get version: {0}")]
+    GetVersionError(String),
+
     /// Invalid retry strategy
     #[error("Invalid retry strategy, check your config or use the default")]
     InvalidRetryStrategy,
