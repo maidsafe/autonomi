@@ -23,7 +23,7 @@ use crate::networking::metrics::NetworkMetricsRecorder;
 use crate::networking::{
     Addresses, CLOSE_GROUP_SIZE, NodeIssue, NodeRecordStore, circular_vec::CircularVec,
     driver::kad::U256, error::Result, external_address::ExternalAddressManager,
-    log_markers::Marker, relay_manager::RelayManager, replication_fetcher::ReplicationFetcher,
+    log_markers::Marker, replication_fetcher::ReplicationFetcher,
 };
 use ant_bootstrap::bootstrap::Bootstrap;
 use ant_evm::PaymentQuote;
@@ -46,7 +46,7 @@ use libp2p::{
     request_response,
     swarm::{NetworkBehaviour, behaviour::toggle::Toggle},
 };
-use std::collections::{BTreeMap, HashMap, HashSet, btree_map::Entry};
+use std::collections::{BTreeMap, HashMap, btree_map::Entry};
 use std::time::Instant;
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::{Duration, interval};
@@ -61,9 +61,6 @@ pub(crate) type BadNodes = BTreeMap<PeerId, (Vec<(NodeIssue, Instant)>, bool)>;
 /// Interval over which we check for the farthest record we _should_ be holding
 /// based upon our knowledge of the CLOSE_GROUP
 pub(crate) const CLOSET_RECORD_CHECK_INTERVAL: Duration = Duration::from_secs(15);
-
-/// Interval over which we query relay manager to check if we can make any more reservations.
-pub(crate) const RELAY_MANAGER_RESERVATION_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Interval over which we check if we could dial any peer in the dial queue.
 const DIAL_QUEUE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
@@ -104,8 +101,6 @@ pub(super) struct NodeBehaviour {
     pub(super) do_not_disturb: behaviour::do_not_disturb::Behaviour,
     pub(super) identify: libp2p::identify::Behaviour,
     pub(super) upnp: Toggle<libp2p::upnp::tokio::Behaviour>,
-    pub(super) relay_client: libp2p::relay::client::Behaviour,
-    pub(super) relay_server: Toggle<libp2p::relay::Behaviour>,
     pub(super) kademlia: kad::Behaviour<NodeRecordStore>,
     pub(super) request_response: request_response::cbor::Behaviour<Request, Response>,
 }
@@ -115,7 +110,6 @@ pub(crate) struct SwarmDriver {
     pub(crate) self_peer_id: PeerId,
     /// When true, we don't filter our local addresses
     pub(crate) local: bool,
-    pub(crate) is_relay_client: bool,
     #[cfg(feature = "open-metrics")]
     pub(crate) close_group: Vec<PeerId>,
     pub(crate) peers_in_rt: usize,
@@ -124,9 +118,6 @@ pub(crate) struct SwarmDriver {
     pub(crate) bootstrap: Bootstrap,
     pub(crate) network_wide_replication: NetworkWideReplication,
     pub(crate) external_address_manager: Option<ExternalAddressManager>,
-    pub(crate) relay_manager: Option<RelayManager>,
-    /// The peers that are using our relay service.
-    pub(crate) connected_relay_clients: HashSet<PeerId>,
     /// The peers that are closer to our PeerId. Includes self.
     pub(crate) replication_fetcher: ReplicationFetcher,
     #[cfg(feature = "open-metrics")]
@@ -183,7 +174,6 @@ impl SwarmDriver {
     pub(crate) async fn run(mut self, mut shutdown_rx: watch::Receiver<bool>) {
         let mut network_discover_interval = interval(NETWORK_DISCOVER_INTERVAL);
         let mut set_farthest_record_interval = interval(CLOSET_RECORD_CHECK_INTERVAL);
-        let mut relay_manager_reservation_interval = interval(RELAY_MANAGER_RESERVATION_INTERVAL);
         let mut bootstrap_interval = Some(interval(BOOTSTRAP_CHECK_INTERVAL));
         let mut dial_queue_check_interval = interval(DIAL_QUEUE_CHECK_INTERVAL);
         let network_wide_replication = duration_with_variance(
@@ -360,11 +350,6 @@ impl SwarmDriver {
                         let _ = metrics_recorder.distance_range.set(ilog2 as i64);
                     }
                 }
-                _ = relay_manager_reservation_interval.tick() => {
-                    if let Some(relay_manager) = &mut self.relay_manager {
-                        relay_manager.try_connecting_to_relay(&mut self.swarm, &self.bad_nodes)
-                    }
-                },
             }
         }
     }

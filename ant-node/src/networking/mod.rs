@@ -19,7 +19,6 @@ mod log_markers;
 mod metrics;
 mod network;
 mod record_store;
-mod relay_manager;
 mod replication_fetcher;
 mod transport;
 

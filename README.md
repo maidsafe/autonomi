@@ -42,6 +42,8 @@ cargo build --release --bin antnode
 
 #### Running the Node
 
+Nodes require direct connectivity to the network. If you're behind NAT, you'll need to configure port forwarding or use a VPN.
+
 To run a node and receive rewards, you need to specify your Ethereum address as a parameter. Rewards are paid to the specified address.
 
 ```

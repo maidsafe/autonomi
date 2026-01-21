@@ -201,7 +201,7 @@ struct Opt {
     #[clap(long)]
     rewards_address: Option<String>,
 
-    /// Enable the mode to run as a relay client if it is behind a NAT and is not externally reachable.
+    /// DEPRECATED: This does nothing from this version onwards.
     #[clap(long, default_value_t = false)]
     relay: bool,
 
@@ -346,7 +346,6 @@ fn main() -> Result<()> {
         );
         node_builder.local(opt.peers.local);
         node_builder.no_upnp(opt.no_upnp);
-        node_builder.relay_client(opt.relay);
         #[cfg(feature = "open-metrics")]
         let mut node_builder = node_builder;
         // if enable flag is provided or only if the port is specified then enable the server by setting Some()
