@@ -80,9 +80,15 @@ pub struct Bootstrap {
 
 impl Bootstrap {
     /// Create a new Bootstrap manager with the given configuration.
-    /// Use `new_with_preloaded_addrs` to ensure that the struct contains at least MIN_INITIAL_ADDRS addresses immediately.
     ///
-    /// Must be called from a tokio runtime context.
+    /// This method does not preload addresses from cache or contacts endpoints. Addresses are fetched
+    /// lazily when `next_addr()` is called. This is suitable for nodes that run the swarm and can
+    /// wait for addresses to be fetched on-demand.
+    ///
+    /// For clients that need addresses populated before starting the libp2p driver, use
+    /// `new_with_preloaded_addrs()` instead.
+    ///
+    /// Must be called from a tokio runtime context (spawns internal tasks).
     pub fn new(config: BootstrapConfig) -> Result<Self> {
         let contacts_progress = Self::build_contacts_progress(&config)?;
 
@@ -151,7 +157,13 @@ impl Bootstrap {
         Ok(bootstrap)
     }
 
-    /// Create a new Bootstrap manager and ensure it has at least MIN_INITIAL_ADDRS addresses preloaded.
+    /// Create a new Bootstrap manager with addresses preloaded from cache and/or contacts endpoints.
+    ///
+    /// This method ensures the address queue has at least `MIN_INITIAL_ADDRS` addresses (or at least 1
+    /// if fewer are available) before returning. This is suitable for clients that need addresses
+    /// populated before starting the libp2p driver.
+    ///
+    /// For nodes that can fetch addresses on-demand via `next_addr()`, use `new()` instead.
     pub async fn new_with_preloaded_addrs(config: BootstrapConfig) -> Result<Self> {
         let mut bootstrap = Self::new(config)?;
 
