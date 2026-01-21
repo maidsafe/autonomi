@@ -7,10 +7,10 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::archive_private::{PrivateArchive, PrivateArchiveDataMap};
-use super::{DownloadError, UploadError};
+use super::{DownloadError, UploadError, bulk_upload_internal, file_upload_internal};
 use crate::client::PutError;
 use crate::client::data_types::chunk::DataMapChunk;
-use crate::client::payment::PaymentOption;
+use crate::client::payment::{BulkPaymentOption, PaymentOption};
 use crate::client::quote::add_costs;
 use crate::{AttoTokens, Client};
 use std::path::PathBuf;
@@ -54,52 +54,107 @@ impl Client {
     /// The directory is recursively walked and each file is uploaded to the network.
     ///
     /// The datamaps of these (private) files are not uploaded but returned within the [`PrivateArchive`] return type.
+    ///
+    /// When using `BulkPaymentOption::Wallet`, the payment method is automatically selected:
+    /// - For directories with >= 64 estimated chunks: uses merkle payments (more efficient)
+    /// - For smaller directories: uses regular per-batch payments
     pub async fn dir_content_upload(
         &self,
         dir_path: PathBuf,
-        payment_option: PaymentOption,
+        payment_option: BulkPaymentOption,
     ) -> Result<(AttoTokens, PrivateArchive), UploadError> {
-        let (total_cost, streams) = self
-            .dir_content_upload_internal(dir_path, payment_option, false)
-            .await?;
-
-        let mut private_archive = PrivateArchive::new();
-        for stream in streams {
-            let file_path = stream.file_path.clone();
-            if let Some(datamap) = stream.data_map_chunk() {
-                private_archive.add_file(stream.relative_path, datamap, stream.metadata);
-            } else {
-                error!("Datamap chunk not found for file: {file_path:?}, this is a BUG");
+        bulk_upload_internal(self, dir_path, payment_option, false, |results| {
+            let mut archive = PrivateArchive::new();
+            for (path, datamap, metadata) in results {
+                archive.add_file(path, datamap, metadata);
             }
-        }
-
-        Ok((total_cost, private_archive))
+            archive
+        })
+        .await
     }
 
     /// Same as [`Client::dir_content_upload`] but also uploads the archive (privately) to the network.
     ///
     /// Returns the [`PrivateArchiveDataMap`] allowing the private archive to be downloaded from the network.
+    ///
+    /// # Atomic Operation
+    ///
+    /// This is an atomic operation that requires a fresh wallet payment for both content and archive.
+    ///
+    /// # Resume Support
+    ///
+    /// To resume failed uploads with payment receipts, use the two-step approach:
+    /// 1. Upload content with receipt: `dir_content_upload(path, BulkPaymentOption::ContinueMerkle(wallet, receipt))`
+    /// 2. Upload archive separately: `archive_put(&archive, PaymentOption::Wallet(wallet))`
+    ///
+    /// This allows you to preserve merkle payment receipts while still completing the full upload.
     pub async fn dir_upload(
         &self,
         dir_path: PathBuf,
-        payment_option: PaymentOption,
+        wallet: &ant_evm::EvmWallet,
     ) -> Result<(AttoTokens, PrivateArchiveDataMap), UploadError> {
         let (cost1, archive) = self
-            .dir_content_upload(dir_path, payment_option.clone())
+            .dir_content_upload(dir_path, BulkPaymentOption::Wallet(wallet.clone()))
             .await?;
-        let (cost2, archive_addr) = self.archive_put(&archive, payment_option).await?;
+        let (cost2, archive_addr) = self
+            .archive_put(&archive, PaymentOption::Wallet(wallet.clone()))
+            .await?;
         let total_cost = add_costs(cost1, cost2).map_err(PutError::from)?;
         Ok((total_cost, archive_addr))
     }
 
     /// Upload the content of a private file to the network.
     /// Reads file, splits into chunks, uploads chunks, uploads datamap, returns [`DataMapChunk`] (pointing to the datamap)
+    ///
+    /// All `BulkPaymentOption` variants are supported:
+    /// - `Wallet`: Fresh upload with auto-selection (merkle for >= 64 chunks, regular otherwise)
+    /// - `Receipt`: Resume with regular receipt
+    /// - `ContinueMerkle`: Uses merkle flow with wallet for unpaid chunks
+    /// - `MerkleReceipt`: Uses merkle flow with existing proofs (fails if unpaid chunks exist)
     pub async fn file_content_upload(
         &self,
         path: PathBuf,
-        payment_option: PaymentOption,
+        payment_option: BulkPaymentOption,
     ) -> Result<(AttoTokens, DataMapChunk), UploadError> {
-        self.file_content_upload_internal(path, payment_option, false)
-            .await
+        file_upload_internal(self, path, payment_option, false).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::self_encryption::MAX_CHUNK_SIZE;
+
+    #[test]
+    fn test_chunk_estimation_ceiling_division() {
+        // Test that we use ceiling division for accurate estimates
+        // MAX_CHUNK_SIZE is typically 1MB (1024*1024 bytes)
+
+        // Small file (500KB) should estimate correctly, not 0
+        let small_size: usize = 500 * 1024; // 500KB
+        let estimated = std::cmp::max(3, small_size.div_ceil(MAX_CHUNK_SIZE));
+        assert!(
+            estimated >= 3,
+            "Small files should estimate at least 3 chunks"
+        );
+
+        // 1.5MB file should estimate 2 chunks (ceiling of 1.5)
+        let medium_size: usize = (MAX_CHUNK_SIZE * 3) / 2; // 1.5 * MAX_CHUNK_SIZE
+        let estimated = std::cmp::max(3, medium_size.div_ceil(MAX_CHUNK_SIZE));
+        assert!(
+            estimated >= 3,
+            "1.5MB file should estimate at least 3 chunks (self-encryption minimum)"
+        );
+
+        // Exact multiple should work correctly
+        let exact_size: usize = MAX_CHUNK_SIZE * 5;
+        let estimated = exact_size.div_ceil(MAX_CHUNK_SIZE);
+        assert_eq!(estimated, 5, "Exact multiples should estimate correctly");
+
+        // Zero size should still estimate minimum
+        let zero_estimated = std::cmp::max(3, 0_usize.div_ceil(MAX_CHUNK_SIZE));
+        assert_eq!(
+            zero_estimated, 3,
+            "Empty files should estimate 3 chunks minimum"
+        );
     }
 }

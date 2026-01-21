@@ -11,5 +11,4 @@ mod stream_encryption;
 
 pub use memory_encryption::{DataMapLevel, Error, encrypt};
 pub use self_encryption::MAX_CHUNK_SIZE;
-pub(crate) use stream_encryption::encrypt_file;
 pub use stream_encryption::{EncryptionStream, encrypt_directory_files};

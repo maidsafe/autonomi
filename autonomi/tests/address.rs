@@ -128,9 +128,8 @@ async fn test_data_addresses_use() -> Result<()> {
     assert_eq!(parsed_register_bls_pubkey, addr);
 
     // put private dir
-    let payment_option = PaymentOption::from(&wallet);
     let path = "tests/file/test_dir/".into();
-    let (_cost, archive_datamap) = client.dir_upload(path, payment_option.clone()).await?;
+    let (_cost, archive_datamap) = client.dir_upload(path, &wallet).await?;
     let archive_datamap_addr = archive_datamap.to_hex();
     println!("Private Archive (DataMap): {archive_datamap_addr}");
 
@@ -139,9 +138,7 @@ async fn test_data_addresses_use() -> Result<()> {
 
     // put public dir
     let path = "tests/file/test_dir/".into();
-    let (_cost, archive_addr) = client
-        .dir_upload_public(path, payment_option.clone())
-        .await?;
+    let (_cost, archive_addr) = client.dir_upload_public(path, &wallet).await?;
     let archive_addr_str = archive_addr.to_hex();
     println!("Public Archive (XorName): {archive_addr_str}");
 

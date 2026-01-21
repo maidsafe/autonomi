@@ -116,16 +116,28 @@ pub enum FileCmd {
     Cost {
         /// The file to estimate cost for.
         file: String,
-        /// Use Merkle batch payment mode instead of standard payment.
-        /// Merkle mode pays for all chunks in a single transaction, saving gas fees.
+        /// Estimate cost for public upload. Everyone can see public data on the Network.
+        /// Default is private (data encrypted, datamaps kept local).
+        #[arg(short, long)]
+        public: bool,
+        /// Exclude archive metadata from cost estimate.
+        /// By default, archive cost is included for directory uploads.
         #[arg(long)]
-        merkle: bool,
+        no_archive: bool,
         /// Use standard payment mode instead of single-node payment (default).
         /// Standard mode pays 3 nodes individually, which costs more in gas fees.
         /// Single-node payment (default) pays only one node with 3x that amount, saving gas fees.
-        /// This flag only applies to standard payment mode (not Merkle).
+        /// Note: This only applies to regular payments, not merkle payments.
         #[arg(long, conflicts_with = "merkle")]
         disable_single_node_payment: bool,
+        /// Force merkle payment estimation (batched payments via smart contract).
+        /// Better for large uploads with many chunks. Mutually exclusive with --regular and --disable-single-node-payment.
+        #[arg(long, conflicts_with_all = ["regular", "disable_single_node_payment"])]
+        merkle: bool,
+        /// Force regular payment estimation (individual chunk quotes).
+        /// Better for small uploads with few chunks. Mutually exclusive with --merkle.
+        #[arg(long, conflicts_with = "merkle")]
+        regular: bool,
     },
 
     /// Upload a file and pay for it. Data on the Network is private by default.
@@ -146,17 +158,21 @@ pub enum FileCmd {
         #[arg(long)]
         #[clap(default_value = "0")]
         retry_failed: u64,
-        /// Use Merkle batch payment mode instead of standard payment.
-        /// Merkle mode pays for all chunks in a single transaction, saving gas fees.
-        #[arg(long)]
-        merkle: bool,
         /// Use standard payment mode instead of single-node payment (default).
         /// Standard mode pays 3 nodes individually, which costs more in gas fees.
         /// Single-node payment (default) pays only one node with 3x that amount, saving gas fees.
         /// Data is stored on 5 nodes regardless of payment mode.
-        /// This flag only applies to standard payment mode (not Merkle).
+        /// Note: This only applies to regular payments, not merkle payments.
         #[arg(long, conflicts_with = "merkle")]
         disable_single_node_payment: bool,
+        /// Force merkle tree payments regardless of chunk count.
+        /// By default, merkle payments are used for >= 64 chunks. Mutually exclusive with --regular and --disable-single-node-payment.
+        #[arg(long, conflicts_with_all = ["regular", "disable_single_node_payment"])]
+        merkle: bool,
+        /// Force regular per-batch payments regardless of chunk count.
+        /// By default, regular payments are used for < 64 chunks. Mutually exclusive with --merkle.
+        #[arg(long, conflicts_with = "merkle")]
+        regular: bool,
         #[command(flatten)]
         transaction_opt: TransactionOpt,
     },
@@ -573,16 +589,31 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
         Some(SubCmd::File { command }) => match command {
             FileCmd::Cost {
                 file,
-                merkle,
+                public,
+                no_archive,
                 disable_single_node_payment,
-            } => file::cost(&file, network_context, merkle, disable_single_node_payment).await,
+                merkle,
+                regular,
+            } => {
+                file::cost(
+                    &file,
+                    public,
+                    !no_archive,
+                    network_context,
+                    disable_single_node_payment,
+                    merkle,
+                    regular,
+                )
+                .await
+            }
             FileCmd::Upload {
                 file,
                 public,
                 no_archive,
                 retry_failed,
-                merkle,
                 disable_single_node_payment,
+                merkle,
+                regular,
                 transaction_opt,
             } => {
                 if let Err((err, exit_code)) = file::upload(
@@ -592,8 +623,9 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                     network_context,
                     transaction_opt.max_fee_per_gas,
                     retry_failed,
-                    merkle,
                     disable_single_node_payment,
+                    merkle,
+                    regular,
                 )
                 .await
                 {

@@ -85,12 +85,12 @@ impl Client {
         data: Bytes,
     ) -> Result<Vec<(XorName, usize)>, CostError> {
         let now = Instant::now();
-        let (data_map_chunks, chunks) = encrypt(data)?;
+        let (data_map_chunk, chunks) = encrypt(data)?;
 
         debug!("Encryption took: {:.2?}", now.elapsed());
 
-        let map_xor_name = *data_map_chunks.address().xorname();
-        let mut content_addrs = vec![(map_xor_name, data_map_chunks.size())];
+        let map_xor_name = *data_map_chunk.address().xorname();
+        let mut content_addrs = vec![(map_xor_name, data_map_chunk.size())];
 
         for chunk in &chunks {
             content_addrs.push((*chunk.name(), chunk.size()));
