@@ -364,7 +364,7 @@ This may increase operation speed, but offers no guarantees that operations were
 
 #### Get a cost estimate for storing a file
 ```
-file cost <file> [--merkle] [--disable-single-node-payment]
+file cost <file> [-p, --public] [--no-archive] [--merkle] [--regular] [--disable-single-node-payment]
 ```
 
 Gets a cost estimate for uploading a file to the network.
@@ -374,13 +374,21 @@ Expected value:
 - `<file>`: File path (accessible by current user)
 
 The following flags can be applied:
-- `--merkle` (Optional) Use Merkle batch payment mode instead of standard payment. Merkle mode pays for all chunks in a single transaction, saving gas fees.
-- `--disable-single-node-payment` (Optional) Use standard payment mode instead of single-node payment. Standard mode pays 3 nodes individually, which costs more in gas fees. Single-node payment (default) pays only one node with 3x that amount, saving gas fees. This flag only applies to standard payment mode (not Merkle).
+- `-p, --public` (Optional) Estimate cost for public upload. Everyone can see public data on the Network. Default is private (data encrypted, datamaps kept local).
+- `--no-archive` (Optional) Exclude archive metadata from cost estimate. By default, archive cost is included for directory uploads.
+- `--merkle` (Optional) Force merkle payment estimation (batched payments via smart contract). Better for large uploads with many chunks. Mutually exclusive with `--regular` and `--disable-single-node-payment`.
+- `--regular` (Optional) Force regular payment estimation (individual chunk quotes). Better for small uploads with few chunks. Mutually exclusive with `--merkle`.
+- `--disable-single-node-payment` (Optional) Use standard payment mode instead of single-node payment. Standard mode pays 3 nodes individually, which costs more in gas fees. Single-node payment (default) pays only one node with 3x that amount, saving gas fees. This flag only applies to regular payments, not merkle payments.
 
+**Payment Mode Auto-Selection**: By default, the CLI automatically selects the optimal payment mode based on the number of chunks:
+- **Merkle payments**: Used for uploads with >= 64 chunks (more gas-efficient for large uploads)
+- **Regular payments**: Used for uploads with < 64 chunks (simpler for small uploads)
+
+The output will show which method was auto-selected and why (e.g., "merkle (auto-selected: ~150 chunks >= 64 threshold)").
 
 #### Upload a file
 ```
-file upload <file> [--public] [--no-archive] [--retry-failed <N>] [--merkle] [--disable-single-node-payment] [--max-fee-per-gas <value>]
+file upload <file> [-p, --public] [--no-archive] [--retry-failed <N>] [--merkle] [--regular] [--disable-single-node-payment] [--max-fee-per-gas <value>]
 ```
 Uploads a file to the network.
 
@@ -388,11 +396,12 @@ Expected value:
 - `<file>`: File path (accessible by current user)
 
 The following flags can be added:
-- `--public` (Optional) Specifying this will make this file publicly available to anyone on the network
-- `--no-archive` (Optional) Skip creating local archive after upload. Only upload files without saving archive information. Note that --no-archive is the default behaviour for single file uploads (folk can still upload a single file as an archive by putting it in a directory)
-- `--retry-failed <N>` (Optional) Automatically retry failed uploads. This is particularly useful for handling gas fee errors when the network base fee exceeds your --max-fee-per-gas setting. The retry mechanism works at the batch level, so only failed chunks are retried, not the entire file upload process. Default is `0` for no retry.
-- `--merkle` (Optional) Use Merkle batch payment mode instead of standard payment. Merkle mode pays for all chunks in a single transaction, saving gas fees.
-- `--disable-single-node-payment` (Optional) Use standard payment mode instead of single-node payment. Standard mode pays 3 nodes individually, which costs more gas. Single-node payment (default) pays only one node with 3x that amount. Data is stored on 5 nodes regardless of payment mode. This flag only applies to standard payment mode (not Merkle).
+- `-p, --public` (Optional) Upload the file as public. Everyone can see public data on the Network. Default is private.
+- `--no-archive` (Optional) Skip creating an archive after uploading a directory. When uploading a directory, files are normally grouped into an archive for easier management. This flag uploads the files individually without creating the archive metadata. Note: This option only affects directory uploads - single file uploads never create archives.
+- `--retry-failed <N>` (Optional) Automatically retry failed uploads after 1 minute pause. This will persistently retry any failed chunks until all data is successfully uploaded. Default is `0` for no retry.
+- `--merkle` (Optional) Force merkle tree payments regardless of chunk count. By default, merkle payments are used for >= 64 chunks. Mutually exclusive with `--regular` and `--disable-single-node-payment`.
+- `--regular` (Optional) Force regular per-batch payments regardless of chunk count. By default, regular payments are used for < 64 chunks. Mutually exclusive with `--merkle`.
+- `--disable-single-node-payment` (Optional) Use standard payment mode instead of single-node payment. Standard mode pays 3 nodes individually, which costs more gas. Single-node payment (default) pays only one node with 3x that amount. Data is stored on 5 nodes regardless of payment mode. This flag only applies to regular payments, not merkle payments.
 - `--max-fee-per-gas <value>` (Optional) Maximum fee per gas / gas price bid. Options: `low`, `market` (default), `auto`, `limited-auto:<WEI>`, `unlimited`, or a specific `<WEI AMOUNT>`.
 
 Example usage with retry functionality:
