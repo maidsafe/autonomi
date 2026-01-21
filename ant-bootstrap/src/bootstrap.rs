@@ -11,6 +11,7 @@ use crate::BootstrapCacheStore;
 use crate::BootstrapConfig;
 use crate::ContactsFetcher;
 use crate::Result;
+use crate::cache_store::CacheDataLatest;
 use crate::contacts_fetcher::ALPHANET_CONTACTS;
 use crate::contacts_fetcher::MAINNET_CONTACTS;
 use crate::craft_valid_multiaddr;
@@ -145,13 +146,20 @@ impl Bootstrap {
         bootstrap.cache_task = Some(cache_task);
 
         if config.first {
-            tokio::spawn(async move {
-                if let Err(err) = cache_store.write().await {
-                    error!("Failed to clear bootstrap cache for first node: {err}");
-                } else {
-                    info!("Bootstrap cache cleared for first node");
+            // Clear the cache file synchronously for the first node
+            let filename = BootstrapCacheStore::cache_file_name(config.local);
+            let cache_path = CacheDataLatest::cache_file_path(&config.cache_dir, &filename);
+            match std::fs::remove_file(&cache_path) {
+                Ok(()) => info!("Bootstrap cache cleared for first node: {cache_path:?}"),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                    debug!("No cache file to clear for first node: {cache_path:?}");
                 }
-            });
+                Err(err) => {
+                    error!(
+                        "Failed to clear bootstrap cache for first node at {cache_path:?}: {err}"
+                    );
+                }
+            }
         }
 
         Ok(bootstrap)
@@ -1217,12 +1225,9 @@ mod tests {
 
         assert!(flow.has_terminated());
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        let contents_after = std::fs::read_to_string(&file_path).unwrap();
         assert!(
-            !contents_after.contains(&cache_addr.to_string()),
-            "Cache should be cleared for first node"
+            !file_path.exists(),
+            "Cache file should be deleted for first node"
         );
     }
 
