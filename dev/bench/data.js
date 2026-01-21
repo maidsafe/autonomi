@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769012802380,
+  "lastUpdate": 1769012804290,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -16177,6 +16177,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/59eff0260c81f42f1496fb63a6f13e333da63cf2"
         },
         "date": 1768971165888,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1a792944c2714a1c0c83d363637f58d8cfdf6f62",
+          "message": "Merge pull request #3417 from mickvandijke/fix-query-termination-get-version\n\nfix(autonomi): catch error for `GetVersion` query",
+          "timestamp": "2026-01-21T15:07:59Z",
+          "tree_id": "077db5f9348ca28b6c6ca4f7a0e2eedd3a671665",
+          "url": "https://github.com/maidsafe/autonomi/commit/1a792944c2714a1c0c83d363637f58d8cfdf6f62"
+        },
+        "date": 1769012803578,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
