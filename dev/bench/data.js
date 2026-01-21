@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1768971166379,
+  "lastUpdate": 1768971167926,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -22239,6 +22239,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 20128,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "anselmega@gmail.com",
+            "name": "Anselme",
+            "username": "grumbach"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "59eff0260c81f42f1496fb63a6f13e333da63cf2",
+          "message": "Merge pull request #3415 from grumbach/upload_flow_refactor\n\nrefactor: upload flow",
+          "timestamp": "2026-01-21T03:31:37Z",
+          "tree_id": "d2a6772aff10ad3e2fcb4865fe87a789c7eb8670",
+          "url": "https://github.com/maidsafe/autonomi/commit/59eff0260c81f42f1496fb63a6f13e333da63cf2"
+        },
+        "date": 1768971167433,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10598,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 21171,
             "unit": "ms"
           },
           {
