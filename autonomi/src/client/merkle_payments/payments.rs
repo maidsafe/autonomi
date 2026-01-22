@@ -399,12 +399,15 @@ impl Client {
         debug!("Waiting for wallet lock");
         let lock_guard = wallet.lock().await;
         debug!("Locked wallet");
-        let (winner_pool_hash, amount) = wallet
+        let (winner_pool_hash, amount, gas_info) = wallet
             .pay_for_merkle_tree(depth, pool_commitments, merkle_payment_timestamp)
             .await?;
         let amount = AttoTokens::from_atto(amount);
         drop(lock_guard);
         debug!("Unlocked wallet");
+
+        // Display gas cost to user
+        crate::loud_info!("Gas cost: {gas_info}");
 
         info!("Payment submitted, winner pool: {winner_pool_hash:?}, amount: {amount}");
 

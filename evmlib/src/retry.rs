@@ -10,6 +10,36 @@ const DEFAULT_RETRY_INTERVAL_MS: u64 = 4000;
 const BROADCAST_TRANSACTION_TIMEOUT_MS: u64 = 5000;
 const WATCH_TIMEOUT_MS: u64 = 1000;
 
+/// Gas information from a transaction
+#[derive(Debug, Clone, Default)]
+pub struct GasInfo {
+    /// Estimated gas before buffer
+    pub estimated_gas: u64,
+    /// Gas limit with buffer (what was actually set on the transaction)
+    pub gas_with_buffer: u64,
+    /// Max fee per gas (EIP-1559)
+    pub max_fee_per_gas: Option<u128>,
+    /// Max priority fee per gas (EIP-1559)
+    pub max_priority_fee_per_gas: Option<u128>,
+    /// Actual gas used (from receipt)
+    pub actual_gas_used: u64,
+    /// Effective gas price paid (from receipt, in wei)
+    pub effective_gas_price: u128,
+    /// Total gas cost in wei (actual_gas_used * effective_gas_price)
+    pub gas_cost_wei: u128,
+}
+
+impl std::fmt::Display for GasInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let gwei_cost = self.gas_cost_wei as f64 / 1e9;
+        write!(
+            f,
+            "{gwei_cost:.6} gwei ({} gas @ {} wei/gas)",
+            self.actual_gas_used, self.effective_gas_price
+        )
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum TransactionError {
     #[error("Could not get current gas price: {0}")]
@@ -66,13 +96,14 @@ where
 }
 
 /// Generic function to send a transaction with retries.
+/// Returns the transaction hash and gas information.
 pub(crate) async fn send_transaction_with_retries<P, N>(
     provider: &P,
     calldata: Calldata,
     to: Address,
     tx_identifier: &str,
     transaction_config: &TransactionConfig,
-) -> Result<TxHash, TransactionError>
+) -> Result<(TxHash, GasInfo), TransactionError>
 where
     P: Provider<N>,
     N: Network,
@@ -91,7 +122,7 @@ where
         )
         .await
         {
-            Ok(tx_hash) => break Ok(tx_hash),
+            Ok((tx_hash, gas_info)) => break Ok((tx_hash, gas_info)),
             Err(err) => {
                 if retries == MAX_RETRIES {
                     error!(
@@ -157,7 +188,7 @@ async fn send_transaction<P, N>(
     mut nonce: Option<u64>,
     tx_identifier: &str,
     transaction_config: &TransactionConfig,
-) -> Result<TxHash, TransactionError>
+) -> Result<(TxHash, GasInfo), TransactionError>
 where
     P: Provider<N>,
     N: Network,
@@ -171,7 +202,7 @@ where
         .with_to(to)
         .with_input(calldata.clone());
 
-    if let Some(fees) = eip1559_fees {
+    if let Some(fees) = &eip1559_fees {
         transaction_request.set_max_fee_per_gas(fees.max_fee_per_gas);
         transaction_request.set_max_priority_fee_per_gas(fees.max_priority_fee_per_gas);
     }
@@ -187,6 +218,17 @@ where
     let gas_with_buffer = estimated_gas.saturating_mul(120) / 100;
     debug!("Estimated gas: {estimated_gas}, with 20% buffer: {gas_with_buffer}");
     transaction_request.set_gas_limit(gas_with_buffer);
+
+    // Prepare gas info (actual values will be set from receipt)
+    let mut gas_info = GasInfo {
+        estimated_gas,
+        gas_with_buffer,
+        max_fee_per_gas: eip1559_fees.as_ref().map(|f| f.max_fee_per_gas),
+        max_priority_fee_per_gas: eip1559_fees.as_ref().map(|f| f.max_priority_fee_per_gas),
+        actual_gas_used: 0,
+        effective_gas_price: 0,
+        gas_cost_wei: 0,
+    };
 
     // Retry with the same nonce to replace a stuck transaction
     if let Some(nonce) = nonce {
@@ -237,12 +279,27 @@ where
             // We must fetch the receipt and check the status field.
             match provider.get_transaction_receipt(tx_hash).await {
                 Ok(Some(receipt)) => {
+                    let gas_used = receipt.gas_used();
+                    let effective_gas_price = receipt.effective_gas_price();
+                    let gas_cost_wei = (gas_used as u128).saturating_mul(effective_gas_price);
+
+                    gas_info.actual_gas_used = gas_used;
+                    gas_info.effective_gas_price = effective_gas_price;
+                    gas_info.gas_cost_wei = gas_cost_wei;
+
                     if receipt.status() {
                         debug!("{tx_identifier} transaction with hash {tx_hash:?} succeeded");
-                        Ok(tx_hash)
+                        info!(
+                            "Gas details: estimated={}, buffer={}, actual={}, effective_price={} wei, total_cost={} wei",
+                            gas_info.estimated_gas,
+                            gas_info.gas_with_buffer,
+                            gas_used,
+                            effective_gas_price,
+                            gas_cost_wei
+                        );
+                        Ok((tx_hash, gas_info))
                     } else {
                         // Transaction was mined but reverted (e.g., out of gas)
-                        let gas_used = receipt.gas_used();
                         error!(
                             "{tx_identifier} transaction {tx_hash:?} was mined but reverted. \
                             Gas used: {gas_used}"

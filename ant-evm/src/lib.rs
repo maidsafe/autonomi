@@ -16,6 +16,7 @@
 extern crate tracing;
 
 pub use evmlib::CustomNetwork;
+pub use evmlib::GasInfo;
 pub use evmlib::Network as EvmNetwork;
 pub use evmlib::common::Address as RewardsAddress;
 pub use evmlib::common::Address as EvmAddress;

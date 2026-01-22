@@ -15,6 +15,7 @@ use crate::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::contract::{network_token, payment_vault};
 use crate::merkle_batch_payment::PoolCommitment;
+use crate::retry::GasInfo;
 use crate::transaction_config::TransactionConfig;
 use crate::utils::http_provider;
 use crate::{Network, TX_TIMEOUT};
@@ -147,11 +148,11 @@ impl Wallet {
     }
 
     /// Function for batch payments of quotes. It accepts an iterator of QuotePayment and returns
-    /// transaction hashes of the payments by quotes.
+    /// transaction hashes of the payments by quotes and gas info.
     pub async fn pay_for_quotes<I: IntoIterator<Item = QuotePayment>>(
         &self,
         quote_payments: I,
-    ) -> Result<BTreeMap<QuoteHash, TxHash>, PayForQuotesError> {
+    ) -> Result<(BTreeMap<QuoteHash, TxHash>, GasInfo), PayForQuotesError> {
         pay_for_quotes(
             self.wallet.clone(),
             &self.network,
@@ -169,13 +170,13 @@ impl Wallet {
     /// * `merkle_payment_timestamp` - Unix timestamp for the payment
     ///
     /// # Returns
-    /// * The winner pool hash (32 bytes) selected by the contract and the amount paid
+    /// * The winner pool hash (32 bytes) selected by the contract, the amount paid, and gas info
     pub async fn pay_for_merkle_tree(
         &self,
         depth: u8,
         pool_commitments: Vec<PoolCommitment>,
         merkle_payment_timestamp: u64,
-    ) -> Result<(PoolHash, Amount), Error> {
+    ) -> Result<(PoolHash, Amount, GasInfo), Error> {
         info!(
             "Paying for Merkle tree: depth={depth}, pools={}, timestamp={merkle_payment_timestamp}",
             pool_commitments.len()
@@ -220,7 +221,7 @@ impl Wallet {
         let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
 
         // Submit payment to smart contract
-        let (winner_pool_hash, actual_amount) = handler
+        let (winner_pool_hash, actual_amount, gas_info) = handler
             .pay_for_merkle_tree(
                 depth,
                 pool_commitments.clone(),
@@ -235,7 +236,7 @@ impl Wallet {
             hex::encode(winner_pool_hash)
         );
 
-        Ok((winner_pool_hash, actual_amount))
+        Ok((winner_pool_hash, actual_amount, gas_info))
     }
 
     /// Estimate the cost of a Merkle tree batch using smart contract
@@ -433,12 +434,13 @@ pub struct PayForQuotesError(pub Error, pub BTreeMap<QuoteHash, TxHash>);
 
 /// Use this wallet to pay for chunks in batched transfer transactions.
 /// If the amount of transfers is more than one transaction can contain, the transfers will be split up over multiple transactions.
+/// Returns the transaction hashes by quote hash and aggregated gas info across all batches.
 pub async fn pay_for_quotes<T: IntoIterator<Item = QuotePayment>>(
     wallet: EthereumWallet,
     network: &Network,
     payments: T,
     transaction_config: &TransactionConfig,
-) -> Result<BTreeMap<QuoteHash, TxHash>, PayForQuotesError> {
+) -> Result<(BTreeMap<QuoteHash, TxHash>, GasInfo), PayForQuotesError> {
     let payments: Vec<_> = payments.into_iter().collect();
     info!("Paying for quotes of len: {}", payments.len());
 
@@ -493,6 +495,7 @@ pub async fn pay_for_quotes<T: IntoIterator<Item = QuotePayment>>(
     let chunks = payment_for_batch.chunks(MAX_TRANSFERS_PER_TRANSACTION);
 
     let mut tx_hashes_by_quote = BTreeMap::new();
+    let mut aggregated_gas_info = GasInfo::default();
 
     for batch in chunks {
         let batch: Vec<QuotePayment> = batch.to_vec();
@@ -502,19 +505,37 @@ pub async fn pay_for_quotes<T: IntoIterator<Item = QuotePayment>>(
             batch.len()
         );
 
-        let tx_hash = data_payments
+        let (tx_hash, gas_info) = data_payments
             .pay_for_quotes(batch.clone(), transaction_config)
             .await
             .map_err(|err| PayForQuotesError(Error::from(err), tx_hashes_by_quote.clone()))?;
 
         info!("Paid for batch of quotes with final tx hash: {tx_hash}");
 
+        // Aggregate gas info across batches
+        aggregated_gas_info.estimated_gas = aggregated_gas_info
+            .estimated_gas
+            .saturating_add(gas_info.estimated_gas);
+        aggregated_gas_info.gas_with_buffer = aggregated_gas_info
+            .gas_with_buffer
+            .saturating_add(gas_info.gas_with_buffer);
+        aggregated_gas_info.actual_gas_used = aggregated_gas_info
+            .actual_gas_used
+            .saturating_add(gas_info.actual_gas_used);
+        aggregated_gas_info.gas_cost_wei = aggregated_gas_info
+            .gas_cost_wei
+            .saturating_add(gas_info.gas_cost_wei);
+        // Keep last batch's fee/price info (they should be similar across batches)
+        aggregated_gas_info.max_fee_per_gas = gas_info.max_fee_per_gas;
+        aggregated_gas_info.max_priority_fee_per_gas = gas_info.max_priority_fee_per_gas;
+        aggregated_gas_info.effective_gas_price = gas_info.effective_gas_price;
+
         for (quote_hash, _, _) in batch {
             tx_hashes_by_quote.insert(quote_hash, tx_hash);
         }
     }
 
-    Ok(tx_hashes_by_quote)
+    Ok((tx_hashes_by_quote, aggregated_gas_info))
 }
 
 #[cfg(test)]

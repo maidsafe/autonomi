@@ -101,15 +101,15 @@ where
     ) -> Result<TxHash, Error> {
         debug!("Approving spender {spender:?} to spend {value}");
         let (calldata, to) = self.approve_calldata(spender, value);
-        send_transaction_with_retries(
+        let (tx_hash, _gas_info) = send_transaction_with_retries(
             self.contract.provider(),
             calldata,
             to,
             "approve",
             transaction_config,
         )
-        .await
-        .map_err(Error::from)
+        .await?;
+        Ok(tx_hash)
     }
 
     /// Approve spender to spend a raw amount of tokens.
@@ -128,15 +128,15 @@ where
     ) -> Result<TxHash, Error> {
         debug!("Transferring raw amount of tokens: {amount} to {receiver:?}");
         let (calldata, to) = self.transfer_calldata(receiver, amount);
-        send_transaction_with_retries(
+        let (tx_hash, _gas_info) = send_transaction_with_retries(
             self.contract.provider(),
             calldata,
             to,
             "transfer",
             transaction_config,
         )
-        .await
-        .map_err(Error::from)
+        .await?;
+        Ok(tx_hash)
     }
 
     /// Transfer a raw amount of tokens.

@@ -123,10 +123,11 @@ mod tests {
 
         // Test 2: Pay for Merkle tree
         println!("\nTest 2: Paying for Merkle tree...");
-        let (winner_pool_hash, total_amount) = vault_handler
+        let (winner_pool_hash, total_amount, gas_info) = vault_handler
             .pay_for_merkle_tree(depth, pool_commitments.clone(), timestamp, &tx_config)
             .await
             .expect("Failed to pay for Merkle tree");
+        println!("Gas used: {:?}", gas_info.actual_gas_used);
 
         println!("Payment transaction sent successfully");
 

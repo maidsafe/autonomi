@@ -267,16 +267,22 @@ impl Client {
             debug!("Locked wallet");
 
             // Execute payments
-            if let Err(pay_err) = wallet.pay_for_quotes(quotes.payments()).await {
-                // payment failed, unlock the wallet for other threads
-                drop(lock_guard);
-                debug!("Unlocked wallet after payment error");
-                return Err(PayError::from(pay_err.0));
-            }
+            match wallet.pay_for_quotes(quotes.payments()).await {
+                Ok((_tx_hashes, gas_info)) => {
+                    // payment is done, unlock the wallet for other threads
+                    drop(lock_guard);
+                    debug!("Unlocked wallet");
 
-            // payment is done, unlock the wallet for other threads
-            drop(lock_guard);
-            debug!("Unlocked wallet");
+                    // Display gas cost to user
+                    crate::loud_info!("Gas cost: {gas_info}");
+                }
+                Err(pay_err) => {
+                    // payment failed, unlock the wallet for other threads
+                    drop(lock_guard);
+                    debug!("Unlocked wallet after payment error");
+                    return Err(PayError::from(pay_err.0));
+                }
+            }
         }
 
         let skipped_chunks = number_of_content_addrs - quotes.len();
