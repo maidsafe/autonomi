@@ -525,14 +525,31 @@ pub async fn pay_for_quotes<T: IntoIterator<Item = QuotePayment>>(
         aggregated_gas_info.gas_cost_wei = aggregated_gas_info
             .gas_cost_wei
             .saturating_add(gas_info.gas_cost_wei);
-        // Keep last batch's fee/price info (they should be similar across batches)
-        aggregated_gas_info.max_fee_per_gas = gas_info.max_fee_per_gas;
-        aggregated_gas_info.max_priority_fee_per_gas = gas_info.max_priority_fee_per_gas;
-        aggregated_gas_info.effective_gas_price = gas_info.effective_gas_price;
+        // For fee rates, keep the maximum seen (represents worst-case user was willing to pay)
+        aggregated_gas_info.max_fee_per_gas = match (
+            aggregated_gas_info.max_fee_per_gas,
+            gas_info.max_fee_per_gas,
+        ) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        };
+        aggregated_gas_info.max_priority_fee_per_gas = match (
+            aggregated_gas_info.max_priority_fee_per_gas,
+            gas_info.max_priority_fee_per_gas,
+        ) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        };
 
         for (quote_hash, _, _) in batch {
             tx_hashes_by_quote.insert(quote_hash, tx_hash);
         }
+    }
+
+    // Compute weighted average effective gas price from totals
+    if aggregated_gas_info.actual_gas_used > 0 {
+        aggregated_gas_info.effective_gas_price =
+            aggregated_gas_info.gas_cost_wei / u128::from(aggregated_gas_info.actual_gas_used);
     }
 
     Ok((tx_hashes_by_quote, aggregated_gas_info))
