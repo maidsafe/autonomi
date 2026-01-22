@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769097580935,
+  "lastUpdate": 1769097583169,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -22662,6 +22662,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 20821,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f4056b4e5cd113c01ba174b1044539867fc47094",
+          "message": "Merge pull request #3418 from maidsafe/dependabot/npm_and_yarn/autonomi-nodejs/tar-7.5.6\n\nchore(deps): bump tar from 7.5.3 to 7.5.6 in /autonomi-nodejs",
+          "timestamp": "2026-01-22T14:41:15Z",
+          "tree_id": "858a25c69c8e0d9008168da33b06ab8b547d7a91",
+          "url": "https://github.com/maidsafe/autonomi/commit/f4056b4e5cd113c01ba174b1044539867fc47094"
+        },
+        "date": 1769097582296,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 11229,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 21948,
             "unit": "ms"
           },
           {
