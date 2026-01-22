@@ -14,7 +14,7 @@ use aes_gcm_siv::{
     Aes256GcmSiv, Key as AesKey, Nonce,
     aead::{Aead, KeyInit},
 };
-use ant_evm::QuotingMetrics;
+use ant_evm::{ProofOfPayment, QuotingMetrics};
 use ant_protocol::constants::MAX_PACKET_SIZE;
 use ant_protocol::{
     NetworkAddress, PrettyPrintRecordKey,
@@ -250,6 +250,9 @@ struct HistoricQuotingMetrics {
 /// Entry in the paid-for list tracking XorNames that have been verified as paid.
 /// This enables nodes to know what data they should store and helps prevent
 /// the free data replication loophole.
+///
+/// Stores the ProofOfPayment so that receivers can verify claims against the EVM chain.
+/// Without the proof, an attacker could claim data is paid for when it isn't.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct PaidForEntry {
     /// The XorName/address of the paid data
@@ -258,6 +261,9 @@ pub(crate) struct PaidForEntry {
     pub data_type: DataTypes,
     /// Timestamp when payment was verified
     pub payment_timestamp: SystemTime,
+    /// The proof of payment for verification by other nodes.
+    /// This allows receivers to verify the claim against the EVM chain.
+    pub proof: ProofOfPayment,
 }
 
 /// Persisted paid-for list structure
@@ -769,7 +775,15 @@ impl NodeRecordStore {
 
     /// Add an entry to the paid-for list after payment verification.
     /// This should be called when a payment is verified for a record.
-    pub(crate) fn add_paid_for_entry(&mut self, xor_name: XorName, data_type: DataTypes) {
+    ///
+    /// The ProofOfPayment is stored so that other nodes can verify the claim
+    /// against the EVM chain when this information is gossiped.
+    pub(crate) fn add_paid_for_entry(
+        &mut self,
+        xor_name: XorName,
+        data_type: DataTypes,
+        proof: ProofOfPayment,
+    ) {
         if self.paid_for_list.contains_key(&xor_name) {
             return;
         }
@@ -781,6 +795,7 @@ impl NodeRecordStore {
             xor_name,
             data_type,
             payment_timestamp: SystemTime::now(),
+            proof,
         };
 
         let _ = self.paid_for_list.insert(xor_name, entry);
@@ -2032,9 +2047,14 @@ mod tests {
         // Initial state: empty paid-for list
         assert_eq!(store.paid_for_count(), 0);
 
+        // Create a mock ProofOfPayment for testing (empty quotes is fine for unit test)
+        let mock_proof = ProofOfPayment {
+            peer_quotes: vec![],
+        };
+
         // Add a paid-for entry
         let xor_name = XorName::random(&mut rand::thread_rng());
-        store.add_paid_for_entry(xor_name, DataTypes::Chunk);
+        store.add_paid_for_entry(xor_name, DataTypes::Chunk, mock_proof.clone());
 
         // Verify it was added
         assert_eq!(store.paid_for_count(), 1);
@@ -2047,12 +2067,12 @@ mod tests {
         assert!(matches!(entry.data_type, DataTypes::Chunk));
 
         // Adding the same XorName again should not duplicate
-        store.add_paid_for_entry(xor_name, DataTypes::Chunk);
+        store.add_paid_for_entry(xor_name, DataTypes::Chunk, mock_proof.clone());
         assert_eq!(store.paid_for_count(), 1);
 
         // Add another entry with different type
         let xor_name2 = XorName::random(&mut rand::thread_rng());
-        store.add_paid_for_entry(xor_name2, DataTypes::Scratchpad);
+        store.add_paid_for_entry(xor_name2, DataTypes::Scratchpad, mock_proof.clone());
 
         assert_eq!(store.paid_for_count(), 2);
         assert!(store.is_paid_for(&xor_name2));
@@ -2095,8 +2115,11 @@ mod tests {
         // Add some paid-for entries
         let xor_name1 = XorName::random(&mut rand::thread_rng());
         let xor_name2 = XorName::random(&mut rand::thread_rng());
-        store.add_paid_for_entry(xor_name1, DataTypes::Chunk);
-        store.add_paid_for_entry(xor_name2, DataTypes::GraphEntry);
+        let mock_proof = ProofOfPayment {
+            peer_quotes: vec![],
+        };
+        store.add_paid_for_entry(xor_name1, DataTypes::Chunk, mock_proof.clone());
+        store.add_paid_for_entry(xor_name2, DataTypes::GraphEntry, mock_proof.clone());
 
         assert_eq!(store.paid_for_count(), 2);
 

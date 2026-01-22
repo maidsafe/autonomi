@@ -846,9 +846,10 @@ impl Node {
         debug!("Payment of {reward_amount:?} is valid for record {pretty_key}");
 
         // Add to paid-for list regardless of reward amount (payment was verified)
+        // Store the proof so other nodes can verify claims against EVM chain
         if let Some(xor_name) = address.xorname() {
             self.network()
-                .notify_paid_for_entry_added(xor_name, data_type);
+                .notify_paid_for_entry_added(xor_name, data_type, payment);
         }
 
         if !reward_amount.is_zero() {
