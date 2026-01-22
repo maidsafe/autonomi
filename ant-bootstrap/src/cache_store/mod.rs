@@ -81,7 +81,7 @@ impl BootstrapCacheStore {
         if addr.iter().any(|p| matches!(p, Protocol::P2pCircuit)) {
             return;
         }
-        let Some(addr) = craft_valid_multiaddr(&addr, false) else {
+        let Some(addr) = craft_valid_multiaddr(&addr) else {
             return;
         };
         let peer_id = match addr.iter().find(|p| matches!(p, Protocol::P2p(_))) {
@@ -149,7 +149,7 @@ impl BootstrapCacheStore {
         }
 
         if self.data.read().await.peers.is_empty() {
-            info!("Cache is empty, skipping sync and flush to disk");
+            info!("No peers to write to disk, skipping sync to disk");
             return Ok(());
         }
 
