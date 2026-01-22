@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769101998598,
+  "lastUpdate": 1769102000557,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -22808,6 +22808,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver average long handling time",
             "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "17d1f73a470e8bc247acf32f929f1515e12ad863",
+          "message": "Merge pull request #3420 from maidsafe/dependabot/npm_and_yarn/autonomi/tests-js/lodash-4.17.23\n\nchore(deps-dev): bump lodash from 4.17.21 to 4.17.23 in /autonomi/tests-js",
+          "timestamp": "2026-01-22T15:52:34Z",
+          "tree_id": "50b42090fe465972f8d7c5185b4101dc4899d4ba",
+          "url": "https://github.com/maidsafe/autonomi/commit/17d1f73a470e8bc247acf32f929f1515e12ad863"
+        },
+        "date": 1769101999812,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 11863,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 24605,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
             "unit": "ms"
           }
         ]
