@@ -21,13 +21,7 @@ jobs:
             ant_path: /Users/runner/Library/Application\ Support/autonomi
     steps:
       - uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant --bin antctl
+      - uses: ./.github/actions/build-binaries
         timeout-minutes: 30
 
       - name: Install antctl on Windows
@@ -44,7 +38,7 @@ jobs:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: true
+          build: false
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -296,4 +290,4 @@ jobs:
         with:
           action: stop
           log_file_prefix: ant_test_logs_pointer
-          build: true
+          build: false

@@ -1,0 +1,38 @@
+name: Build Rust binaries
+description: Build Rust binaries with CI profile and common cache/linker setup.
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: mozilla/sccache-action@v0.0.3
+    - shell: bash
+      run: |
+        echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+        echo "SCCACHE_GHA_ENABLED=on" >> $GITHUB_ENV
+    - uses: actions/github-script@v7
+      with:
+        script: |
+          core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
+          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+    - if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y mold
+    - if: runner.os == 'Linux'
+      shell: bash
+      run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
+    - uses: Swatinem/rust-cache@v2
+    - shell: bash
+      run: |
+        set -euo pipefail
+        cargo build --profile=ci --bin antnode --bin ant --bin antctl
+    - if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p target/release
+        find target/ci -maxdepth 1 -type f -name 'ant*' -exec cp {} target/release/ \;
+    - if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path "target\\release" | Out-Null
+        Copy-Item "target\\ci\\ant*.exe" -Destination "target\\release" -Force

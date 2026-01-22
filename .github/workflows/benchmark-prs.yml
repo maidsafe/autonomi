@@ -17,13 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v2
-        continue-on-error: true
+      - uses: ./.github/actions/build-binaries
+        timeout-minutes: 30
 
       ########################
       ### Setup            ###
@@ -37,15 +32,6 @@ jobs:
         shell: bash
         run: wget https://sn-node.s3.eu-west-2.amazonaws.com/the-test-data.zip
 
-      # As normal user won't care much about initial client startup,
-      # but be more alerted on communication speed during transmission.
-      # Meanwhile the criterion testing code includes the client startup as well,
-      # it will be better to execute bench test with `local`,
-      # to make the measurement results reflect speed improvement or regression more accurately.
-      - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant
-        timeout-minutes: 30
-
       - name: Start a local network
         uses: maidsafe/ant-local-testnet-action@main
         env:
@@ -54,7 +40,7 @@ jobs:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: true
+          build: false
 
       - name: Check ANT_PEERS was set
         shell: bash
@@ -222,7 +208,7 @@ jobs:
         with:
           action: stop
           log_file_prefix: ant_test_logs_benchmark
-          build: true
+          build: false
 
       #########################
       ### Node Mem Analysis ###

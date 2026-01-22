@@ -16,25 +16,16 @@ jobs:
   memory-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/build-binaries
+        timeout-minutes: 30
 
       - name: Check we're on the right commit
         run: git log -1 --oneline
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        continue-on-error: true
-
       - name: install ripgrep
         shell: bash
         run: sudo apt-get install -y ripgrep
-
-      - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant
-        timeout-minutes: 30
 
       - name: Start a local network
         uses: maidsafe/ant-local-testnet-action@main
@@ -42,7 +33,7 @@ jobs:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: true
+          build: false
 
       - name: Check ANT_PEERS was set
         shell: bash
@@ -194,7 +185,7 @@ jobs:
         with:
           action: stop
           log_file_prefix: ant_test_logs_memcheck
-          build: true
+          build: false
 
       - name: Check node memory usage
         shell: bash
