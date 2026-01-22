@@ -44,7 +44,10 @@ pub use archive_public::PublicArchive;
 
 /// Estimate chunk count for a directory or file.
 /// Returns at least 3 chunks per file (self-encryption minimum).
-pub(crate) fn estimate_directory_chunks(dir_path: &PathBuf) -> Result<usize, std::io::Error> {
+///
+/// This is useful for predicting which payment method will be used
+/// (merkle vs regular) based on the [`crate::client::config::MERKLE_PAYMENT_THRESHOLD`].
+pub fn estimate_directory_chunks(dir_path: &PathBuf) -> Result<usize, std::io::Error> {
     let mut total_chunks = 0;
 
     // Handle single file case
@@ -102,10 +105,12 @@ where
 {
     match payment_option {
         BulkPaymentOption::Wallet(wallet) => {
+            // Auto-detect payment method based on estimated chunks
+            // Note: The CLI prints user-facing messages; library uses debug logging
             let estimated_chunks = estimate_directory_chunks(&dir_path)?;
             if estimated_chunks >= MERKLE_PAYMENT_THRESHOLD {
-                crate::loud_info!(
-                    "Using merkle payments for ~{estimated_chunks} chunks (threshold: {MERKLE_PAYMENT_THRESHOLD})"
+                info!(
+                    "Auto-selected merkle payments for ~{estimated_chunks} chunks (>= {MERKLE_PAYMENT_THRESHOLD} threshold)"
                 );
                 let (cost, results) = client
                     .files_put_with_merkle_payment(
@@ -116,8 +121,8 @@ where
                     .await?;
                 Ok((cost, build_archive(results)))
             } else {
-                crate::loud_info!(
-                    "Using regular payments for ~{estimated_chunks} chunks (threshold: {MERKLE_PAYMENT_THRESHOLD})"
+                info!(
+                    "Auto-selected regular payments for ~{estimated_chunks} chunks (< {MERKLE_PAYMENT_THRESHOLD} threshold)"
                 );
                 let (cost, streams) = client
                     .dir_content_upload_internal(dir_path, PaymentOption::Wallet(wallet), is_public)
@@ -127,7 +132,6 @@ where
             }
         }
         BulkPaymentOption::ForceMerkle(wallet) => {
-            crate::loud_info!("Using merkle payments (forced)");
             let (cost, results) = client
                 .files_put_with_merkle_payment(
                     dir_path,
@@ -138,7 +142,6 @@ where
             Ok((cost, build_archive(results)))
         }
         BulkPaymentOption::ForceRegular(wallet) => {
-            crate::loud_info!("Using regular payments (forced)");
             let (cost, streams) = client
                 .dir_content_upload_internal(dir_path, PaymentOption::Wallet(wallet), is_public)
                 .await?;
