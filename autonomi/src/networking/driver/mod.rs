@@ -15,7 +15,7 @@ use std::{num::NonZeroUsize, time::Duration};
 
 use crate::networking::NetworkError;
 use crate::networking::interface::NetworkTask;
-use ant_bootstrap::bootstrap::Bootstrap;
+use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::NetworkAddress;
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use ant_protocol::{
@@ -60,8 +60,6 @@ const PEER_CACHE_SIZE: usize = 2_000;
 /// Client with poor connection requires a longer time to transmit large sized record to production network, via put_record_to.
 /// This should match other request timeouts (REQ_TIMEOUT, KAD_QUERY_TIMEOUT) to avoid premature substream termination.
 const CLIENT_SUBSTREAMS_TIMEOUT_S: Duration = Duration::from_secs(120);
-/// Periodically trigger the bootstrap process to try connect to more peers in the network.
-const BOOTSTRAP_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// Driver for the Autonomi Client Network
 ///
@@ -72,8 +70,8 @@ const BOOTSTRAP_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_
 ///
 /// Please read the doc comment above
 pub(crate) struct NetworkDriver {
-    /// Bootstrap flow responsible for fetching peers and coordinating initial dials.
-    bootstrap: Bootstrap,
+    /// Optional cache store for writing bootstrap addresses to disk.
+    bootstrap_cache_store: Option<BootstrapCacheStore>,
     /// The list of currently connected peers and their addresses.
     live_connected_peers: BTreeMap<ConnectionId, (PeerId, Multiaddr)>,
     /// libp2p interaction through the swarm and its events
@@ -97,7 +95,10 @@ pub(crate) struct AutonomiClientBehaviour {
 
 impl NetworkDriver {
     /// Create a new network runner
-    pub fn new(bootstrap: Bootstrap, task_receiver: mpsc::Receiver<NetworkTask>) -> Self {
+    pub fn new(
+        bootstrap_cache_store: Option<BootstrapCacheStore>,
+        task_receiver: mpsc::Receiver<NetworkTask>,
+    ) -> Self {
         // random new client id
         let keypair = Keypair::generate_ed25519();
         let peer_id = PeerId::from(keypair.public());
@@ -201,23 +202,40 @@ impl NetworkDriver {
 
         let task_handler = TaskHandler::new();
 
-        let mut driver = Self {
-            bootstrap,
+        Self {
+            bootstrap_cache_store,
             live_connected_peers: Default::default(),
             swarm,
             task_receiver,
             pending_tasks: task_handler,
             connections_made: 0,
+        }
+    }
+
+    /// Add a contact to bootstrap the client
+    pub(super) fn add_contact(&mut self, contact: Multiaddr) {
+        let contact_id = match contact.iter().find(|p| matches!(p, Protocol::P2p(_))) {
+            Some(Protocol::P2p(id)) => id,
+            _ => {
+                debug!("Bootstrap peer {contact} has no peer ID, skipping adding to kad");
+                return;
+            }
         };
 
-        driver.bootstrap_network();
-
-        driver
+        debug!("Adding bootstrap contact to kad: {contact}");
+        self.swarm
+            .behaviour_mut()
+            .kademlia
+            .add_address(&contact_id, contact);
     }
 
     /// Run the network runner, loops forever waiting for tasks and processing them
     pub async fn run(mut self) {
-        let mut bootstrap_interval = Some(tokio::time::interval(BOOTSTRAP_CHECK_INTERVAL));
+        if let Some(cache) = &self.bootstrap_cache_store {
+            // start the periodic cache sync and flush task
+            #[allow(clippy::let_underscore_future)]
+            let _ = cache.sync_and_flush_periodically();
+        }
         loop {
             tokio::select! {
                 // tasks sent by client
@@ -236,54 +254,8 @@ impl NetworkDriver {
                         error!("Error processing swarm event: {e}");
                     }
                 }
-                // Only call the async closure IF bootstrap_interval is Some. This prevents the tokio::select! from
-                // executing this branch once bootstrap_interval is set to None.
-                _ = async {
-                    #[allow(clippy::unwrap_used)]
-                    bootstrap_interval.as_mut().expect("bootstrap interval is checked before executing").tick().await
-                }, if bootstrap_interval.is_some() => {
-                    let completed = self.bootstrap.trigger_bootstrapping_process(&mut self.swarm, self.connections_made);
-                    if completed {
-                        info!("Initial bootstrap process completed. Marking bootstrap_interval as None.");
-                        bootstrap_interval = None;
-                    }
-                }
             }
         }
-    }
-
-    /// Bootstrap to the network by triggering the bootstrapping process
-    ///
-    /// We also "optionally" add some peers directly to the routing table to make sure we have a large
-    /// sample of peers to query from.
-    fn bootstrap_network(&mut self) {
-        let mut peers = Vec::new();
-
-        while let Ok(Some(addr)) = self.bootstrap.next_addr() {
-            if peers.len() >= 50 {
-                break;
-            }
-
-            peers.push(addr);
-        }
-
-        for contact in peers {
-            let contact_id = match contact.iter().find(|p| matches!(p, Protocol::P2p(_))) {
-                Some(Protocol::P2p(id)) => id,
-                _ => {
-                    debug!("Bootstrap peer {contact} has no peer ID, skipping adding to kad");
-                    continue;
-                }
-            };
-
-            self.swarm
-                .behaviour_mut()
-                .kademlia
-                .add_address(&contact_id, contact);
-        }
-
-        self.bootstrap
-            .trigger_bootstrapping_process(&mut self.swarm, 0);
     }
 
     /// Shorthand for kad behaviour mut

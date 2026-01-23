@@ -107,12 +107,13 @@ impl InitialPeersConfig {
         if let Some(count) = count
             && bootstrap_addresses.len() >= count
         {
-            bootstrap_addresses.truncate(count);
+            let mut addrs: Vec<_> = bootstrap_addresses.into_iter().collect();
+            addrs.truncate(count);
             info!(
                 "Found {} bootstrap addresses. Returning early.",
-                bootstrap_addresses.len()
+                addrs.len()
             );
-            return Ok(bootstrap_addresses.into_iter().collect());
+            return Ok(addrs);
         }
 
         // load from cache if present
@@ -135,12 +136,13 @@ impl InitialPeersConfig {
                     if let Some(count) = count
                         && bootstrap_addresses.len() >= count
                     {
-                        bootstrap_addresses.truncate(count);
+                        let mut addrs: Vec<_> = bootstrap_addresses.into_iter().collect();
+                        addrs.truncate(count);
                         info!(
                             "Found {} bootstrap addresses. Returning early.",
-                            bootstrap_addresses.len()
+                            addrs.len()
                         );
-                        return Ok(bootstrap_addresses.into_iter().collect());
+                        return Ok(addrs);
                     }
                 }
             } else {
@@ -171,12 +173,13 @@ impl InitialPeersConfig {
             if let Some(count) = count
                 && bootstrap_addresses.len() >= count
             {
-                bootstrap_addresses.truncate(count);
+                let mut addrs: Vec<_> = bootstrap_addresses.into_iter().collect();
+                addrs.truncate(count);
                 info!(
                     "Found {} bootstrap addresses. Returning early.",
-                    bootstrap_addresses.len()
+                    addrs.len()
                 );
-                return Ok(bootstrap_addresses.into_iter().collect());
+                return Ok(addrs);
             }
         }
 
@@ -199,14 +202,12 @@ impl InitialPeersConfig {
         }
 
         if !bootstrap_addresses.is_empty() {
+            let mut addrs: Vec<_> = bootstrap_addresses.into_iter().collect();
             if let Some(count) = count {
-                bootstrap_addresses.truncate(count);
+                addrs.truncate(count);
             }
-            info!(
-                "Found {} bootstrap addresses. Returning early.",
-                bootstrap_addresses.len()
-            );
-            Ok(bootstrap_addresses.into_iter().collect())
+            info!("Found {} bootstrap addresses.", addrs.len());
+            Ok(addrs)
         } else {
             error!("No initial bootstrap peers found through any means");
             Err(Error::NoBootstrapPeersFound)
@@ -227,21 +228,5 @@ impl InitialPeersConfig {
             }
         }
         bootstrap_addresses
-    }
-}
-
-trait HashSetTruncate<T> {
-    fn truncate(&mut self, n: usize);
-}
-
-impl<T: Clone + std::hash::Hash + Eq> HashSetTruncate<T> for HashSet<T> {
-    fn truncate(&mut self, n: usize) {
-        while self.len() > n {
-            if let Some(item) = self.iter().next().cloned() {
-                self.remove(&item);
-            } else {
-                break;
-            }
-        }
     }
 }

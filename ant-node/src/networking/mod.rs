@@ -9,6 +9,7 @@
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::result_large_err)]
 
+mod bootstrap;
 mod circular_vec;
 mod driver;
 mod error;
@@ -128,6 +129,14 @@ pub(crate) fn multiaddr_pop_p2p(addr: &mut Multiaddr) -> Option<PeerId> {
 pub(crate) fn multiaddr_get_p2p(addr: &Multiaddr) -> Option<PeerId> {
     addr.iter().find_map(|p| match p {
         Protocol::P2p(peer_id) => Some(peer_id),
+        _ => None,
+    })
+}
+
+pub(crate) fn multiaddr_get_ip(addr: &Multiaddr) -> Option<std::net::IpAddr> {
+    addr.iter().find_map(|p| match p {
+        Protocol::Ip4(ip) => Some(std::net::IpAddr::V4(ip)),
+        Protocol::Ip6(ip) => Some(std::net::IpAddr::V6(ip)),
         _ => None,
     })
 }

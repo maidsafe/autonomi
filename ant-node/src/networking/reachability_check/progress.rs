@@ -113,7 +113,7 @@ mod tests {
     use crate::networking::reachability_check::dialer::DialResult;
     use crate::networking::reachability_check::dialer::DialState;
     use crate::networking::reachability_check::dialer::Dialer;
-    use ant_bootstrap::{Bootstrap, BootstrapConfig};
+    use crate::networking::reachability_check::dialer::ReachabilityBootstrap;
     use libp2p::PeerId;
     use std::collections::HashMap;
     use std::time::Duration;
@@ -159,10 +159,9 @@ mod tests {
         ongoing: HashMap<PeerId, DialState>,
         completed: HashMap<PeerId, DialResult>,
     ) -> DialManager {
-        let bootstrap_config = BootstrapConfig::default();
         let self_peer_id = PeerId::random();
-        let bootstrap =
-            Bootstrap::new(bootstrap_config.clone()).expect("Failed to create bootstrap for test");
+        let initial_addrs = vec![];
+        let bootstrap = ReachabilityBootstrap::new(initial_addrs.clone());
 
         let dialer = Dialer {
             ongoing_dial_attempts: ongoing,
@@ -174,7 +173,7 @@ mod tests {
             dialer,
             all_dial_attempts: completed,
             bootstrap,
-            bootstrap_config,
+            initial_addrs,
             self_peer_id,
         }
     }

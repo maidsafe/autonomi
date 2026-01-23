@@ -11,18 +11,43 @@ use crate::networking::driver::event::DIAL_BACK_DELAY;
 use crate::networking::error::Result;
 use crate::networking::multiaddr_get_p2p;
 use crate::networking::reachability_check::get_majority;
-use ant_bootstrap::Bootstrap;
-use ant_bootstrap::BootstrapConfig;
 use libp2p::Multiaddr;
 use libp2p::PeerId;
 use libp2p::swarm::ConnectionId;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::collections::hash_map::Entry;
 use std::fmt;
 use std::net::SocketAddr;
 use std::time::Duration;
 use std::time::Instant;
+
+/// A simple bootstrap address manager for reachability checks.
+/// This replaces the ant-bootstrap Bootstrap struct which was removed.
+#[derive(Debug)]
+pub(crate) struct ReachabilityBootstrap {
+    addrs: VecDeque<Multiaddr>,
+}
+
+impl ReachabilityBootstrap {
+    /// Create a new ReachabilityBootstrap with the given addresses
+    pub(crate) fn new(addrs: Vec<Multiaddr>) -> Self {
+        Self {
+            addrs: addrs.into_iter().collect(),
+        }
+    }
+
+    /// Get the next address to dial
+    pub(crate) fn next_addr(&mut self) -> Result<Option<Multiaddr>> {
+        Ok(self.addrs.pop_front())
+    }
+
+    /// Check if the address queue is empty
+    pub(crate) fn is_addr_queue_empty(&self) -> Option<bool> {
+        Some(self.addrs.is_empty())
+    }
+}
 
 pub(super) const TIMEOUT_ON_INITIATED_STATE: Duration = Duration::from_secs(30);
 pub(super) const TIMEOUT_ON_CONNECTED_STATE: Duration =
@@ -35,8 +60,8 @@ pub(crate) struct DialManager {
     pub(crate) current_workflow_attempt: usize,
     pub(crate) dialer: Dialer,
     pub(crate) all_dial_attempts: HashMap<PeerId, DialResult>,
-    pub(crate) bootstrap: Bootstrap,
-    pub(crate) bootstrap_config: BootstrapConfig,
+    pub(crate) bootstrap: ReachabilityBootstrap,
+    pub(crate) initial_addrs: Vec<Multiaddr>,
     pub(crate) self_peer_id: PeerId,
 }
 
@@ -152,16 +177,15 @@ impl DialState {
 }
 
 impl DialManager {
-    pub(crate) fn new(bootstrap_config: BootstrapConfig, self_peer_id: PeerId) -> Result<Self> {
-        let manager = Self {
+    pub(crate) fn new(initial_addrs: Vec<Multiaddr>, self_peer_id: PeerId) -> Self {
+        Self {
             current_workflow_attempt: 1,
             dialer: Dialer::default(),
             all_dial_attempts: HashMap::new(),
-            bootstrap: Bootstrap::new(bootstrap_config.clone())?,
-            bootstrap_config,
+            bootstrap: ReachabilityBootstrap::new(initial_addrs.clone()),
+            initial_addrs,
             self_peer_id,
-        };
-        Ok(manager)
+        }
     }
 
     /// Re attempt the dialer workflow by resetting the dialer and initial contacts manager.
@@ -172,14 +196,7 @@ impl DialManager {
     pub(crate) fn increment_workflow(&mut self) {
         self.current_workflow_attempt += 1;
         self.dialer = Dialer::default();
-        match Bootstrap::new(self.bootstrap_config.clone()) {
-            Err(e) => {
-                error!(
-                    "Failed to re initialize the Bootstrap during DialManager workflow increment: {e}, keeping the old one"
-                );
-            }
-            Ok(bootstrap) => self.bootstrap = bootstrap,
-        }
+        self.bootstrap = ReachabilityBootstrap::new(self.initial_addrs.clone());
     }
 
     /// Reset the dialer and initial contacts manager and the current workflow attempt counter.
@@ -190,14 +207,7 @@ impl DialManager {
         self.current_workflow_attempt = 1;
         self.dialer = Dialer::default();
         self.all_dial_attempts.clear();
-        match Bootstrap::new(self.bootstrap_config.clone()) {
-            Err(e) => {
-                error!(
-                    "Failed to re initialize the Bootstrap during DialManager workflow reset: {e}, keeping the old one"
-                );
-            }
-            Ok(bootstrap) => self.bootstrap = bootstrap,
-        }
+        self.bootstrap = ReachabilityBootstrap::new(self.initial_addrs.clone());
     }
 
     /// Returns the next contact address to dial.

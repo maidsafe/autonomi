@@ -8,7 +8,6 @@
 
 use crate::utils::get_root_dir_and_keypair;
 use crate::{NodeBuilder, RunningNode};
-use ant_bootstrap::{BootstrapConfig, bootstrap::Bootstrap};
 pub use ant_evm::{EvmNetwork, RewardsAddress};
 pub use libp2p::Multiaddr;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -22,8 +21,10 @@ pub struct NodeSpawner {
     evm_network: EvmNetwork,
     /// The rewards address used for receiving rewards.
     rewards_address: RewardsAddress,
-    /// The bootstrap configuration for the node.
-    bootstrap_config: Option<BootstrapConfig>,
+    /// Initial peers to connect to.
+    initial_peers: Vec<Multiaddr>,
+    /// Whether this is a local network.
+    local: bool,
     /// A boolean indicating whether UPnP should be disabled.
     no_upnp: bool,
     /// An optional `PathBuf` representing the root directory for the node.
@@ -37,7 +38,8 @@ impl NodeSpawner {
             socket_addr: SocketAddr::new(IpAddr::from(Ipv4Addr::UNSPECIFIED), 0),
             evm_network: Default::default(),
             rewards_address: Default::default(),
-            bootstrap_config: None,
+            initial_peers: vec![],
+            local: false,
             no_upnp: false,
             root_dir: None,
         }
@@ -73,13 +75,23 @@ impl NodeSpawner {
         self
     }
 
-    /// Set the bootstrap configuration for the node.
+    /// Set the initial peers for the node.
     ///
     /// # Arguments
     ///
-    /// * `bootstrap_config` - The `BootstrapConfig` containing bootstrap configuration.
-    pub fn with_bootstrap_config(mut self, bootstrap_config: BootstrapConfig) -> Self {
-        self.bootstrap_config = Some(bootstrap_config);
+    /// * `initial_peers` - The initial peers to connect to.
+    pub fn with_initial_peers(mut self, initial_peers: Vec<Multiaddr>) -> Self {
+        self.initial_peers = initial_peers;
+        self
+    }
+
+    /// Set whether this is a local network.
+    ///
+    /// # Arguments
+    ///
+    /// * `local` - Whether this is a local network.
+    pub fn with_local(mut self, local: bool) -> Self {
+        self.local = local;
         self
     }
 
@@ -113,7 +125,8 @@ impl NodeSpawner {
             self.socket_addr,
             self.evm_network,
             self.rewards_address,
-            self.bootstrap_config,
+            self.initial_peers,
+            self.local,
             self.no_upnp,
             &self.root_dir,
         )
@@ -131,19 +144,16 @@ async fn spawn_node(
     socket_addr: SocketAddr,
     evm_network: EvmNetwork,
     rewards_address: RewardsAddress,
-    bootstrap_config: Option<BootstrapConfig>,
+    initial_peers: Vec<Multiaddr>,
+    local: bool,
     no_upnp: bool,
     root_dir: &Option<PathBuf>,
 ) -> eyre::Result<RunningNode> {
     let (root_dir, keypair) = get_root_dir_and_keypair(root_dir)?;
 
-    let bootstrap_config = bootstrap_config.unwrap_or_default();
-    let local = bootstrap_config.local;
-    let bootstrap = Bootstrap::new(bootstrap_config)?;
-
     let mut node_builder = NodeBuilder::new(
         keypair,
-        bootstrap,
+        initial_peers,
         rewards_address,
         evm_network,
         socket_addr,
@@ -193,14 +203,9 @@ mod tests {
     async fn test_launch_node() {
         let evm_network = EvmNetwork::ArbitrumSepoliaTest;
 
-        let bootstrap_config = BootstrapConfig::new(true)
-            .with_first(true)
-            .with_disable_cache_reading(true)
-            .with_disable_env_peers(true);
-
         let running_node = NodeSpawner::new()
             .with_evm_network(evm_network)
-            .with_bootstrap_config(bootstrap_config)
+            .with_local(true)
             .spawn()
             .await
             .unwrap();

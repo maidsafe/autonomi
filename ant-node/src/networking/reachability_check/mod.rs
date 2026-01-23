@@ -21,7 +21,6 @@ use crate::networking::metrics::NetworkMetricsRecorder;
 use crate::networking::multiaddr_get_socket_addr;
 use crate::networking::multiaddr_pop_p2p;
 use crate::networking::reachability_check::listener::ListenerManager;
-use ant_bootstrap::BootstrapConfig;
 use custom_debug::Debug as CustomDebug;
 use dialer::DialManager;
 use futures::StreamExt;
@@ -143,7 +142,7 @@ impl ReachabilityCheckSwarmDriver {
         swarm: Swarm<ReachabilityCheckBehaviour>,
         keypair: &Keypair,
         listen_addr: SocketAddr,
-        bootstrap_config: BootstrapConfig,
+        initial_addrs: Vec<Multiaddr>,
         no_upnp: bool,
         #[cfg(feature = "open-metrics")] metrics_recorder: Option<NetworkMetricsRecorder>,
     ) -> Result<Self, NetworkError> {
@@ -154,7 +153,7 @@ impl ReachabilityCheckSwarmDriver {
         let peer_id = PeerId::from(keypair.public());
         Ok(Self {
             swarm,
-            dial_manager: DialManager::new(bootstrap_config, peer_id)?,
+            dial_manager: DialManager::new(initial_addrs, peer_id),
             progress_calculator: ProgressCalculator::new(),
             listener_manager: ListenerManager::new(keypair, listen_addr, no_upnp).await?,
             #[cfg(feature = "open-metrics")]

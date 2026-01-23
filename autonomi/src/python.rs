@@ -15,7 +15,7 @@ use std::{
 };
 
 // External dependencies
-use ant_bootstrap::{Bootstrap, BootstrapConfig};
+use ant_bootstrap::BootstrapCacheConfig;
 use ant_evm::{PaymentQuote, QuotingMetrics, RewardsAddress};
 use ant_protocol::storage::DataTypes;
 use bls::{PK_SIZE, PublicKey, SecretKey};
@@ -2002,19 +2002,19 @@ impl PyGraphEntryAddress {
 
 /// Configuration for the bootstrap cache
 #[pyclass(name = "BootstrapCacheConfig")]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PyBootstrapCacheConfig {
-    pub(crate) inner: BootstrapConfig,
+    pub(crate) inner: BootstrapCacheConfig,
 }
 
 #[pymethods]
 impl PyBootstrapCacheConfig {
     /// Creates a new BootstrapCacheConfig with default settings.
     #[new]
-    fn new(local: bool) -> Self {
-        Self {
-            inner: BootstrapConfig::new(local),
-        }
+    fn new(local: bool) -> PyResult<Self> {
+        Ok(Self {
+            inner: BootstrapCacheConfig::new(local),
+        })
     }
 
     /// Update the config with a custom cache directory.
@@ -2024,17 +2024,17 @@ impl PyBootstrapCacheConfig {
         }
     }
 
-    /// Sets the maximum number of cached peers.
-    fn with_max_cached_peers(&self, max_peers: usize) -> Self {
+    /// Sets the maximum number of peers.
+    fn with_max_peers(&self, max_peers: usize) -> Self {
         Self {
-            inner: self.inner.clone().with_max_cached_peers(max_peers),
+            inner: self.inner.clone().with_max_peers(max_peers),
         }
     }
 
     /// Sets the maximum number of addresses for a single peer.
-    fn with_max_addrs_per_cached_peer(&self, max_addrs: usize) -> Self {
+    fn with_addrs_per_peer(&self, max_addrs: usize) -> Self {
         Self {
-            inner: self.inner.clone().with_max_addrs_per_cached_peer(max_addrs),
+            inner: self.inner.clone().with_addrs_per_peer(max_addrs),
         }
     }
 
@@ -2045,12 +2045,7 @@ impl PyBootstrapCacheConfig {
         }
     }
 
-    /// Sets the flag to disable reading from the cache file.
-    fn with_disable_cache_reading(&self, disable: bool) -> Self {
-        Self {
-            inner: self.inner.clone().with_disable_cache_reading(disable),
-        }
-    }
+    // Note: with_disable_cache_reading was removed - only with_disable_cache_writing exists now
 
     /// Sets whether backwards-compatible cache writes are enabled.
     fn with_backwards_compatible_writes(&self, enable: bool) -> Self {
@@ -2059,69 +2054,24 @@ impl PyBootstrapCacheConfig {
         }
     }
 
-    /// Sets the minimum cache save duration in seconds.
-    fn with_min_cache_save_duration(&self, seconds: u64) -> Self {
-        Self {
-            inner: self
-                .inner
-                .clone()
-                .with_min_cache_save_duration(Duration::from_secs(seconds)),
-        }
-    }
+    // Note: The following methods were removed as they don't exist in BootstrapCacheConfig:
+    // - with_min_cache_save_duration (field exists but no builder method)
+    // - with_max_cache_save_duration (field exists but no builder method)
+    // - with_cache_save_scaling_factor (field exists but no builder method)
+    // - with_network_contacts_url (belongs to InitialPeersConfig)
+    // - with_first (belongs to InitialPeersConfig)
+    // - with_initial_peers (belongs to InitialPeersConfig)
 
-    /// Sets the maximum cache save duration in seconds.
-    fn with_max_cache_save_duration(&self, seconds: u64) -> Self {
-        Self {
-            inner: self
-                .inner
-                .clone()
-                .with_max_cache_save_duration(Duration::from_secs(seconds)),
-        }
-    }
-
-    /// Sets the cache save scaling factor.
-    fn with_cache_save_scaling_factor(&self, factor: u32) -> Self {
-        Self {
-            inner: self.inner.clone().with_cache_save_scaling_factor(factor),
-        }
-    }
-
-    /// Sets the list of network contact URLs.
-    fn with_network_contacts_url(&self, urls: Vec<String>) -> Self {
-        Self {
-            inner: self.inner.clone().with_network_contacts_url(urls),
-        }
-    }
-
-    /// Sets whether this config represents the first node in the network.
-    fn with_first(&self, first: bool) -> Self {
-        Self {
-            inner: self.inner.clone().with_first(first),
-        }
-    }
-
-    /// Sets the initial peers that should be used for bootstrapping.
-    fn with_initial_peers(&self, peers: Vec<String>) -> PyResult<Self> {
-        let parsed = peers
-            .into_iter()
-            .map(|addr| addr.parse::<Multiaddr>())
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|err| PyValueError::new_err(format!("Invalid multiaddr: {err}")))?;
-        Ok(Self {
-            inner: self.inner.clone().with_initial_peers(parsed),
-        })
-    }
-
-    /// Get the maximum number of cached peers.
+    /// Get the maximum number of peers.
     #[getter]
-    fn max_cached_peers(&self) -> usize {
-        self.inner.max_cached_peers
+    fn max_peers(&self) -> usize {
+        self.inner.max_peers
     }
 
-    /// Get the maximum number of addresses per cached peer.
+    /// Get the maximum number of addresses per peer.
     #[getter]
-    fn max_addrs_per_cached_peer(&self) -> usize {
-        self.inner.max_addrs_per_cached_peer
+    fn max_addrs_per_peer(&self) -> usize {
+        self.inner.max_addrs_per_peer
     }
 
     /// Get the cache directory.
@@ -2136,11 +2086,7 @@ impl PyBootstrapCacheConfig {
         self.inner.disable_cache_writing
     }
 
-    /// Get whether cache reading is disabled.
-    #[getter]
-    fn disable_cache_reading(&self) -> bool {
-        self.inner.disable_cache_reading
-    }
+    // Note: disable_cache_reading getter removed - field doesn't exist in BootstrapCacheConfig
 
     /// Get whether backwards-compatible cache writes are enabled.
     #[getter]
@@ -2166,11 +2112,7 @@ impl PyBootstrapCacheConfig {
         self.inner.cache_save_scaling_factor
     }
 
-    /// Get the configured network contact URLs.
-    #[getter]
-    fn network_contacts_url(&self) -> Vec<String> {
-        self.inner.network_contacts_url.clone()
-    }
+    // Note: network_contacts_url getter removed - field doesn't exist in BootstrapCacheConfig
 
     /// Get whether this config is marked as local.
     #[getter]
@@ -2281,7 +2223,7 @@ impl PyInitialPeersConfig {
     /// Read bootstrap addresses from the ANT_PEERS environment variable
     #[staticmethod]
     fn read_bootstrap_addr_from_env() -> Vec<String> {
-        Bootstrap::fetch_from_env()
+        InitialPeersConfig::read_bootstrap_addr_from_env()
             .into_iter()
             .map(|addr| addr.to_string())
             .collect()
@@ -4395,13 +4337,13 @@ impl PyClientConfig {
     /// Whether we're expected to connect to a local network.
     #[getter]
     fn get_local(&self) -> bool {
-        self.inner.bootstrap_config.local
+        self.inner.init_peers_config.local
     }
 
     /// Whether we're expected to connect to a local network.
     #[setter]
     fn set_local(&mut self, value: bool) {
-        self.inner.bootstrap_config.local = value;
+        self.inner.init_peers_config.local = value;
     }
 
     /// List of peers to connect to.
@@ -4410,8 +4352,8 @@ impl PyClientConfig {
     #[getter]
     fn get_peers(&self) -> Vec<String> {
         self.inner
-            .bootstrap_config
-            .initial_peers
+            .init_peers_config
+            .addrs
             .iter()
             .map(|p| p.to_string())
             .collect()
@@ -4430,7 +4372,7 @@ impl PyClientConfig {
             .collect::<Result<_, _>>()
             .map_err(|e| PyValueError::new_err(format!("Failed to parse peers: {e}")))?;
 
-        self.inner.bootstrap_config.initial_peers = peers;
+        self.inner.init_peers_config.addrs = peers;
         Ok(())
     }
 

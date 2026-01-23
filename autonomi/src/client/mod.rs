@@ -15,7 +15,6 @@
 /// - Pointer
 /// - Scratchpad
 pub mod data_types;
-use ant_bootstrap::BootstrapConfig;
 pub use data_types::chunk;
 pub use data_types::graph;
 pub use data_types::pointer;
@@ -50,7 +49,7 @@ use payment::Receipt;
 pub use put_error_state::ChunkBatchUploadState;
 use quote::PaymentMode;
 
-use ant_bootstrap::{bootstrap::Bootstrap, contacts_fetcher::ALPHANET_CONTACTS};
+use ant_bootstrap::{InitialPeersConfig, contacts::ALPHANET_CONTACTS};
 pub use ant_evm::Amount;
 use ant_evm::EvmNetwork;
 use config::ClientConfig;
@@ -190,11 +189,7 @@ impl Client {
     ///
     /// See [`Client::init_with_config`].
     pub async fn init() -> Result<Self, ConnectError> {
-        Self::init_with_config(ClientConfig {
-            bootstrap_config: BootstrapConfig::new(false),
-            ..Default::default()
-        })
-        .await
+        Self::init_with_config(ClientConfig::default()).await
     }
 
     /// Initialize a client that is configured to be local.
@@ -206,7 +201,11 @@ impl Client {
                 .map_err(|e| ConnectError::EvmNetworkError(e.to_string()))?,
             strategy: Default::default(),
             network_id: None,
-            bootstrap_config: BootstrapConfig::new(true),
+            init_peers_config: InitialPeersConfig {
+                local: true,
+                ..Default::default()
+            },
+            bootstrap_cache_config: None,
         })
         .await
     }
@@ -214,13 +213,14 @@ impl Client {
     /// Initialize a client that is configured to be connected to the the alpha network (Impossible Futures).
     pub async fn init_alpha() -> Result<Self, ConnectError> {
         let client_config = ClientConfig {
-            bootstrap_config: BootstrapConfig {
+            init_peers_config: InitialPeersConfig {
                 network_contacts_url: ALPHANET_CONTACTS.iter().map(|s| s.to_string()).collect(),
                 ..Default::default()
             },
             evm_network: EvmNetwork::ArbitrumSepoliaTest,
             strategy: Default::default(),
             network_id: Some(2),
+            bootstrap_cache_config: None,
         };
         Self::init_with_config(client_config).await
     }
@@ -241,17 +241,18 @@ impl Client {
     pub async fn init_with_peers(peers: Vec<Multiaddr>) -> Result<Self, ConnectError> {
         // Any global address makes the client non-local
         let local = !peers.iter().any(multiaddr_is_global);
-        let bootstrap_config = BootstrapConfig {
+        let init_peers_config = InitialPeersConfig {
             local,
-            initial_peers: peers.clone(),
+            addrs: peers.clone(),
             ..Default::default()
         };
 
         Self::init_with_config(ClientConfig {
-            bootstrap_config,
+            init_peers_config,
             evm_network: EvmNetwork::new(local).unwrap_or_default(),
             strategy: Default::default(),
             network_id: None,
+            bootstrap_cache_config: None,
         })
         .await
     }
@@ -275,49 +276,15 @@ impl Client {
             ant_protocol::version::set_network_id(network_id);
         }
 
-        let bootstrap =
-            Bootstrap::new_with_preloaded_addrs(config.bootstrap_config.clone()).await?;
-        let network = Network::new(bootstrap)?;
+        let initial_peers = match config.init_peers_config.get_bootstrap_addr(Some(50)).await {
+            Ok(peers) => peers,
+            Err(e) => return Err(e.into()),
+        };
+
+        let network = Network::new(initial_peers, config.bootstrap_cache_config)?;
 
         // Wait for the network to be ready with enough peers
-        let connectivity_result = network.wait_for_connectivity().await;
-
-        // If the connection failed and we were using the bootstrap cache,
-        // retry once with the cache disabled to fall back to mainnet contacts
-        if connectivity_result.is_err() && !config.bootstrap_config.disable_cache_reading {
-            warn!(
-                "Initial connection failed with bootstrap cache enabled. Retrying with cache disabled to use mainnet contacts..."
-            );
-
-            // Create a new config with cache reading disabled
-            let retry_config = BootstrapConfig {
-                disable_cache_reading: true,
-                ..config.bootstrap_config.clone()
-            };
-
-            // Retry the bootstrap and connection with cache disabled
-            let bootstrap_retry = Bootstrap::new_with_preloaded_addrs(retry_config).await?;
-            let network_retry = Network::new(bootstrap_retry)?;
-
-            // Wait for connectivity with the new bootstrap configuration
-            network_retry.wait_for_connectivity().await?;
-
-            info!(
-                "Successfully connected to the network using mainnet contacts after cache failure"
-            );
-
-            return Ok(Self {
-                network: network_retry,
-                client_event_sender: None,
-                evm_network: config.evm_network,
-                config: config.strategy,
-                retry_failed: 0,
-                payment_mode: PaymentMode::Standard,
-            });
-        }
-
-        // If the first attempt succeeded or cache was already disabled, return normally
-        connectivity_result?;
+        network.wait_for_connectivity().await?;
 
         Ok(Self {
             network,
@@ -325,7 +292,7 @@ impl Client {
             evm_network: config.evm_network,
             config: config.strategy,
             retry_failed: 0,
-            payment_mode: PaymentMode::default(),
+            payment_mode: PaymentMode::Standard,
         })
     }
 
@@ -434,16 +401,7 @@ mod tests {
                 .parse()
                 .unwrap(),
         ];
-        let bootstrap = Bootstrap::new_with_preloaded_addrs(
-            BootstrapConfig::default()
-                .with_initial_peers(initial_peers)
-                .with_disable_cache_reading(true)
-                .with_disable_env_peers(true)
-                .with_local(true),
-        )
-        .await
-        .unwrap();
-        let network = Network::new(bootstrap).unwrap();
+        let network = Network::new(initial_peers, None).unwrap();
 
         match network.wait_for_connectivity().await {
             Err(ConnectError::TimedOut) => {} // This is the expected outcome

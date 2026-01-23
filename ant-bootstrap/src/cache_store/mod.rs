@@ -9,10 +9,10 @@
 pub mod cache_data_v0;
 pub mod cache_data_v1;
 
-use crate::{BootstrapCacheConfig, Error, Result, craft_valid_multiaddr};
+use crate::{BootstrapCacheConfig, Error, Result, craft_valid_multiaddr, multiaddr_get_peer_id};
 use libp2p::{Multiaddr, PeerId, multiaddr::Protocol};
 use rand::Rng;
-use std::{fs, sync::Arc, time::Duration};
+use std::{collections::HashSet, fs, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use tracing::Instrument;
 
@@ -23,6 +23,8 @@ pub const CACHE_DATA_VERSION_LATEST: u32 = cache_data_v1::CacheData::CACHE_DATA_
 pub struct BootstrapCacheStore {
     pub(crate) config: Arc<BootstrapCacheConfig>,
     pub(crate) data: Arc<RwLock<CacheDataLatest>>,
+    /// List of peers to remove from the fs cache, would be done during the next sync_and_flush_to_disk call
+    pub(crate) to_remove: Arc<RwLock<HashSet<PeerId>>>,
 }
 
 impl BootstrapCacheStore {
@@ -51,6 +53,7 @@ impl BootstrapCacheStore {
         let store = Self {
             config: Arc::new(config),
             data: Arc::new(RwLock::new(CacheDataLatest::default())),
+            to_remove: Arc::new(RwLock::new(HashSet::new())),
         };
 
         Ok(store)
@@ -64,13 +67,9 @@ impl BootstrapCacheStore {
         self.data.read().await.get_all_addrs().cloned().collect()
     }
 
-    /// Remove a peer from the cache. This does not update the cache on disk.
-    pub async fn remove_peer(&self, peer_id: &PeerId) {
-        self.data
-            .write()
-            .await
-            .peers
-            .retain(|(id, _)| id != peer_id);
+    /// Queue a peer for removal from the cache. The actual removal will happen during the next sync_and_flush_to_disk call.
+    pub async fn queue_remove_peer(&self, peer_id: &PeerId) {
+        self.to_remove.write().await.insert(*peer_id);
     }
 
     /// Add an address to the cache. Note that the address must have a valid peer ID.
@@ -83,9 +82,8 @@ impl BootstrapCacheStore {
         let Some(addr) = craft_valid_multiaddr(&addr) else {
             return;
         };
-        let peer_id = match addr.iter().find(|p| matches!(p, Protocol::P2p(_))) {
-            Some(Protocol::P2p(id)) => id,
-            _ => return,
+        let Some(peer_id) = multiaddr_get_peer_id(&addr) else {
+            return;
         };
 
         debug!("Adding addr to bootstrap cache: {addr}");
@@ -108,7 +106,7 @@ impl BootstrapCacheStore {
         ) {
             Ok(mut data) => {
                 while data.peers.len() > cfg.max_peers {
-                    data.peers.pop_front();
+                    data.peers.pop_back();
                 }
                 return Ok(data);
             }
@@ -126,7 +124,7 @@ impl BootstrapCacheStore {
                 warn!("Loaded cache data from older version, upgrading to latest version");
                 let mut data: CacheDataLatest = data.into();
                 while data.peers.len() > cfg.max_peers {
-                    data.peers.pop_front();
+                    data.peers.pop_back();
                 }
 
                 Ok(data)
@@ -139,14 +137,16 @@ impl BootstrapCacheStore {
     }
 
     /// Flush the cache to disk after syncing with the CacheData from the file.
+    ///
+    /// Note: This clears the data in memory after writing to disk.
     pub async fn sync_and_flush_to_disk(&self) -> Result<()> {
         if self.config.disable_cache_writing {
             info!("Cache writing is disabled, skipping sync to disk");
             return Ok(());
         }
 
-        if self.data.read().await.peers.is_empty() {
-            info!("No peers to write to disk, skipping sync to disk");
+        if self.data.read().await.peers.is_empty() && self.to_remove.read().await.is_empty() {
+            info!("No peers to write to disk and no removals queued, skipping sync to disk");
             return Ok(());
         }
 
@@ -163,6 +163,17 @@ impl BootstrapCacheStore {
             );
         } else {
             warn!("Failed to load cache data from file, overwriting with new data");
+        }
+
+        // Remove queued peers
+        let to_remove: Vec<PeerId> = self.to_remove.write().await.drain().collect();
+        if !to_remove.is_empty() {
+            info!("Removing {} peers from cache", to_remove.len());
+            for peer_id in to_remove {
+                self.data.write().await.remove_peer(&peer_id);
+            }
+        } else {
+            debug!("No peers queued for removal from cache");
         }
 
         self.write().await.inspect_err(|e| {
@@ -252,9 +263,9 @@ fn duration_with_variance(duration: Duration, variance: u32) -> Duration {
 
     let random_adjustment = Duration::from_secs(rand::thread_rng().gen_range(0..variance as u64));
     if random_adjustment.as_secs().is_multiple_of(2) {
-        duration - random_adjustment
+        duration.saturating_sub(random_adjustment)
     } else {
-        duration + random_adjustment
+        duration.saturating_add(random_adjustment)
     }
 }
 

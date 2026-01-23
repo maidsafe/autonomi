@@ -3,7 +3,6 @@
 //! This library provides Node.js bindings for the ant-node library, which
 //! provides network spawning capabilities and convergent encryption on file-based data.
 
-use ant_node::BootstrapConfig;
 use ant_node::spawn::node_spawner::Multiaddr;
 use napi::bindgen_prelude::*;
 use napi::tokio::sync::Mutex;
@@ -12,7 +11,6 @@ use napi_derive::napi;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr as _;
-use std::time::Duration;
 
 // Convert Rust errors to JavaScript errors
 fn map_error<E>(err: E) -> napi::Error
@@ -46,7 +44,13 @@ fn _try_from_big_int<T: TryFrom<u64>>(value: BigInt, arg: &str) -> Result<T> {
 }
 
 // Convert BootstrapConfigFields to BootstrapConfig
-fn convert_bootstrap_config(config: BootstrapConfigFields) -> Result<BootstrapConfig> {
+/// Configuration extracted from BootstrapConfigFields for spawning nodes
+struct BootstrapParams {
+    initial_peers: Vec<Multiaddr>,
+    local: bool,
+}
+
+fn convert_bootstrap_config(config: BootstrapConfigFields) -> Result<BootstrapParams> {
     let initial_peers = if let Some(peers) = config.initial_peers {
         peers
             .iter()
@@ -63,51 +67,12 @@ fn convert_bootstrap_config(config: BootstrapConfigFields) -> Result<BootstrapCo
         vec![]
     };
 
-    let mut bootstrap_config = BootstrapConfig::new(config.local.unwrap_or(false));
+    let local = config.local.unwrap_or(false);
 
-    if let Some(backwards_compatible_writes) = config.backwards_compatible_writes {
-        bootstrap_config =
-            bootstrap_config.with_backwards_compatible_writes(backwards_compatible_writes);
-    }
-    if let Some(cache_dir) = config.cache_dir {
-        bootstrap_config = bootstrap_config.with_cache_dir(PathBuf::from(cache_dir));
-    }
-    if let Some(cache_save_scaling_factor) = config.cache_save_scaling_factor {
-        bootstrap_config.cache_save_scaling_factor = cache_save_scaling_factor;
-    }
-    if let Some(disable_cache_writing) = config.disable_cache_writing {
-        bootstrap_config.disable_cache_writing = disable_cache_writing;
-    }
-    if let Some(disable_cache_reading) = config.disable_cache_reading {
-        bootstrap_config.disable_cache_reading = disable_cache_reading;
-    }
-    if let Some(disable_env_peers) = config.disable_env_peers {
-        bootstrap_config.disable_env_peers = disable_env_peers;
-    }
-    if let Some(first) = config.first {
-        bootstrap_config = bootstrap_config.with_first(first);
-    }
-    if !initial_peers.is_empty() {
-        bootstrap_config = bootstrap_config.with_initial_peers(initial_peers);
-    }
-    if let Some(max_cached_peers) = config.max_cached_peers {
-        bootstrap_config = bootstrap_config.with_max_cached_peers(max_cached_peers as usize);
-    }
-    if let Some(max_addrs_per_cached_peer) = config.max_addrs_per_cached_peer {
-        bootstrap_config =
-            bootstrap_config.with_max_addrs_per_cached_peer(max_addrs_per_cached_peer as usize);
-    }
-    if let Some(min_duration_ms) = config.min_cache_save_duration_ms {
-        bootstrap_config.min_cache_save_duration = Duration::from_millis(min_duration_ms as u64);
-    }
-    if let Some(max_duration_ms) = config.max_cache_save_duration_ms {
-        bootstrap_config.max_cache_save_duration = Duration::from_millis(max_duration_ms as u64);
-    }
-    if let Some(network_contacts_url) = config.network_contacts_url {
-        bootstrap_config.network_contacts_url = network_contacts_url;
-    }
-
-    Ok(bootstrap_config)
+    Ok(BootstrapParams {
+        initial_peers,
+        local,
+    })
 }
 
 #[napi]
@@ -246,7 +211,18 @@ impl RunningNetwork {
             napi::Error::new(Status::GenericFailure, "Network has already been shutdown")
         })?;
 
-        let peer = running_network.bootstrap_peer().await;
+        let addrs = running_network
+            .get_all_listen_multiaddr()
+            .await
+            .map_err(|e| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    format!("Failed to get bootstrap peer: {e}"),
+                )
+            })?;
+        let peer = addrs.first().ok_or_else(|| {
+            napi::Error::new(Status::GenericFailure, "No bootstrap peers available")
+        })?;
         Ok(peer.to_string())
     }
 
@@ -290,8 +266,10 @@ impl NetworkSpawner {
         let mut spawner = ant_node::spawn::network_spawner::NetworkSpawner::new();
         if let Some(args) = args {
             if let Some(bootstrap_config) = args.bootstrap_config {
-                let config = convert_bootstrap_config(bootstrap_config)?;
-                spawner = spawner.with_bootstrap_config(config);
+                let params = convert_bootstrap_config(bootstrap_config)?;
+                spawner = spawner.with_local(params.local);
+                // Note: initial_peers is handled automatically by NetworkSpawner
+                // as it collects peers from already-spawned nodes
             }
             if let Some(no_upnp) = args.no_upnp {
                 spawner = spawner.with_no_upnp(no_upnp);
@@ -393,8 +371,9 @@ impl NodeSpawner {
                 );
             }
             if let Some(bootstrap_config) = args.bootstrap_config {
-                let config = convert_bootstrap_config(bootstrap_config)?;
-                spawner = spawner.with_bootstrap_config(config);
+                let params = convert_bootstrap_config(bootstrap_config)?;
+                spawner = spawner.with_initial_peers(params.initial_peers);
+                spawner = spawner.with_local(params.local);
             }
             if let Some(no_upnp) = args.no_upnp {
                 spawner = spawner.with_no_upnp(no_upnp);

@@ -15,7 +15,7 @@ use crate::metrics::NodeMetricsRecorder;
 use crate::networking::MetricsRegistries;
 use crate::networking::{Addresses, Network, NetworkConfig, NetworkEvent, NodeIssue};
 use crate::{PutValidationError, RunningNode};
-use ant_bootstrap::bootstrap::Bootstrap;
+use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::EvmNetwork;
 use ant_evm::RewardsAddress;
 use ant_evm::merkle_payments::MERKLE_PAYMENT_EXPIRATION;
@@ -115,7 +115,8 @@ const CLOSE_GROUP_RESTART_SUPPRESSION: Duration = Duration::from_secs(90);
 /// Helper to build and run a Node
 pub struct NodeBuilder {
     addr: SocketAddr,
-    bootstrap: Bootstrap,
+    initial_peers: Vec<Multiaddr>,
+    bootstrap_cache: Option<BootstrapCacheStore>,
     evm_address: RewardsAddress,
     evm_network: EvmNetwork,
     identity_keypair: Keypair,
@@ -134,7 +135,7 @@ impl NodeBuilder {
     /// or fetched from the bootstrap cache set using `bootstrap_cache` method.
     pub fn new(
         identity_keypair: Keypair,
-        bootstrap_flow: Bootstrap,
+        initial_peers: Vec<Multiaddr>,
         evm_address: RewardsAddress,
         evm_network: EvmNetwork,
         addr: SocketAddr,
@@ -142,7 +143,8 @@ impl NodeBuilder {
     ) -> Self {
         Self {
             addr,
-            bootstrap: bootstrap_flow,
+            initial_peers,
+            bootstrap_cache: None,
             evm_address,
             evm_network,
             identity_keypair,
@@ -175,6 +177,11 @@ impl NodeBuilder {
     /// Set the flag to disable UPnP for the node
     pub fn no_upnp(&mut self, no_upnp: bool) {
         self.no_upnp = no_upnp;
+    }
+
+    /// Set the bootstrap cache store for the node
+    pub fn bootstrap_cache(&mut self, cache: BootstrapCacheStore) {
+        self.bootstrap_cache = Some(cache);
     }
 
     /// Asynchronously runs a new node instance, setting up the swarm driver,
@@ -212,7 +219,8 @@ impl NodeBuilder {
             listen_addr: self.addr,
             root_dir: self.root_dir.clone(),
             shutdown_rx: shutdown_rx.clone(),
-            bootstrap: self.bootstrap,
+            initial_peers: self.initial_peers,
+            bootstrap_cache: self.bootstrap_cache,
             no_upnp: self.no_upnp,
             custom_request_timeout: None,
             reachability_status: None,

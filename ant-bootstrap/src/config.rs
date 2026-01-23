@@ -15,9 +15,6 @@ use std::{
     time::Duration,
 };
 
-/// The duration since last seen before removing the address of a Peer.
-const ADDR_EXPIRY_DURATION: Duration = Duration::from_secs(24 * 60 * 60); // 24 hours
-
 /// Maximum peers to store
 const MAX_PEERS: usize = 1500;
 
@@ -33,12 +30,17 @@ const MAX_BOOTSTRAP_CACHE_SAVE_INTERVAL: Duration = Duration::from_secs(3 * 60 *
 /// Configuration for the bootstrap cache
 #[derive(Clone, Debug)]
 pub struct BootstrapCacheConfig {
-    /// The duration since last seen before removing the address of a Peer.
-    pub addr_expiry_duration: Duration,
     /// Enable backwards compatibility while writing the cache file.
     /// This will write the cache file in all versions of the cache file format.
     pub backwards_compatible_writes: bool,
     /// The directory to load and store the bootstrap cache. If not provided, the default path will be used.
+    ///
+    /// The JSON filename will be derived automatically from the network ID
+    ///
+    /// The default location is platform specific:
+    ///  - Linux: $HOME/.local/share/autonomi/bootstrap_cache/bootstrap_cache_<network_id>.json
+    ///  - macOS: $HOME/Library/Application Support/autonomi/bootstrap_cache/bootstrap_cache_<network_id>.json
+    ///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\bootstrap_cache\bootstrap_cache_<network_id>.json
     pub cache_dir: PathBuf,
     /// The cache save scaling factor. We start with the min_cache_save_duration and scale it up to the max_cache_save_duration.
     pub cache_save_scaling_factor: u32,
@@ -64,7 +66,7 @@ impl TryFrom<&InitialPeersConfig> for BootstrapCacheConfig {
         let cache_dir = if let Some(cache_dir) = &config.bootstrap_cache_dir {
             cache_dir.clone()
         } else {
-            default_cache_dir()?
+            default_cache_dir()
         };
         bootstrap_config.cache_dir = cache_dir;
         Ok(bootstrap_config)
@@ -73,18 +75,17 @@ impl TryFrom<&InitialPeersConfig> for BootstrapCacheConfig {
 
 impl BootstrapCacheConfig {
     /// Creates a new BootstrapConfig with default settings
-    pub fn new(local: bool) -> Result<Self> {
-        Ok(Self {
+    pub fn new(local: bool) -> Self {
+        Self {
             local,
-            cache_dir: default_cache_dir()?,
+            cache_dir: default_cache_dir(),
             ..Self::empty()
-        })
+        }
     }
 
     /// Creates a new BootstrapConfig with empty settings
     pub fn empty() -> Self {
         Self {
-            addr_expiry_duration: ADDR_EXPIRY_DURATION,
             backwards_compatible_writes: false,
             max_peers: MAX_PEERS,
             max_addrs_per_peer: MAX_ADDRS_PER_PEER,
@@ -106,12 +107,6 @@ impl BootstrapCacheConfig {
     /// Set the local flag
     pub fn with_local(mut self, enable: bool) -> Self {
         self.local = enable;
-        self
-    }
-
-    /// Set a new addr expiry duration
-    pub fn with_addr_expiry_duration(mut self, duration: Duration) -> Self {
-        self.addr_expiry_duration = duration;
         self
     }
 
@@ -141,18 +136,28 @@ impl BootstrapCacheConfig {
 }
 
 /// Returns the default dir that should contain the bootstrap cache file
-fn default_cache_dir() -> Result<PathBuf> {
-    let dir = dirs_next::data_dir()
-        .ok_or_else(|| Error::CouldNotObtainDataDir)
-        .inspect_err(|err| {
-            error!("Failed to obtain data directory: {err}");
-        })?
-        .join("autonomi")
-        .join("bootstrap_cache");
+///
+/// The default location is platform specific:
+///  - Linux: $HOME/.local/share/autonomi/bootstrap_cache/bootstrap_cache_<network_id>.json
+///  - macOS: $HOME/Library/Application Support/autonomi/bootstrap_cache/bootstrap_cache_<network_id>.json
+///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\bootstrap_cache\bootstrap_cache_<network_id>.json
+///
+/// We fallback to $HOME dir and then to current working directory if the platform specific directory cannot be
+/// determined.
+fn default_cache_dir() -> PathBuf {
+    let base_dir = if let Some(dir) = dirs_next::data_dir() {
+        dir
+    } else if let Some(home) = dirs_next::home_dir() {
+        warn!("Failed to obtain platform data directory, falling back to home directory");
+        home
+    } else {
+        let cwd = std::env::current_dir().unwrap_or_else(|err| {
+            error!("Failed to obtain current working directory: {err}. Using current process directory '.'");
+            PathBuf::from(".")
+        });
+        warn!("Falling back to current working directory for bootstrap cache");
+        cwd
+    };
 
-    std::fs::create_dir_all(&dir).inspect_err(|err| {
-        error!("Failed to create bootstrap cache directory at {dir:?}: {err}");
-    })?;
-
-    Ok(dir)
+    base_dir.join("autonomi").join("bootstrap_cache")
 }

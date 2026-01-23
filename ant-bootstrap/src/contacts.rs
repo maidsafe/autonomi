@@ -102,13 +102,8 @@ impl ContactsFetcher {
         self.endpoints.push(endpoint);
     }
 
-    /// Fetch the list of bootstrap addresses from all configured endpoints
+    /// Fetch the list of bootstrap multiaddrs from all configured endpoints
     pub async fn fetch_bootstrap_addresses(&self) -> Result<Vec<Multiaddr>> {
-        Ok(self.fetch_addrs().await?.into_iter().collect())
-    }
-
-    /// Fetch the list of multiaddrs from all configured endpoints
-    pub async fn fetch_addrs(&self) -> Result<Vec<Multiaddr>> {
         info!(
             "Starting peer fetcher from {} endpoints: {:?}",
             self.endpoints.len(),
@@ -229,17 +224,12 @@ impl ContactsFetcher {
 
     /// Try to parse a response from an endpoint
     fn try_parse_response(response: &str) -> Result<Vec<Multiaddr>> {
-        let cache_data = if let Ok(data) =
-            serde_json::from_str::<super::cache_store::cache_data_v1::CacheData>(response)
-        {
-            Some(data)
-        } else if let Ok(data) =
-            serde_json::from_str::<super::cache_store::cache_data_v0::CacheData>(response)
-        {
-            Some(data.into())
-        } else {
-            None
-        };
+        let cache_data: Option<super::cache_store::cache_data_v1::CacheData> =
+            serde_json::from_str(response).ok().or_else(|| {
+                serde_json::from_str::<super::cache_store::cache_data_v0::CacheData>(response)
+                    .ok()
+                    .map(Into::into)
+            });
 
         match cache_data {
             Some(cache_data) => {

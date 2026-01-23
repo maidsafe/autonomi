@@ -21,9 +21,7 @@ mod upgrade;
 
 use crate::log::{reset_critical_failure, set_critical_failure};
 use crate::subcommands::EvmNetworkCommand;
-use ant_bootstrap::BootstrapConfig;
-use ant_bootstrap::InitialPeersConfig;
-use ant_bootstrap::bootstrap::Bootstrap;
+use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig};
 use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
@@ -315,9 +313,10 @@ fn main() -> Result<()> {
     // another process with these args.
     let rt = Runtime::new()?;
 
-    let bootstrap_config = BootstrapConfig::try_from(&opt.peers)?
+    // Create bootstrap cache for storing discovered peers
+    let bootstrap_cache_config = BootstrapCacheConfig::try_from(&opt.peers)?
         .with_backwards_compatible_writes(opt.write_older_cache_files);
-    let bootstrap = rt.block_on(async { Bootstrap::new(bootstrap_config) })?;
+    let bootstrap_cache = BootstrapCacheStore::new(bootstrap_cache_config)?;
 
     let msg = format!(
         "Running {} v{}",
@@ -332,20 +331,25 @@ fn main() -> Result<()> {
         ant_build_info::git_info()
     );
 
-    if opt.peers.local {
+    let local = opt.peers.local;
+    if local {
         rt.spawn(init_metrics(std::process::id()));
     }
     let restart_options = rt.block_on(async move {
+        // Get bootstrap peers from InitialPeersConfig
+        let initial_peers = opt.peers.get_bootstrap_addr(None).await?;
+
         let mut node_builder = NodeBuilder::new(
             keypair,
-            bootstrap,
+            initial_peers,
             rewards_address,
             evm_network,
             node_socket_addr,
             root_dir,
         );
-        node_builder.local(opt.peers.local);
+        node_builder.local(local);
         node_builder.no_upnp(opt.no_upnp);
+        node_builder.bootstrap_cache(bootstrap_cache);
         #[cfg(feature = "open-metrics")]
         let mut node_builder = node_builder;
         // if enable flag is provided or only if the port is specified then enable the server by setting Some()

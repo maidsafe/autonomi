@@ -12,6 +12,7 @@ pub(crate) mod event;
 pub(crate) mod network_discovery;
 pub(crate) mod network_wide_replication;
 
+use crate::networking::bootstrap::InitialBootstrap;
 use ant_bootstrap::BootstrapCacheStore;
 use event::NodeEvent;
 use network_discovery::{NETWORK_DISCOVER_INTERVAL, NetworkDiscovery};
@@ -25,7 +26,6 @@ use crate::networking::{
     Addresses, CLOSE_GROUP_SIZE, NodeIssue, NodeRecordStore, circular_vec::CircularVec,
     driver::kad::U256, error::Result, log_markers::Marker, replication_fetcher::ReplicationFetcher,
 };
-use ant_bootstrap::bootstrap::Bootstrap;
 use ant_evm::PaymentQuote;
 use ant_protocol::messages::ConnectionInfo;
 use ant_protocol::{
@@ -114,8 +114,9 @@ pub(crate) struct SwarmDriver {
     pub(crate) close_group: Vec<PeerId>,
     pub(crate) peers_in_rt: usize,
     pub(crate) initial_bootstrap_trigger: InitialBootstrapTrigger,
+    pub(crate) initial_bootstrap: InitialBootstrap,
     pub(crate) network_discovery: NetworkDiscovery,
-    pub(crate) bootstrap: Bootstrap,
+    pub(crate) bootstrap_cache: Option<BootstrapCacheStore>,
     pub(crate) network_wide_replication: NetworkWideReplication,
     /// The peers that are closer to our PeerId. Includes self.
     pub(crate) replication_fetcher: ReplicationFetcher,
@@ -181,6 +182,12 @@ impl SwarmDriver {
         );
         let mut network_wide_replication_interval = interval(network_wide_replication);
         let _ = dial_queue_check_interval.tick().await; // first tick completes immediately
+
+        if let Some(cache) = &self.bootstrap_cache {
+            // start the periodic cache sync and flush task
+            #[allow(clippy::let_underscore_future)]
+            let _ = cache.sync_and_flush_periodically();
+        }
 
         let mut round_robin_index = 0;
         loop {
@@ -260,8 +267,8 @@ impl SwarmDriver {
                     bootstrap_interval.as_mut().expect("bootstrap interval is checked before executing").tick().await
                 }, if bootstrap_interval.is_some() => {
                     if self.initial_bootstrap_trigger.should_trigger_initial_bootstrap() {
-                        let completed = self.bootstrap.trigger_bootstrapping_process(&mut self.swarm, self.peers_in_rt);
-                        if completed {
+                        self.initial_bootstrap.trigger_bootstrapping_process(&mut self.swarm, self.peers_in_rt);
+                        if self.initial_bootstrap.has_terminated() {
                             info!("Initial bootstrap process completed. Marking bootstrap_interval as None.");
                             bootstrap_interval = None;
                         }
@@ -533,20 +540,24 @@ impl SwarmDriver {
     /// This function creates a new cache store to ensure that any new data added after spawning the task is not lost.
     /// It then spawns a new asynchronous task to add the provided address to the cache and flush it to disk.
     fn add_sync_and_flush_cache(&mut self, addr: Multiaddr) -> Result<()> {
-        let old_cache = self.bootstrap.cache_store().clone();
-        // This is important to ensure that sync_and_flush_to_disk's clear of in-memory data does not
-        // wipe out any new data added after we spawn the task.
-        if let Ok(cache) = BootstrapCacheStore::new(old_cache.config().clone()) {
-            *self.bootstrap.cache_store_mut() = cache;
-            // Save cache to disk.
-            #[allow(clippy::let_underscore_future)]
-            let _ = tokio::spawn(async move {
-                info!("Adding address to bootstrap cache and sync,flush to disk: {addr:?}");
-                old_cache.add_addr(addr).await;
-                if let Err(err) = old_cache.sync_and_flush_to_disk().await {
-                    error!("Failed to save bootstrap cache: {err}");
-                }
-            });
+        if let Some(old_cache) = self.bootstrap_cache.take() {
+            // This is important to ensure that sync_and_flush_to_disk's clear of in-memory data does not
+            // wipe out any new data added after we spawn the task.
+            if let Ok(new_cache) = BootstrapCacheStore::new(old_cache.config().clone()) {
+                self.bootstrap_cache = Some(new_cache);
+                // Save cache to disk.
+                #[allow(clippy::let_underscore_future)]
+                let _ = tokio::spawn(async move {
+                    info!("Adding address to bootstrap cache and sync,flush to disk: {addr:?}");
+                    old_cache.add_addr(addr).await;
+                    if let Err(err) = old_cache.sync_and_flush_to_disk().await {
+                        error!("Failed to save bootstrap cache: {err}");
+                    }
+                });
+            } else {
+                // If we can't create a new cache, put the old one back
+                self.bootstrap_cache = Some(old_cache);
+            }
         }
 
         Ok(())

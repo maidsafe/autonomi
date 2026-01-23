@@ -33,7 +33,6 @@ mod initial_peers;
 
 use ant_protocol::version::{get_network_id_str, get_truncate_version_str};
 use libp2p::{Multiaddr, PeerId, multiaddr::Protocol};
-use thiserror::Error;
 
 pub use cache_store::BootstrapCacheStore;
 pub use config::BootstrapCacheConfig;
@@ -58,32 +57,13 @@ pub fn craft_valid_multiaddr(addr: &Multiaddr) -> Option<Multiaddr> {
 
     let udp = addr
         .iter()
-        .find(|protocol| matches!(protocol, Protocol::Udp(_)));
-    let tcp = addr
+        .find(|protocol| matches!(protocol, Protocol::Udp(_)))?;
+
+    output_address.push(udp);
+    let quic = addr
         .iter()
-        .find(|protocol| matches!(protocol, Protocol::Tcp(_)));
-
-    // UDP or TCP
-    if let Some(udp) = udp {
-        output_address.push(udp);
-        if let Some(quic) = addr
-            .iter()
-            .find(|protocol| matches!(protocol, Protocol::QuicV1))
-        {
-            output_address.push(quic);
-        }
-    } else if let Some(tcp) = tcp {
-        output_address.push(tcp);
-
-        if let Some(ws) = addr
-            .iter()
-            .find(|protocol| matches!(protocol, Protocol::Ws(_)))
-        {
-            output_address.push(ws);
-        }
-    } else {
-        return None;
-    }
+        .find(|protocol| matches!(protocol, Protocol::QuicV1))?;
+    output_address.push(quic);
 
     if let Some(peer_id) = peer_id {
         output_address.push(peer_id);

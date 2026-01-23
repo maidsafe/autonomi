@@ -11,7 +11,7 @@ use crate::exit_code::{
 };
 use crate::opt::{ALPHA_NETWORK_ID, LOCAL_NETWORK_ID, MAIN_NETWORK_ID, NetworkId};
 use autonomi::client::config::ClientOperatingStrategy;
-use autonomi::{BootstrapConfig, Client, ClientConfig, InitialPeersConfig, get_evm_network};
+use autonomi::{BootstrapCacheConfig, Client, ClientConfig, InitialPeersConfig, get_evm_network};
 use color_eyre::eyre::eyre;
 use indicatif::ProgressBar;
 use std::time::Duration;
@@ -75,14 +75,15 @@ pub async fn connect_to_network_with_config(
                 (err.into(), exit_code)
             })?;
 
-            let bootstrap_config =
-                BootstrapConfig::try_from(&network_context.peers).map_err(|err| {
+            let bootstrap_cache_config = BootstrapCacheConfig::try_from(&network_context.peers)
+                .map_err(|err| {
                     let exit_code = bootstrap_error_exit_code(&err);
                     (err.into(), exit_code)
                 })?;
 
             let config = ClientConfig {
-                bootstrap_config,
+                bootstrap_cache_config: Some(bootstrap_cache_config),
+                init_peers_config: network_context.peers,
                 evm_network,
                 strategy: operating_strategy.clone(),
                 network_id: Some(network_context.network_id.as_u8()),

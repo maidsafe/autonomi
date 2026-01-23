@@ -16,7 +16,8 @@ use crate::{
     },
     utils::get_antnode_root_dir,
 };
-use ant_bootstrap::{BootstrapConfig, bootstrap::Bootstrap};
+// Note: ant-bootstrap provides InitialPeersConfig, BootstrapCacheConfig, etc.
+// but NodeBuilder takes initial_peers directly as Vec<Multiaddr>
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_protocol::{NetworkAddress, storage::ChunkAddress};
 use const_hex::FromHex;
@@ -83,16 +84,9 @@ impl PyAntNode {
         let keypair = Keypair::generate_ed25519();
 
         future_into_py(py, async move {
-            let bootstrap = Bootstrap::new(BootstrapConfig {
-                initial_peers,
-                local,
-                ..Default::default()
-            })
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to initialise bootstrap: {e}")))?;
-
             let mut node_builder = NodeBuilder::new(
                 keypair,
-                bootstrap,
+                initial_peers,
                 rewards_address,
                 evm_network.0,
                 node_socket_addr,
@@ -309,15 +303,25 @@ pub struct PyRunningNetwork(Arc<Mutex<Option<RunningNetwork>>>);
 
 #[pymethods]
 impl PyRunningNetwork {
+    /// Get the first bootstrap peer address from the network.
     fn bootstrap_peer<'a>(&mut self, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
         let self_ = Arc::clone(&self.0);
         future_into_py(py, async move {
-            let mut self_ = self_.lock().await;
-            let running_network = self_.as_mut().ok_or_else(|| {
+            let self_ = self_.lock().await;
+            let running_network = self_.as_ref().ok_or_else(|| {
                 PyRuntimeError::new_err("RunningNetwork probably already shutdown")
             })?;
 
-            let peer = running_network.bootstrap_peer().await;
+            let addrs = running_network
+                .get_all_listen_multiaddr()
+                .await
+                .map_err(|e| {
+                    PyRuntimeError::new_err(format!("Failed to get listen addresses: {e}"))
+                })?;
+
+            let peer = addrs.into_iter().next().ok_or_else(|| {
+                PyRuntimeError::new_err("No listen addresses available from the network")
+            })?;
 
             Ok(peer.to_string())
         })
@@ -385,41 +389,25 @@ impl PyNodeSpawner {
         Ok(())
     }
 
-    /// Set bootstrap configuration for the node.
-    #[pyo3(signature = (local=None, initial_peers=None, first=None, disable_cache_reading=None, disable_cache_writing=None))]
-    pub fn with_bootstrap_config(
-        &mut self,
-        local: Option<bool>,
-        initial_peers: Option<Vec<String>>,
-        first: Option<bool>,
-        disable_cache_reading: Option<bool>,
-        disable_cache_writing: Option<bool>,
-    ) -> PyResult<()> {
+    /// Set the initial peers for the node.
+    pub fn with_initial_peers(&mut self, initial_peers: Vec<String>) -> PyResult<()> {
         if let Some(self_) = self.0.take() {
-            let mut bootstrap_config = BootstrapConfig::new(local.unwrap_or(false));
+            let peers: Vec<Multiaddr> = initial_peers
+                .into_iter()
+                .map(|addr| addr.parse())
+                .collect::<Result<_, _>>()
+                .map_err(|e| PyValueError::new_err(format!("Invalid peer address: {e}")))?;
+            self.0 = Some(self_.with_initial_peers(peers));
+        } else {
+            return Err(PyRuntimeError::new_err("NodeSpawner inner error"));
+        }
+        Ok(())
+    }
 
-            if let Some(peers) = initial_peers {
-                let peers = peers
-                    .into_iter()
-                    .map(|addr| addr.parse())
-                    .collect::<Result<_, _>>()
-                    .map_err(|e| PyValueError::new_err(format!("Invalid peer address: {e}")))?;
-                bootstrap_config = bootstrap_config.with_initial_peers(peers);
-            }
-
-            if let Some(first) = first {
-                bootstrap_config = bootstrap_config.with_first(first);
-            }
-
-            if let Some(disable) = disable_cache_reading {
-                bootstrap_config.disable_cache_reading = disable;
-            }
-
-            if let Some(disable) = disable_cache_writing {
-                bootstrap_config.disable_cache_writing = disable;
-            }
-
-            self.0 = Some(self_.with_bootstrap_config(bootstrap_config));
+    /// Set whether this is a local network.
+    pub fn with_local(&mut self, local: bool) -> PyResult<()> {
+        if let Some(self_) = self.0.take() {
+            self.0 = Some(self_.with_local(local));
         } else {
             return Err(PyRuntimeError::new_err("NodeSpawner inner error"));
         }
@@ -509,41 +497,12 @@ impl PyNetworkSpawner {
         Ok(())
     }
 
-    /// Set bootstrap configuration for the network.
-    #[pyo3(signature = (local=None, initial_peers=None, first=None, disable_cache_reading=None, disable_cache_writing=None))]
-    pub fn with_bootstrap_config(
-        &mut self,
-        local: Option<bool>,
-        initial_peers: Option<Vec<String>>,
-        first: Option<bool>,
-        disable_cache_reading: Option<bool>,
-        disable_cache_writing: Option<bool>,
-    ) -> PyResult<()> {
+    /// Set whether this is a local network.
+    /// Note: NetworkSpawner manages initial peers internally - each new node
+    /// connects to previously spawned nodes in the network.
+    pub fn with_local(&mut self, local: bool) -> PyResult<()> {
         if let Some(self_) = self.0.take() {
-            let mut bootstrap_config = BootstrapConfig::new(local.unwrap_or(false));
-
-            if let Some(peers) = initial_peers {
-                let peers = peers
-                    .into_iter()
-                    .map(|addr| addr.parse())
-                    .collect::<Result<_, _>>()
-                    .map_err(|e| PyValueError::new_err(format!("Invalid peer address: {e}")))?;
-                bootstrap_config = bootstrap_config.with_initial_peers(peers);
-            }
-
-            if let Some(first) = first {
-                bootstrap_config = bootstrap_config.with_first(first);
-            }
-
-            if let Some(disable) = disable_cache_reading {
-                bootstrap_config.disable_cache_reading = disable;
-            }
-
-            if let Some(disable) = disable_cache_writing {
-                bootstrap_config.disable_cache_writing = disable;
-            }
-
-            self.0 = Some(self_.with_bootstrap_config(bootstrap_config));
+            self.0 = Some(self_.with_local(local));
         } else {
             return Err(PyRuntimeError::new_err("NetworkSpawner inner error"));
         }

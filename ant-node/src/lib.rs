@@ -53,7 +53,7 @@ pub use self::{
     networking::sort_peers_by_key,
     node::{NodeBuilder, PERIODIC_REPLICATION_INTERVAL_MAX_S},
 };
-pub use ant_bootstrap::{Bootstrap, BootstrapCacheStore, BootstrapConfig, InitialPeersConfig};
+pub use ant_bootstrap::{BootstrapCacheStore, InitialPeersConfig};
 
 use crate::error::Result;
 
@@ -70,7 +70,7 @@ use tokio::sync::watch;
 
 /// Once a node is started and running, the user obtains
 /// a `NodeRunning` object which can be used to interact with it.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RunningNode {
     shutdown_sender: watch::Sender<bool>,
     network: Network,

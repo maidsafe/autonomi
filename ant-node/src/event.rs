@@ -19,6 +19,12 @@ const NODE_EVENT_CHANNEL_SIZE: usize = 500;
 #[derive(Clone)]
 pub struct NodeEventsChannel(broadcast::Sender<NodeEvent>);
 
+impl std::fmt::Debug for NodeEventsChannel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NodeEventsChannel").finish()
+    }
+}
+
 /// Type of channel receiver where events are broadcasted to by the node.
 pub type NodeEventsReceiver = broadcast::Receiver<NodeEvent>;
 

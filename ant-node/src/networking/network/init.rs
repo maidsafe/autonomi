@@ -11,6 +11,7 @@ use ant_protocol::constants::{KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, REPLICATI
 use crate::ReachabilityStatus;
 use crate::networking::{
     CLOSE_GROUP_SIZE, NetworkEvent,
+    bootstrap::InitialBootstrap,
     circular_vec::CircularVec,
     driver::{
         BLOCKLIST_CACHE_SIZE, InitialBootstrapTrigger, NodeBehaviour, SwarmDriver, behaviour::upnp,
@@ -25,7 +26,6 @@ use crate::networking::{
 use crate::networking::{
     MetricsRegistries, metrics::NetworkMetricsRecorder, metrics::service::run_metrics_server,
 };
-use ant_bootstrap::bootstrap::Bootstrap;
 use ant_protocol::{
     NetworkAddress, PrettyPrintKBucketKey,
     messages::{Request, Response},
@@ -80,7 +80,8 @@ pub(crate) struct NetworkConfig {
     pub listen_addr: SocketAddr,
     pub root_dir: PathBuf,
     pub shutdown_rx: tokio::sync::watch::Receiver<bool>,
-    pub bootstrap: Bootstrap,
+    pub initial_peers: Vec<libp2p::Multiaddr>,
+    pub bootstrap_cache: Option<ant_bootstrap::BootstrapCacheStore>,
     pub no_upnp: bool,
     /// The reachability status found using the reachability swarm
     pub reachability_status: Option<ReachabilityStatus>,
@@ -358,7 +359,8 @@ fn init_swarm_driver(
         close_group: Vec::with_capacity(CLOSE_GROUP_SIZE),
         peers_in_rt: 0,
         initial_bootstrap_trigger: InitialBootstrapTrigger::new(is_upnp_enabled),
-        bootstrap: config.bootstrap,
+        initial_bootstrap: InitialBootstrap::new(config.initial_peers),
+        bootstrap_cache: config.bootstrap_cache,
         network_wide_replication: NetworkWideReplication::new(network_event_sender.clone()),
         replication_fetcher,
         #[cfg(feature = "open-metrics")]

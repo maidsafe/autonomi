@@ -10,7 +10,6 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 
-use ant_node::BootstrapConfig;
 use ant_node::spawn::network_spawner::NetworkSpawner;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -27,11 +26,9 @@ async fn main() {
 
     let network_size = 20;
 
-    let bootstrap_config = BootstrapConfig::new(true);
-
     let running_network = NetworkSpawner::new()
         .with_evm_network(Default::default())
-        .with_bootstrap_config(bootstrap_config)
+        .with_local(true)
         .with_size(network_size)
         .spawn()
         .await
