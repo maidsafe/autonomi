@@ -4,25 +4,15 @@ runs:
   using: composite
   steps:
     - uses: dtolnay/rust-toolchain@stable
-    - uses: mozilla/sccache-action@v0.0.3
-    - uses: actions/github-script@v7
+    - uses: mozilla/sccache-action@v0.0.9
       with:
-        script: |
-          core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
-          core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-    - name: Test and enable sccache
+        version: "v0.10.0"
+      continue-on-error: true
+    - name: Enable sccache
       shell: bash
       run: |
-        # Test if sccache can start successfully with GHA cache
-        export SCCACHE_GHA_ENABLED=on
-        if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
-          echo "sccache is working, enabling it"
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "SCCACHE_GHA_ENABLED=on" >> $GITHUB_ENV
-        else
-          echo "::warning::sccache failed to start, building without cache"
-          sccache --stop-server 2>/dev/null || true
-        fi
+        echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+        echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
     - if: runner.os == 'Linux'
       shell: bash
       run: sudo apt-get update && sudo apt-get install -y mold

@@ -130,9 +130,18 @@ runs:
       shell: pwsh
       run: |
         $destination = "C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps"
-        Copy-Item ${{ inputs.antctl-path }} -Destination "$destination\antctl.exe"
+        # Handle paths with or without .exe extension
+        $antctlPath = "${{ inputs.antctl-path }}"
+        if (-not $antctlPath.EndsWith(".exe")) {
+          $antctlPath = "$antctlPath.exe"
+        }
+        Copy-Item $antctlPath -Destination "$destination\antctl.exe"
         if ("${{ inputs.enable-evm-testnet }}" -eq "true") {
-          Copy-Item ${{ inputs.evm-testnet-path }} -Destination "$destination\evm-testnet.exe"
+          $evmPath = "${{ inputs.evm-testnet-path }}"
+          if (-not $evmPath.EndsWith(".exe")) {
+            $evmPath = "$evmPath.exe"
+          }
+          Copy-Item $evmPath -Destination "$destination\evm-testnet.exe"
         }
 
     - name: start evm testnet

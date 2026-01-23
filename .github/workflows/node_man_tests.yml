@@ -23,20 +23,15 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - uses: mozilla/sccache-action@v0.0.3
-      - name: Test and enable sccache
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
         shell: bash
         run: |
-          # Test if sccache can start successfully with GHA cache
-          export SCCACHE_GHA_ENABLED=true
-          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
-            echo "sccache is working, enabling it"
-            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-            echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-          else
-            echo "::warning::sccache failed to start, building without cache"
-            sccache --stop-server 2>/dev/null || true
-          fi
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
       - name: Install mold (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y mold
