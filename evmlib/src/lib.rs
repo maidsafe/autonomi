@@ -39,6 +39,9 @@ pub mod transaction_config;
 pub mod utils;
 pub mod wallet;
 
+// Re-export GasInfo for use by other crates
+pub use retry::GasInfo;
+
 /// Timeout for transactions
 const TX_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(24); // Should differ per chain
 

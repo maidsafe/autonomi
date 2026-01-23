@@ -2,7 +2,7 @@ use crate::common::{Address, Amount, Calldata, TxHash};
 use crate::contract::payment_vault::error::Error;
 use crate::contract::payment_vault::interface::IPaymentVault;
 use crate::contract::payment_vault::interface::IPaymentVault::IPaymentVaultInstance;
-use crate::retry::{retry, send_transaction_with_retries};
+use crate::retry::{GasInfo, retry, send_transaction_with_retries};
 use crate::transaction_config::TransactionConfig;
 use alloy::network::Network;
 use alloy::providers::Provider;
@@ -56,11 +56,12 @@ where
     }
 
     /// Pay for quotes.
+    /// Returns the transaction hash and gas information.
     pub async fn pay_for_quotes<I: IntoIterator<Item: Into<IPaymentVault::DataPayment>>>(
         &self,
         data_payments: I,
         transaction_config: &TransactionConfig,
-    ) -> Result<TxHash, Error> {
+    ) -> Result<(TxHash, GasInfo), Error> {
         debug!("Paying for quotes.");
         let (calldata, to) = self.pay_for_quotes_calldata(data_payments)?;
         send_transaction_with_retries(

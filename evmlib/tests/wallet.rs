@@ -95,7 +95,7 @@ async fn test_pay_for_quotes_and_data_payment_verification() {
     }
 
     // Would normally only pay the three highest quotes per chunk, but for testing we pay all five.
-    let tx_hashes = wallet
+    let (tx_hashes, _gas_info) = wallet
         .pay_for_quotes(quote_payments.iter().flatten().cloned())
         .await
         .unwrap();
