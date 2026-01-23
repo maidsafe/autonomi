@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  WiX localization file for Autonomi CLI Suite MSI installer.
+  Overrides default WixUI text strings with product-specific content.
+-->
+<WixLocalization Culture="en-US" xmlns="http://wixtoolset.org/schemas/v4/wxl">
+
+  <!-- Welcome dialog customization -->
+  <String Id="WelcomeDlgDescription">This will install the Autonomi command-line tools on your computer:
+
+    - ant: Client CLI for file operations on the Autonomi Network
+    - antnode: Node software for running an Autonomi node
+    - antctl: Node management and control tool
+
+Click Install to continue or Cancel to exit Setup.</String>
+
+</WixLocalization>

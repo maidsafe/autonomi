@@ -96,10 +96,13 @@ jobs:
           Write-Host "  Artifacts: $artifactsPath"
           Write-Host "  Output: $outputMsi"
 
+          $wxlFile = "resources\installer\windows\autonomi.wxl"
+
           wix build `
             -d ProductVersion=$version `
             -d ArtifactsDir=$artifactsPath `
             -ext WixToolset.UI.wixext `
+            -loc $wxlFile `
             -o $outputMsi `
             $wxsFile
 
