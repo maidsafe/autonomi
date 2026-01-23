@@ -16,7 +16,7 @@ in the release that could potentially be tested if we need to.
 Please follow these steps:
 
 - Read the current release info from the release cycle info file
-- Create a branch from the current branch called `rc-<release-year>-<release-month>-<release-cycle>
+- Create a branch from the current branch called `rc-<release-year>.<release-month>.<release-cycle>
   + 1`. So the current release cycle value should be incremented by 1. If a branch with the same
   name already exists, prompt the user to ask if they want to delete it. This may have been left
   behind from a previous test.
@@ -36,5 +36,9 @@ Please follow these steps:
   the commit message to indicate it is a testing RC and will be removed.
 - We need to make sure there are no previous test binaries with the same RC version. You can use the
   `remove-s3-ant-rc-binaries.sh` script to do this.
+- We also need to make sure the `upstream` repository does not have a tag in the form
+  `rc-<release-year>.<release-month>.<release-cycle>.<release-cycle-counter>`. This is because the
+  fake release candidate we will use is going to need this tag, and it may have been left behind
+  from a previous test.
 - Push the branch to the `upstream` repository. If there is an error on the push, do *not* force
   push to the branch since it is on `upstream`. The user can inspect what is going on here.

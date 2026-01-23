@@ -273,12 +273,12 @@ jobs:
             --sign "$SIGNING_IDENTITY" \
             --keychain "$KEYCHAIN_PATH" \
             autonomi-unsigned.pkg \
-            autonomi-${{ steps.version.outputs.version }}-${{ inputs.arch }}.pkg
+            ${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg
 
           echo "Package signed successfully"
 
           # Verify signature
-          pkgutil --check-signature autonomi-${{ steps.version.outputs.version }}-${{ inputs.arch }}.pkg
+          pkgutil --check-signature ${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg
 
       - name: Submit for notarization
         id: notarize
@@ -287,7 +287,7 @@ jobs:
           APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          PKG_FILE="autonomi-${{ steps.version.outputs.version }}-${{ inputs.arch }}.pkg"
+          PKG_FILE="${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg"
 
           echo "Submitting $PKG_FILE for notarization..."
 
@@ -334,7 +334,7 @@ jobs:
           APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          PKG_FILE="autonomi-${{ steps.version.outputs.version }}-${{ inputs.arch }}.pkg"
+          PKG_FILE="${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg"
           SUBMISSION_ID="${{ steps.notarize.outputs.submission_id }}"
 
           echo "Stapling notarization ticket to $PKG_FILE..."
@@ -378,7 +378,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: autonomi-pkg-${{ inputs.arch }}
-          path: autonomi-${{ steps.version.outputs.version }}-${{ inputs.arch }}.pkg
+          path: ${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg
 
       - name: Cleanup keychain
         if: always()

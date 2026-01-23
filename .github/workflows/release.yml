@@ -460,6 +460,40 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
 
+  sign-macos-app-x86_64:
+    if: ${{
+        github.repository_owner == 'maidsafe' &&
+        (github.ref == 'refs/heads/stable' || startsWith(github.ref, 'refs/heads/rc'))
+      }}
+    name: sign macos app (x86_64)
+    needs: [build]
+    uses: ./.github/workflows/build-macos-app.yml
+    with:
+      arch: x86_64-apple-darwin
+    secrets:
+      APPLE_APPLICATION_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_P12_BASE64 }}
+      APPLE_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+
+  sign-macos-app-aarch64:
+    if: ${{
+        github.repository_owner == 'maidsafe' &&
+        (github.ref == 'refs/heads/stable' || startsWith(github.ref, 'refs/heads/rc'))
+      }}
+    name: sign macos app (aarch64)
+    needs: [build]
+    uses: ./.github/workflows/build-macos-app.yml
+    with:
+      arch: aarch64-apple-darwin
+    secrets:
+      APPLE_APPLICATION_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_P12_BASE64 }}
+      APPLE_APPLICATION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+
   s3-release:
     if: ${{
         github.repository_owner == 'maidsafe' &&
@@ -568,7 +602,7 @@ jobs:
       }}
     name: github release
     runs-on: ubuntu-latest
-    needs: [build, sign-windows-binaries, sign-macos-pkg-x86_64, sign-macos-pkg-aarch64, s3-release]
+    needs: [build, sign-windows-binaries, sign-macos-pkg-x86_64, sign-macos-pkg-aarch64, sign-macos-app-x86_64, sign-macos-app-aarch64, s3-release]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@master
@@ -611,6 +645,14 @@ jobs:
         with:
           name: autonomi-pkg-aarch64-apple-darwin
           path: pkg-artifacts
+      - uses: actions/download-artifact@master
+        with:
+          name: node-launchpad-dmg-x86_64-apple-darwin
+          path: dmg-artifacts
+      - uses: actions/download-artifact@master
+        with:
+          name: node-launchpad-dmg-aarch64-apple-darwin
+          path: dmg-artifacts
 
       - uses: cargo-bins/cargo-binstall@main
       - name: install just
@@ -687,8 +729,8 @@ jobs:
             echo "Install \`ant\`, \`antnode\`, and \`antctl\` using the signed and notarized pkg installer."
             echo ""
             echo "Download the appropriate pkg file for your Mac:"
-            echo "- **Apple Silicon (M1/M2/M3):** \`autonomi-${{ env.PACKAGE_VERSION }}-aarch64-apple-darwin.pkg\`"
-            echo "- **Intel:** \`autonomi-${{ env.PACKAGE_VERSION }}-x86_64-apple-darwin.pkg\`"
+            echo "- **Apple Silicon (M1/M2/M3):** \`${{ env.PACKAGE_VERSION }}.autonomi.aarch64-apple-darwin.pkg\`"
+            echo "- **Intel:** \`${{ env.PACKAGE_VERSION }}.autonomi.x86_64-apple-darwin.pkg\`"
             echo ""
             echo "Double-click the downloaded file and follow the installation prompts."
             echo "The binaries will be installed to \`/usr/local/bin\`."
@@ -699,6 +741,17 @@ jobs:
             echo "antnode --version"
             echo "antctl --version"
             echo "\`\`\`"
+            echo ""
+            echo "### macOS Node Launchpad App"
+            echo ""
+            echo "Node Launchpad is a TUI application for managing Autonomi nodes."
+            echo ""
+            echo "Download the appropriate DMG file for your Mac:"
+            echo "- **Apple Silicon (M1/M2/M3):** \`${{ env.PACKAGE_VERSION }}.node-launchpad.aarch64-apple-darwin.dmg\`"
+            echo "- **Intel:** \`${{ env.PACKAGE_VERSION }}.node-launchpad.x86_64-apple-darwin.dmg\`"
+            echo ""
+            echo "Open the DMG and drag Node Launchpad to your Applications folder."
+            echo "The app will open Terminal and run the Node Launchpad TUI."
           } > release-description.md
 
       # For the next two steps, it seems to be necessary to set `GITHUB_TOKEN` on the step rather
@@ -734,6 +787,19 @@ jobs:
             if [ -f "$pkg" ]; then
               echo "Uploading $pkg"
               gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} "$pkg"
+            fi
+          done
+
+      - name: upload macOS Node Launchpad DMGs
+        env:
+          GITHUB_TOKEN: ${{ secrets.AUTONOMI_PAT }}
+        shell: bash
+        run: |
+          echo "Uploading macOS Node Launchpad DMGs..."
+          for dmg in dmg-artifacts/*.dmg; do
+            if [ -f "$dmg" ]; then
+              echo "Uploading $dmg"
+              gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} "$dmg"
             fi
           done
 
