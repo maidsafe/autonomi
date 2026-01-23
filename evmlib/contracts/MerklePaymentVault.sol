@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@prb/math/src/SD59x18.sol";
 import "./IMerklePaymentVault.sol";
 
 /// Merkle Batch Payment Vault
@@ -24,11 +25,38 @@ contract MerklePaymentVault is IMerklePaymentVault {
     /// Number of candidates per pool (fixed)
     uint8 public constant override CANDIDATES_PER_POOL = 16;
 
+    // ============ Pricing Constants ============
+
+    /// Precision for fixed-point calculations (1e18)
+    uint256 public constant PRECISION = 1e18;
+
+    /// Constant ANT price for local testnet (1e18)
+    /// In production, this would be fetched from Chainlink
+    uint256 public constant ANT_PRICE = 1e18;
+
+    /// Scaling factor for the pricing formula
+    uint256 public scalingFactor = 1e18;
+
+    /// Minimum price floor (3 to match regular payment baseline)
+    uint256 public minPrice = 3;
+
+    /// Maximum cost unit for capacity calculation
+    uint256 public maxCostUnit = 1e24;
+
+    /// Cost unit per data type
+    mapping(DataType => uint256) public costUnitPerDataType;
+
     // ============ Constructor ============
 
     constructor(address _antToken) {
         require(_antToken != address(0), "Invalid token address");
         antToken = IERC20(_antToken);
+
+        // Initialize cost units per data type
+        costUnitPerDataType[DataType.Chunk] = 1e18;
+        costUnitPerDataType[DataType.GraphEntry] = 1e18;
+        costUnitPerDataType[DataType.Scratchpad] = 1e18;
+        costUnitPerDataType[DataType.Pointer] = 1e18;
     }
 
     // ============ Main Functions ============
@@ -75,7 +103,8 @@ contract MerklePaymentVault is IMerklePaymentVault {
 
         // Calculate median price from all CANDIDATES_PER_POOL candidates
         uint256 medianPrice = _calculateMedianPrice(winnerPool.candidates);
-        totalAmount = medianPrice * depth;
+        uint256 numChunks = 1 << depth; // 2^depth chunks in the merkle tree
+        totalAmount = medianPrice * numChunks;
 
         // Select depth winner nodes from pool
         uint8[] memory winnerIndices = _selectWinnerNodes(depth, winnerPoolHash, merklePaymentTimestamp);
@@ -86,6 +115,7 @@ contract MerklePaymentVault is IMerklePaymentVault {
         info.merklePaymentTimestamp = merklePaymentTimestamp;
 
         // Transfer tokens to winners and store payment records
+        // depth winners share the total amount (each gets totalAmount/depth)
         uint256 amountPerNode = totalAmount / depth;
         for (uint256 i = 0; i < depth; i++) {
             uint8 nodeIdx = winnerIndices[i];
@@ -141,7 +171,8 @@ contract MerklePaymentVault is IMerklePaymentVault {
 
         // Calculate median price from all CANDIDATES_PER_POOL candidates
         uint256 medianPrice = _calculateMedianPrice(winnerPool.candidates);
-        totalAmount = medianPrice * depth;
+        uint256 numChunks = 1 << depth; // 2^depth chunks in the merkle tree
+        totalAmount = medianPrice * numChunks;
 
         return totalAmount;
     }
@@ -173,7 +204,7 @@ contract MerklePaymentVault is IMerklePaymentVault {
     }
 
     /// Calculate median price from CANDIDATES_PER_POOL candidate quotes
-    function _calculateMedianPrice(CandidateNode[16] calldata candidates) internal pure returns (uint256) {
+    function _calculateMedianPrice(CandidateNode[16] calldata candidates) internal view returns (uint256) {
         // Get quote for each candidate
         uint256[16] memory quotes;
         for (uint256 i = 0; i < 16; i++) {
@@ -189,14 +220,97 @@ contract MerklePaymentVault is IMerklePaymentVault {
 
     /// Calculate quote for a single node based on metrics
     ///
-    /// Pricing algorithm considers:
-    /// - Data size (base cost)
-    /// - Node capacity/saturation (higher when more full)
-    /// - Network participation (rewards reliability)
-    /// - Network density (adjusts for network conditions)
-    function _getQuote(QuotingMetrics calldata metrics) internal pure returns (uint256) {
-        // Temporary until we have the updated pricing formula
-        return (1);
+    /// Uses the production pricing formula:
+    /// price = (-s/ANT) * (ln|rUpper - 1| - ln|rLower - 1|) + pMin*(rUpper - rLower) - (rUpper - rLower)/ANT
+    ///
+    /// Where:
+    /// - s = scalingFactor
+    /// - ANT = antPrice
+    /// - pMin = minPrice
+    /// - rLower = totalCostUnit / maxCostUnit
+    /// - rUpper = (totalCostUnit + costUnitPerDataType[dataType]) / maxCostUnit
+    function _getQuote(QuotingMetrics calldata metrics) internal view returns (uint256) {
+        uint256 totalCostUnit = _getTotalCostUnit(metrics);
+        uint256 lowerBound = _getBound(totalCostUnit);
+        uint256 upperBound = _getBound(totalCostUnit + costUnitPerDataType[metrics.dataType]);
+
+        // Edge cases: if bounds are equal or at precision, return minPrice
+        if (lowerBound == upperBound || lowerBound == PRECISION || upperBound == PRECISION) {
+            return minPrice;
+        }
+
+        // Calculate |rUpper - 1| and |rLower - 1| for logarithm
+        uint256 upperDiff = _absDiff(upperBound, PRECISION);
+        uint256 lowerDiff = _absDiff(lowerBound, PRECISION);
+
+        // Avoid log(0) - return minPrice if either diff is 0
+        if (upperDiff == 0 || lowerDiff == 0) {
+            return minPrice;
+        }
+
+        // Calculate ln|rUpper - 1| - ln|rLower - 1| using PRB Math
+        int256 logUpper = _calculateLn(upperDiff);
+        int256 logLower = _calculateLn(lowerDiff);
+        int256 logDiff = logUpper - logLower;
+
+        // Calculate linear part: rUpper - rLower
+        uint256 linearPart = _absDiff(upperBound, lowerBound);
+
+        // Formula components:
+        // partOne = (-s/ANT) * logDiff
+        // partTwo = pMin * linearPart / PRECISION
+        // partThree = linearPart / ANT (scaled by PRECISION)
+        int256 partOne = (-int256(scalingFactor) * logDiff) / int256(ANT_PRICE * PRECISION);
+        uint256 partTwo = (linearPart * minPrice) / PRECISION;
+        uint256 partThree = (linearPart * PRECISION) / ANT_PRICE / PRECISION;
+
+        // Combine: price = partOne + partTwo - partThree
+        int256 price = partOne + int256(partTwo) - int256(partThree);
+
+        // Return price, with minPrice as floor
+        if (price <= 0) {
+            return minPrice;
+        }
+        return uint256(price);
+    }
+
+    /// Calculate total cost unit from metrics
+    function _getTotalCostUnit(QuotingMetrics calldata metrics) internal view returns (uint256) {
+        uint256 total = 0;
+        for (uint256 i = 0; i < metrics.recordsPerType.length; i++) {
+            Record calldata record = metrics.recordsPerType[i];
+            total += costUnitPerDataType[record.dataType] * record.records;
+        }
+        // Also add the closeRecordsStored as a base contribution
+        total += metrics.closeRecordsStored * PRECISION / 1000; // Scale down close records
+        return total;
+    }
+
+    /// Calculate bound ratio: value / maxCostUnit
+    function _getBound(uint256 value) internal view returns (uint256) {
+        if (maxCostUnit == 0) {
+            return 0;
+        }
+        return (value * PRECISION) / maxCostUnit;
+    }
+
+    /// Calculate absolute difference between two values
+    function _absDiff(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a >= b) {
+            return a - b;
+        }
+        return b - a;
+    }
+
+    /// Calculate natural logarithm using PRB Math
+    function _calculateLn(uint256 x) internal pure returns (int256) {
+        if (x == 0) {
+            return type(int256).min; // Return minimum for log(0)
+        }
+        // Convert to SD59x18 (scaled by 1e18)
+        SD59x18 value = sd(int256(x));
+        SD59x18 result = ln(value);
+        return result.unwrap();
     }
 
     /// Sort array of CANDIDATES_PER_POOL quotes using insertion sort (efficient for small arrays)
