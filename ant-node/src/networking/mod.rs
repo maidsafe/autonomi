@@ -89,6 +89,14 @@ pub fn sort_peers_by_key<T>(
 #[derive(Clone, Debug, Default)]
 pub struct Addresses(pub Vec<Multiaddr>);
 
+pub(crate) fn multiaddr_get_ip(addr: &Multiaddr) -> Option<std::net::IpAddr> {
+    addr.iter().find_map(|p| match p {
+        Protocol::Ip4(ip) => Some(std::net::IpAddr::V4(ip)),
+        Protocol::Ip6(ip) => Some(std::net::IpAddr::V6(ip)),
+        _ => None,
+    })
+}
+
 pub(crate) fn multiaddr_get_port(addr: &Multiaddr) -> Option<u16> {
     addr.iter().find_map(|p| match p {
         Protocol::Udp(port) => Some(port),

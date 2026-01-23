@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// TODO: Remove once the reachability check workflow is fully integrated into the node startup.
 #![allow(dead_code)]
 
 mod dialer;
@@ -147,6 +148,7 @@ impl ReachabilityCheckSwarmDriver {
         #[cfg(feature = "open-metrics")] metrics_recorder: Option<NetworkMetricsRecorder>,
     ) -> Result<Self, NetworkError> {
         let swarm = swarm;
+        info!("Obtaining valid listeners for the reachability check workflow");
         println!("Obtaining valid listeners for the reachability check workflow");
 
         let peer_id = PeerId::from(keypair.public());
@@ -174,6 +176,7 @@ impl ReachabilityCheckSwarmDriver {
 
     /// Runs the reachability check workflow.
     pub(crate) async fn detect(mut self) -> Result<ReachabilityStatus, NetworkError> {
+        info!("Starting reachability check workflow. This could take 3 to 10 minutes..");
         println!("Starting reachability check workflow. This could take 3 to 10 minutes..");
 
         // Bind to the first listener
@@ -181,6 +184,12 @@ impl ReachabilityCheckSwarmDriver {
 
         info!(
             "Starting reachability check workflow. Listener {} of {}, Attempt {} of {MAX_WORKFLOW_ATTEMPTS}",
+            self.listener_manager.current_listener_index() + 1,
+            self.listener_manager.total_listeners(),
+            self.dial_manager.current_workflow_attempt
+        );
+        info!(
+            "Reachability Workflow Summary - Listener {} of {}, Attempt {} of {MAX_WORKFLOW_ATTEMPTS}",
             self.listener_manager.current_listener_index() + 1,
             self.listener_manager.total_listeners(),
             self.dial_manager.current_workflow_attempt
@@ -571,6 +580,7 @@ impl ReachabilityCheckSwarmDriver {
             Ok((external_addr, local_adapter)) => {
                 let upnp_supported = self.listener_manager.upnp_supported(&local_adapter);
                 info!("Node is reachable via local adapter: {local_adapter}");
+                info!("Reachability status: Reachable with UPnP status: {upnp_supported}");
                 println!("Reachability status: Reachable with UPnP status: {upnp_supported}\n");
                 Some(ReachabilityStatus::Reachable {
                     local_addr: local_adapter,
@@ -579,11 +589,18 @@ impl ReachabilityCheckSwarmDriver {
                 })
             }
             Err(reason) => {
+                warn!("{reason}");
                 println!("{reason}");
                 if reason.retryable() && self.has_retries_remaining() {
                     // Try another workflow attempt with the same listener
                     info!(
                         "Retrying reachability check workflow (failed due to: {reason:?}). Listener {} of {}, Attempt {} of {MAX_WORKFLOW_ATTEMPTS}",
+                        self.listener_manager.current_listener_index() + 1,
+                        self.listener_manager.total_listeners(),
+                        self.dial_manager.current_workflow_attempt + 1
+                    );
+                    info!(
+                        "Reachability Workflow Summary - Listener {} of {}, Attempt {} of {MAX_WORKFLOW_ATTEMPTS}",
                         self.listener_manager.current_listener_index() + 1,
                         self.listener_manager.total_listeners(),
                         self.dial_manager.current_workflow_attempt + 1
@@ -607,6 +624,10 @@ impl ReachabilityCheckSwarmDriver {
                         "Max workflow attempts reached for listener {}. Trying next listener.",
                         self.listener_manager.current_listener_index() + 1
                     );
+                    warn!(
+                        "Listener {} failed after MAX attempts. Trying next listener...",
+                        self.listener_manager.current_listener_index() + 1,
+                    );
                     println!(
                         "Listener {} failed after MAX attempts. Trying next listener...",
                         self.listener_manager.current_listener_index() + 1,
@@ -615,6 +636,12 @@ impl ReachabilityCheckSwarmDriver {
                     // Try to bind to the next listener
                     match self.try_next_listener() {
                         Ok(()) => {
+                            info!(
+                                "Reachability Workflow Summary - Listener {} of {}, Attempt {} of {MAX_WORKFLOW_ATTEMPTS}",
+                                self.listener_manager.current_listener_index() + 1,
+                                self.listener_manager.total_listeners(),
+                                self.dial_manager.current_workflow_attempt
+                            );
                             println!(
                                 "\nReachability Workflow Summary - Listener {} of {}, Attempt {} of {MAX_WORKFLOW_ATTEMPTS}",
                                 self.listener_manager.current_listener_index() + 1,
@@ -636,6 +663,7 @@ impl ReachabilityCheckSwarmDriver {
                         "All listeners exhausted. Max reachability check workflow attempts reached. Cannot determine reachability status."
                     );
                 }
+                error!("We are not reachable. Terminating the reachability check workflow.");
                 println!("We are not reachable. Terminating the reachability check workflow.\n");
                 let reasons = self.failure_reasons();
                 Some(ReachabilityStatus::NotReachable { reasons })
@@ -729,14 +757,15 @@ impl ReachabilityCheckSwarmDriver {
             return Err(ReachabilityIssue::MultipleLocalAdapterAddresses);
         }
 
-        let external_addr = *external_addrs
-            .iter()
-            .next()
-            .expect("This should not be empty, we checked it above");
-        let local_adapter_addr = *local_adapter_addrs
-            .iter()
-            .next()
-            .expect("This should not be empty, we checked it above");
+        // Safe to unwrap since we checked len() == 1 above
+        let Some(external_addr) = external_addrs.into_iter().next() else {
+            error!("No external addresses found after validation - this should not happen");
+            return Err(ReachabilityIssue::NoDialBacks);
+        };
+        let Some(local_adapter_addr) = local_adapter_addrs.into_iter().next() else {
+            error!("No local adapter addresses found after validation - this should not happen");
+            return Err(ReachabilityIssue::NoDialBacks);
+        };
 
         if external_addr.ip().is_unspecified() {
             error!("External address is unspecified. Terminating the node.");
