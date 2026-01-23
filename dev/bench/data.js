@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769142699852,
+  "lastUpdate": 1769142798850,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -11056,6 +11056,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 223,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "anselmega@gmail.com",
+            "name": "Anselme",
+            "username": "grumbach"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9b89a372630c9fbab45d0e9c95521e61063b02d8",
+          "message": "Merge pull request #3419 from grumbach/gas_info\n\nfeat: print information about gas costs",
+          "timestamp": "2026-01-23T03:12:54Z",
+          "tree_id": "9323149e835a1ee8886c8ef04ac752a448264396",
+          "url": "https://github.com/maidsafe/autonomi/commit/9b89a372630c9fbab45d0e9c95521e61063b02d8"
+        },
+        "date": 1769142798038,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 274,
             "unit": "MB"
           }
         ]
