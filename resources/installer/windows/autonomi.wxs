@@ -90,14 +90,6 @@
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
 
-    <!-- Set default installation directory -->
-    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-
-    <!-- Use minimal UI (progress bar only, no dialogs) -->
-    <UI>
-      <UIRef Id="WixUI_Minimal" />
-    </UI>
-
   </Package>
 
 </Wix>

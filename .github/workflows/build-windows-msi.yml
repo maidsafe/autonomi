@@ -63,8 +63,6 @@ jobs:
         shell: pwsh
         run: |
           dotnet tool install --global wix --version 5.0.2
-          # Add WiX extensions for UI
-          wix extension add WixToolset.UI.wixext/5.0.2
 
       - name: Verify binaries exist
         shell: pwsh
@@ -100,7 +98,6 @@ jobs:
           wix build `
             -d ProductVersion=$version `
             -d ArtifactsDir=$artifactsPath `
-            -ext WixToolset.UI.wixext `
             -o $outputMsi `
             $wxsFile
 
