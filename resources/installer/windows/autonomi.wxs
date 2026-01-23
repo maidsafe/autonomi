@@ -7,9 +7,10 @@
   - Adds installation directory to system PATH
   - Supports clean uninstall (removes binaries and PATH entry)
 
-  Build with: wix build -d ProductVersion=X.X.X.X -d ArtifactsDir=path/to/binaries autonomi.wxs
+  Build with: wix build -d ProductVersion=X.X.X.X -d ArtifactsDir=path/to/binaries -ext WixToolset.UI.wixext autonomi.wxs
 -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
   <Package Name="Autonomi CLI Suite"
            Manufacturer="MaidSafe"
@@ -89,6 +90,13 @@
              ConfigurableDirectory="INSTALLFOLDER">
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
+
+    <!-- Use WixUI_Minimal for a simple install experience with completion dialog -->
+    <ui:WixUI Id="WixUI_Minimal" />
+
+    <!-- Customize the exit dialog text -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT"
+              Value="The Autonomi CLI tools (ant, antnode, antctl) have been installed to C:\Program Files\Autonomi\ and added to your PATH. Open a new Command Prompt or PowerShell window to use them." />
 
   </Package>
 
