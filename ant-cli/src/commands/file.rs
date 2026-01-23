@@ -9,6 +9,7 @@
 use crate::access::{cached_merkle_payments, cached_payments};
 use crate::actions::NetworkContext;
 use crate::args::max_fee_per_gas::{MaxFeePerGasParam, get_max_fee_per_gas_from_opt_param};
+use crate::commands::PaymentFlags;
 use crate::exit_code::{ExitCodeError, FEES_ERROR, IO_ERROR, upload_exit_code};
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
@@ -18,143 +19,232 @@ use autonomi::client::config::MERKLE_PAYMENT_THRESHOLD;
 use autonomi::client::payment::{BulkPaymentOption, PaymentOption};
 use autonomi::files::{UploadError, estimate_directory_chunks};
 use autonomi::networking::{Quorum, RetryStrategy};
-use autonomi::{Client, ClientOperatingStrategy, PaymentMode, TransactionConfig};
+use autonomi::{AttoTokens, Client, ClientOperatingStrategy, PaymentMode, TransactionConfig};
 use color_eyre::Section;
 use color_eyre::eyre::{Context, Result, eyre};
 use std::path::PathBuf;
 
 const MAX_ADDRESSES_TO_PRINT: usize = 3;
 
+/// Represents the payment method to be used
+#[derive(Debug, Clone)]
+pub enum PaymentMethod {
+    /// Merkle tree payments (batched via smart contract)
+    Merkle { is_resuming: bool },
+    /// Regular per-batch payments
+    Regular {
+        /// Payment mode: "standard" or "single-node"
+        mode: &'static str,
+        is_resuming: bool,
+    },
+}
+
+/// Information about the selected payment method for display
+#[derive(Debug)]
+pub struct PaymentMethodInfo {
+    pub method: PaymentMethod,
+    pub emoji: &'static str,
+    pub estimated_chunks: usize,
+}
+
+impl PaymentMethodInfo {
+    /// Generate the display message for this payment method
+    pub fn display_message(&self) -> String {
+        match &self.method {
+            PaymentMethod::Merkle { is_resuming } => {
+                let action = if *is_resuming { "Resuming" } else { "Using" };
+                format!(
+                    "{} {action} merkle tree payments (~{} chunks)",
+                    self.emoji, self.estimated_chunks
+                )
+            }
+            PaymentMethod::Regular { mode, is_resuming } => {
+                let action = if *is_resuming { "Resuming" } else { "Using" };
+                format!(
+                    "{} {action} regular payments (~{} chunks, {mode})",
+                    self.emoji, self.estimated_chunks
+                )
+            }
+        }
+    }
+}
+
+/// Determine the payment method based on flags, cached receipts, and chunk count
+fn determine_payment_method(
+    estimated_chunks: usize,
+    force_merkle: bool,
+    force_regular: bool,
+    use_standard_payment: bool,
+    has_cached_regular: bool,
+    has_cached_merkle: bool,
+) -> PaymentMethodInfo {
+    let mode = if use_standard_payment {
+        "standard"
+    } else {
+        "single-node"
+    };
+
+    if force_merkle {
+        PaymentMethodInfo {
+            method: PaymentMethod::Merkle {
+                is_resuming: has_cached_merkle,
+            },
+            emoji: "🌳",
+            estimated_chunks,
+        }
+    } else if force_regular {
+        let emoji = if use_standard_payment { "💳" } else { "🎯" };
+        PaymentMethodInfo {
+            method: PaymentMethod::Regular {
+                mode,
+                is_resuming: has_cached_regular,
+            },
+            emoji,
+            estimated_chunks,
+        }
+    } else if has_cached_regular {
+        // Resume cached regular payment
+        let emoji = if use_standard_payment { "💳" } else { "🎯" };
+        PaymentMethodInfo {
+            method: PaymentMethod::Regular {
+                mode,
+                is_resuming: true,
+            },
+            emoji,
+            estimated_chunks,
+        }
+    } else if has_cached_merkle {
+        // Resume cached merkle payment
+        PaymentMethodInfo {
+            method: PaymentMethod::Merkle { is_resuming: true },
+            emoji: "🌳",
+            estimated_chunks,
+        }
+    } else if estimated_chunks >= MERKLE_PAYMENT_THRESHOLD {
+        // Auto-select merkle
+        PaymentMethodInfo {
+            method: PaymentMethod::Merkle { is_resuming: false },
+            emoji: "🌳",
+            estimated_chunks,
+        }
+    } else {
+        // Auto-select regular
+        let emoji = if use_standard_payment { "💳" } else { "🎯" };
+        PaymentMethodInfo {
+            method: PaymentMethod::Regular {
+                mode,
+                is_resuming: false,
+            },
+            emoji,
+            estimated_chunks,
+        }
+    }
+}
+
+/// Add archive cost to base cost if needed
+async fn add_archive_cost_if_needed(
+    client: &Client,
+    base_cost: AttoTokens,
+    path: &PathBuf,
+    include_archive: bool,
+    is_public: bool,
+) -> Result<AttoTokens> {
+    if include_archive {
+        let archive_cost = client
+            .estimate_archive_cost(path, is_public)
+            .await
+            .wrap_err("Failed to calculate archive cost")?;
+        base_cost
+            .checked_add(archive_cost)
+            .ok_or_else(|| eyre!("Cost overflow when adding archive cost"))
+    } else {
+        Ok(base_cost)
+    }
+}
+
 pub async fn cost(
     file: &str,
     is_public: bool,
     include_archive: bool,
     network_context: NetworkContext,
-    use_standard_payment: bool,
-    force_merkle: bool,
-    force_regular: bool,
+    payment_flags: PaymentFlags,
 ) -> Result<()> {
+    let PaymentFlags {
+        disable_single_node_payment: use_standard_payment,
+        merkle: force_merkle,
+        regular: force_regular,
+    } = payment_flags;
+
     let mut client = crate::actions::connect_to_network(network_context)
         .await
         .map_err(|(err, _)| err)?;
 
-    // Configure payment mode - default is SingleNode, only override if Standard is requested
-    if use_standard_payment {
-        client = client.with_payment_mode(PaymentMode::Standard);
-        println!("💳 Estimating cost with standard payment mode (pays 3 nodes individually)");
-    } else {
-        println!("🎯 Estimating cost with single node payment mode (default - saves gas fees)");
-    }
-
     let path = PathBuf::from(file);
     let visibility = if is_public { "public" } else { "private" };
+    let archive_info = if include_archive {
+        "with archive"
+    } else {
+        "without archive"
+    };
 
-    if force_merkle {
-        // Forced merkle estimation
-        let archive_info = if include_archive {
-            "with archive"
-        } else {
-            "without archive"
-        };
-        println!("Getting upload cost ({visibility}, {archive_info})...");
-        info!(
-            "Calculating cost for file: {file} (public={is_public}, include_archive={include_archive}, method=merkle forced)"
-        );
+    // Estimate chunks for consistent method determination
+    let estimated_chunks =
+        estimate_directory_chunks(&path).wrap_err("Failed to estimate chunk count")?;
 
+    // Determine payment method (no cached receipts for cost estimation)
+    let method_info = determine_payment_method(
+        estimated_chunks,
+        force_merkle,
+        force_regular,
+        use_standard_payment,
+        false, // has_cached_regular
+        false, // has_cached_merkle
+    );
+
+    // Configure payment mode - set Standard if user requested it
+    // This is a no-op for merkle payments, but ensures regular payments honor the user's preference
+    if use_standard_payment {
+        client = client.with_payment_mode(PaymentMode::Standard);
+    }
+
+    // Print initial status
+    println!("{}", method_info.display_message());
+    println!("Getting upload cost ({visibility}, {archive_info})...");
+    info!(
+        "Calculating cost for file: {file} (public={is_public}, include_archive={include_archive})"
+    );
+
+    // Calculate cost based on method
+    let total_cost = if force_merkle {
+        // Forced merkle mode
         let content_cost = client
             .file_cost_merkle(path.clone(), is_public)
             .await
             .wrap_err("Failed to calculate merkle cost for file")?;
-
-        let total_cost = if include_archive {
-            let archive_cost = client
-                .estimate_archive_cost(&path, is_public)
-                .await
-                .wrap_err("Failed to calculate archive cost")?;
-            content_cost
-                .checked_add(archive_cost)
-                .ok_or_else(|| eyre!("Cost overflow when adding archive cost"))?
-        } else {
-            content_cost
-        };
-
-        println!("Estimate cost to upload file: {file}");
-        println!("Total cost: {total_cost}");
-        println!("Method: merkle (forced)");
-        info!("Total cost: {total_cost} for file: {file}");
+        add_archive_cost_if_needed(&client, content_cost, &path, include_archive, is_public).await?
     } else if force_regular {
-        // Forced regular estimation
-        let archive_info = if include_archive {
-            "with archive"
-        } else {
-            "without archive"
-        };
-        println!("Getting upload cost ({visibility}, {archive_info})...");
-        info!(
-            "Calculating cost for file: {file} (public={is_public}, include_archive={include_archive}, method=regular forced)"
-        );
-
+        // Forced regular mode
         let content_cost = client
             .file_cost_regular(&path, is_public)
             .await
             .wrap_err("Failed to calculate regular cost for file")?;
-
-        let total_cost = if include_archive {
-            let archive_cost = client
-                .estimate_archive_cost(&path, is_public)
-                .await
-                .wrap_err("Failed to calculate archive cost")?;
-            content_cost
-                .checked_add(archive_cost)
-                .ok_or_else(|| eyre!("Cost overflow when adding archive cost"))?
-        } else {
-            content_cost
-        };
-
-        println!("Estimate cost to upload file: {file}");
-        println!("Total cost: {total_cost}");
-        println!("Method: regular (forced)");
-        info!("Total cost: {total_cost} for file: {file}");
+        add_archive_cost_if_needed(&client, content_cost, &path, include_archive, is_public).await?
     } else {
-        // Auto-select method based on chunk count
-        let archive_info = if include_archive {
-            "with archive"
-        } else {
-            "without archive"
-        };
-        println!("Getting upload cost ({visibility}, {archive_info})...");
-        info!(
-            "Calculating cost for file: {file} (public={is_public}, include_archive={include_archive}, method=auto)"
-        );
-
-        let cost = client
+        // Auto mode - let client decide based on its internal threshold logic
+        client
             .file_cost(&path, is_public, include_archive)
             .await
-            .wrap_err("Failed to calculate cost for file")?;
+            .wrap_err("Failed to calculate cost for file")?
+    };
 
-        // Estimate chunk count to determine which method was used
-        let estimated_chunks =
-            estimate_directory_chunks(&path).wrap_err("Failed to estimate chunk count")?;
-        let method_info = if estimated_chunks >= MERKLE_PAYMENT_THRESHOLD {
-            format!(
-                "merkle (auto-selected: ~{estimated_chunks} chunks >= {MERKLE_PAYMENT_THRESHOLD} threshold)"
-            )
-        } else {
-            format!(
-                "regular (auto-selected: ~{estimated_chunks} chunks < {MERKLE_PAYMENT_THRESHOLD} threshold)"
-            )
-        };
-
-        println!("Estimate cost to upload file: {file}");
-        println!("Total cost: {cost}");
-        println!("Method: {method_info}");
-        info!("Total cost: {cost} for file: {file}");
-    }
+    // Print results
+    println!("Estimate cost to upload file: {file}");
+    println!("Total cost: {total_cost}");
+    info!("Total cost: {total_cost} for file: {file}");
 
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn upload(
     file: &str,
     public: bool,
@@ -162,10 +252,14 @@ pub async fn upload(
     network_context: NetworkContext,
     max_fee_per_gas_param: Option<MaxFeePerGasParam>,
     retry_failed: u64,
-    use_standard_payment: bool,
-    force_merkle: bool,
-    force_regular: bool,
+    payment_flags: PaymentFlags,
 ) -> Result<(), ExitCodeError> {
+    let PaymentFlags {
+        disable_single_node_payment: use_standard_payment,
+        merkle: force_merkle,
+        regular: force_regular,
+    } = payment_flags;
+
     let config = ClientOperatingStrategy::new();
 
     let mut client =
@@ -180,7 +274,7 @@ pub async fn upload(
     }
 
     // Configure payment mode - default is SingleNode, only override if Standard is requested
-    if use_standard_payment {
+    if use_standard_payment && !force_merkle {
         client = client.with_payment_mode(PaymentMode::Standard);
     }
 
@@ -351,61 +445,55 @@ async fn upload_dir_standard(
     // Estimate chunks upfront for consistent messaging
     let estimated_chunks = estimate_directory_chunks(&dir_path)?;
 
-    // Determine payment option based on flags and cached receipts
-    let payment_option = if force_merkle {
-        if cached_regular.is_some() {
-            println!("Ignoring cached regular payment (--merkle specified)");
-        }
-        if let Some(merkle_receipt) = cached_merkle {
-            println!("🌳 Resuming merkle tree payment (~{estimated_chunks} chunks)");
-            BulkPaymentOption::ContinueMerkle(wallet.clone(), merkle_receipt)
-        } else {
-            println!("🌳 Using merkle tree payments (~{estimated_chunks} chunks)");
-            BulkPaymentOption::ForceMerkle(wallet.clone())
-        }
-    } else if force_regular {
-        if cached_merkle.is_some() {
-            println!("Ignoring cached merkle payment (--regular specified)");
-        }
-        let mode = if use_standard_payment {
-            "standard"
-        } else {
-            "single-node"
-        };
-        let emoji = if use_standard_payment { "💳" } else { "🎯" };
-        if let Some(receipt) = cached_regular {
-            println!("{emoji} Resuming regular payment (~{estimated_chunks} chunks, {mode})");
-            BulkPaymentOption::Receipt(receipt)
-        } else {
-            println!("{emoji} Using regular payments (~{estimated_chunks} chunks, {mode})");
-            BulkPaymentOption::ForceRegular(wallet.clone())
-        }
-    } else if let Some(receipt) = cached_regular {
-        let mode = if use_standard_payment {
-            "standard"
-        } else {
-            "single-node"
-        };
-        let emoji = if use_standard_payment { "💳" } else { "🎯" };
-        println!("{emoji} Resuming regular payment (~{estimated_chunks} chunks, {mode})");
-        BulkPaymentOption::Receipt(receipt)
-    } else if let Some(merkle_receipt) = cached_merkle {
-        println!("🌳 Resuming merkle tree payment (~{estimated_chunks} chunks)");
-        BulkPaymentOption::ContinueMerkle(wallet.clone(), merkle_receipt)
-    } else {
-        // Auto-detect based on chunk count
-        if estimated_chunks >= MERKLE_PAYMENT_THRESHOLD {
-            println!("🌳 Using merkle tree payments (~{estimated_chunks} chunks)");
-        } else {
-            let mode = if use_standard_payment {
-                "standard"
+    // Determine payment method using shared logic
+    let method_info = determine_payment_method(
+        estimated_chunks,
+        force_merkle,
+        force_regular,
+        use_standard_payment,
+        cached_regular.is_some(),
+        cached_merkle.is_some(),
+    );
+
+    // Print any ignored cache warnings
+    if force_merkle && cached_regular.is_some() {
+        println!("Ignoring cached regular payment (--merkle specified)");
+    }
+    if force_regular && cached_merkle.is_some() {
+        println!("Ignoring cached merkle payment (--regular specified)");
+    }
+
+    // Print the payment method message
+    println!("{}", method_info.display_message());
+
+    // Build payment option based on method and cached receipts
+    let payment_option = match &method_info.method {
+        PaymentMethod::Merkle { is_resuming } => {
+            if *is_resuming {
+                if let Some(merkle_receipt) = cached_merkle {
+                    BulkPaymentOption::ContinueMerkle(wallet.clone(), merkle_receipt)
+                } else {
+                    BulkPaymentOption::ForceMerkle(wallet.clone())
+                }
+            } else if force_merkle {
+                BulkPaymentOption::ForceMerkle(wallet.clone())
             } else {
-                "single-node"
-            };
-            let emoji = if use_standard_payment { "💳" } else { "🎯" };
-            println!("{emoji} Using regular payments (~{estimated_chunks} chunks, {mode})");
+                BulkPaymentOption::Wallet(wallet.clone())
+            }
         }
-        BulkPaymentOption::Wallet(wallet.clone())
+        PaymentMethod::Regular { is_resuming, .. } => {
+            if *is_resuming {
+                if let Some(receipt) = cached_regular {
+                    BulkPaymentOption::Receipt(receipt)
+                } else {
+                    BulkPaymentOption::ForceRegular(wallet.clone())
+                }
+            } else if force_regular {
+                BulkPaymentOption::ForceRegular(wallet.clone())
+            } else {
+                BulkPaymentOption::Wallet(wallet.clone())
+            }
+        }
     };
 
     if public {
