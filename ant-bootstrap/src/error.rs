@@ -18,6 +18,8 @@ pub enum Error {
     FailedToParseCacheData,
     #[error("Could not obtain data directory")]
     CouldNotObtainDataDir,
+    #[error("Invalid bootstrap cache directory")]
+    InvalidBootstrapCacheDir,
     #[error("Could not obtain bootstrap addresses from {0} after {1} retries")]
     FailedToObtainAddrsFromUrl(String, usize),
     #[error("Failed to parse Url")]

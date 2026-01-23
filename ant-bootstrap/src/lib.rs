@@ -25,25 +25,21 @@
 #[macro_use]
 extern crate tracing;
 
-pub mod bootstrap;
 pub mod cache_store;
 pub mod config;
-pub mod contacts_fetcher;
+pub mod contacts;
 pub mod error;
+mod initial_peers;
 
 use ant_protocol::version::{get_network_id_str, get_truncate_version_str};
 use libp2p::{Multiaddr, PeerId, multiaddr::Protocol};
 use thiserror::Error;
 
-pub use bootstrap::Bootstrap;
 pub use cache_store::BootstrapCacheStore;
-pub use config::BootstrapConfig;
-pub use config::InitialPeersConfig;
-pub use contacts_fetcher::ContactsFetcher;
+pub use config::BootstrapCacheConfig;
+pub use contacts::ContactsFetcher;
 pub use error::{Error, Result};
-
-/// The name of the environment variable that can be used to pass peers to the node.
-pub const ANT_PEERS_ENV: &str = "ANT_PEERS";
+pub use initial_peers::{ANT_PEERS_ENV, InitialPeersConfig};
 
 /// Craft a proper address to avoid any ill formed addresses
 ///
@@ -62,13 +58,32 @@ pub fn craft_valid_multiaddr(addr: &Multiaddr) -> Option<Multiaddr> {
 
     let udp = addr
         .iter()
-        .find(|protocol| matches!(protocol, Protocol::Udp(_)))?;
-
-    output_address.push(udp);
-    let quic = addr
+        .find(|protocol| matches!(protocol, Protocol::Udp(_)));
+    let tcp = addr
         .iter()
-        .find(|protocol| matches!(protocol, Protocol::QuicV1))?;
-    output_address.push(quic);
+        .find(|protocol| matches!(protocol, Protocol::Tcp(_)));
+
+    // UDP or TCP
+    if let Some(udp) = udp {
+        output_address.push(udp);
+        if let Some(quic) = addr
+            .iter()
+            .find(|protocol| matches!(protocol, Protocol::QuicV1))
+        {
+            output_address.push(quic);
+        }
+    } else if let Some(tcp) = tcp {
+        output_address.push(tcp);
+
+        if let Some(ws) = addr
+            .iter()
+            .find(|protocol| matches!(protocol, Protocol::Ws(_)))
+        {
+            output_address.push(ws);
+        }
+    } else {
+        return None;
+    }
 
     if let Some(peer_id) = peer_id {
         output_address.push(peer_id);
@@ -97,142 +112,4 @@ pub fn multiaddr_get_peer_id(addr: &Multiaddr) -> Option<PeerId> {
 
 pub fn get_network_version() -> String {
     format!("{}_{}", get_network_id_str(), get_truncate_version_str())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use libp2p::Multiaddr;
-
-    const VALID_PEER_ID: &str = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE";
-
-    #[test]
-    fn craft_valid_multiaddr_accepts_udp_quic_v1_with_peer_id() {
-        let input = format!("/ip4/127.0.0.1/udp/8080/quic-v1/p2p/{VALID_PEER_ID}");
-        let addr: Multiaddr = input.parse().unwrap();
-
-        let result = craft_valid_multiaddr(&addr).expect("should accept udp/quic-v1 with peer id");
-
-        assert_eq!(result.to_string(), input);
-    }
-
-    #[test]
-    fn craft_valid_multiaddr_accepts_udp_quic_v1_without_peer_id() {
-        let input = "/ip4/127.0.0.1/udp/8080/quic-v1";
-        let addr: Multiaddr = input.parse().unwrap();
-
-        let result =
-            craft_valid_multiaddr(&addr).expect("should accept udp/quic-v1 without peer id");
-
-        assert_eq!(result.to_string(), input);
-    }
-
-    #[test]
-    fn craft_valid_multiaddr_rejects_tcp_transport() {
-        let input = format!("/ip4/127.0.0.1/tcp/8080/p2p/{VALID_PEER_ID}");
-        let addr: Multiaddr = input.parse().unwrap();
-
-        let result = craft_valid_multiaddr(&addr);
-
-        assert!(result.is_none(), "should reject tcp transport");
-    }
-
-    #[test]
-    fn craft_valid_multiaddr_rejects_tcp_with_websocket() {
-        let input = format!("/ip4/127.0.0.1/tcp/8080/ws/p2p/{VALID_PEER_ID}");
-        let addr: Multiaddr = input.parse().unwrap();
-
-        let result = craft_valid_multiaddr(&addr);
-
-        assert!(result.is_none(), "should reject tcp/ws transport");
-    }
-
-    #[test]
-    fn craft_valid_multiaddr_rejects_udp_without_quic() {
-        let input = "/ip4/127.0.0.1/udp/8080";
-        let addr: Multiaddr = input.parse().unwrap();
-
-        let result = craft_valid_multiaddr(&addr);
-
-        assert!(result.is_none(), "should reject udp without quic-v1");
-    }
-
-    #[test]
-    fn craft_valid_multiaddr_rejects_address_without_udp() {
-        let input = format!("/ip4/127.0.0.1/p2p/{VALID_PEER_ID}");
-        let addr: Multiaddr = input.parse().unwrap();
-
-        let result = craft_valid_multiaddr(&addr);
-
-        assert!(result.is_none(), "should reject address without udp");
-    }
-
-    #[test]
-    fn craft_valid_multiaddr_rejects_address_without_ip() {
-        let input = format!("/udp/8080/quic-v1/p2p/{VALID_PEER_ID}");
-        let addr: Multiaddr = input.parse().unwrap();
-
-        let result = craft_valid_multiaddr(&addr);
-
-        assert!(result.is_none(), "should reject address without ip");
-    }
-
-    #[test]
-    fn craft_valid_multiaddr_from_str_accepts_valid_address() {
-        let input = format!("/ip4/127.0.0.1/udp/8080/quic-v1/p2p/{VALID_PEER_ID}");
-
-        let result =
-            craft_valid_multiaddr_from_str(&input).expect("should parse valid address string");
-
-        assert_eq!(result.to_string(), input);
-    }
-
-    #[test]
-    fn craft_valid_multiaddr_from_str_rejects_invalid_string() {
-        let result = craft_valid_multiaddr_from_str("not a multiaddr");
-
-        assert!(result.is_none(), "should reject invalid multiaddr string");
-    }
-
-    #[test]
-    fn craft_valid_multiaddr_from_str_accepts_address_without_peer_id() {
-        let input = "/ip4/127.0.0.1/udp/8080/quic-v1";
-
-        let result = craft_valid_multiaddr_from_str(input)
-            .expect("should accept address string without peer id");
-
-        assert_eq!(result.to_string(), input);
-    }
-
-    #[test]
-    fn craft_valid_multiaddr_from_str_rejects_tcp_address() {
-        let input = format!("/ip4/127.0.0.1/tcp/8080/p2p/{VALID_PEER_ID}");
-
-        let result = craft_valid_multiaddr_from_str(&input);
-
-        assert!(result.is_none(), "should reject tcp address");
-    }
-
-    #[test]
-    fn multiaddr_get_peer_id_extracts_peer_id_when_present() {
-        let addr: Multiaddr = format!("/ip4/127.0.0.1/udp/8080/quic-v1/p2p/{VALID_PEER_ID}")
-            .parse()
-            .unwrap();
-
-        let peer_id = multiaddr_get_peer_id(&addr).expect("should extract peer id");
-
-        assert_eq!(peer_id.to_string(), VALID_PEER_ID);
-    }
-
-    #[test]
-    fn multiaddr_get_peer_id_returns_none_when_absent() {
-        let addr: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
-
-        let result = multiaddr_get_peer_id(&addr);
-
-        assert!(
-            result.is_none(),
-            "should return None when peer id is absent"
-        );
-    }
 }

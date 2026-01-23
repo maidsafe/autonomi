@@ -15,7 +15,6 @@ ant-protocol = { path = "../ant-protocol", version = "1.0.11" }
 atomic-write-file = "0.2.2"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.2.1", features = ["derive", "env"] }
-custom_debug = "~0.6.1"
 dirs-next = "~2.0.0"
 futures = "0.3.30"
 libp2p = { version = "0.56.0", features = ["serde"] }
