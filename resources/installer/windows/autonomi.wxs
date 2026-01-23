@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX v5 source file for Autonomi CLI Suite MSI installer.
+
+  This installer packages ant, antnode, and antctl binaries and:
+  - Installs to C:\Program Files\Autonomi\
+  - Adds installation directory to system PATH
+  - Supports clean uninstall (removes binaries and PATH entry)
+
+  Build with: wix build -d ProductVersion=X.X.X.X -d ArtifactsDir=path/to/binaries autonomi.wxs
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Package Name="Autonomi CLI Suite"
+           Manufacturer="MaidSafe"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="e3ad3ca3-5da2-4472-8e16-bf7c6658aa78"
+           Scope="perMachine"
+           Language="1033"
+           Codepage="1252">
+
+    <SummaryInformation Description="Autonomi CLI Suite - Command-line tools for the Autonomi Network"
+                        Manufacturer="MaidSafe" />
+
+    <!-- Prevent downgrades, allow upgrades -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Autonomi CLI Suite is already installed."
+                  Schedule="afterInstallInitialize" />
+
+    <!-- Embed cabinet files in the MSI -->
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Directory Structure -->
+    <StandardDirectory Id="ProgramFilesFolder">
+      <Directory Id="INSTALLFOLDER" Name="Autonomi" />
+    </StandardDirectory>
+
+    <!-- Component Group containing all binaries and PATH modification -->
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+
+      <!-- ant.exe - Autonomi client CLI for file operations -->
+      <Component Id="AntBinary" Guid="a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d">
+        <File Id="AntExe"
+              Name="ant.exe"
+              Source="$(var.ArtifactsDir)\ant.exe"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- antnode.exe - Autonomi node software -->
+      <Component Id="AntnodeBinary" Guid="b2c3d4e5-f6a7-5b6c-9d0e-1f2a3b4c5d6e">
+        <File Id="AntnodeExe"
+              Name="antnode.exe"
+              Source="$(var.ArtifactsDir)\antnode.exe"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- antctl.exe - Node management and control tool -->
+      <Component Id="AntctlBinary" Guid="c3d4e5f6-a7b8-6c7d-0e1f-2a3b4c5d6e7f">
+        <File Id="AntctlExe"
+              Name="antctl.exe"
+              Source="$(var.ArtifactsDir)\antctl.exe"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- Add installation directory to system PATH -->
+      <Component Id="PathEntry" Guid="d4e5f6a7-b8c9-7d8e-1f2a-3b4c5d6e7f8a">
+        <Environment Id="PATH"
+                     Name="PATH"
+                     Value="[INSTALLFOLDER]"
+                     Permanent="no"
+                     Part="last"
+                     Action="set"
+                     System="yes" />
+        <!-- Use a registry key as KeyPath since Environment elements cannot be KeyPath -->
+        <RegistryValue Root="HKLM"
+                       Key="Software\MaidSafe\Autonomi"
+                       Name="PathConfigured"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+
+    </ComponentGroup>
+
+    <!-- Feature definition -->
+    <Feature Id="ProductFeature"
+             Title="Autonomi CLI Suite"
+             Description="Install ant, antnode, and antctl command-line tools"
+             Level="1"
+             ConfigurableDirectory="INSTALLFOLDER">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+    <!-- Set default installation directory -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <!-- Use minimal UI (progress bar only, no dialogs) -->
+    <UI>
+      <UIRef Id="WixUI_Minimal" />
+    </UI>
+
+  </Package>
+
+</Wix>

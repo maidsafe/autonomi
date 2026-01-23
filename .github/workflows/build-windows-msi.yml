@@ -1,0 +1,203 @@
+# Reusable workflow for building and signing Windows MSI installer
+#
+# This workflow creates a signed MSI installer for the Autonomi CLI suite
+# containing ant, antnode, and antctl binaries.
+#
+# Usage from release.yml:
+#   build-windows-msi:
+#     uses: ./.github/workflows/build-windows-msi.yml
+#     secrets: inherit
+
+name: build Windows MSI
+
+on:
+  workflow_call:
+    secrets:
+      SM_HOST:
+        description: 'DigiCert SSM host endpoint'
+        required: true
+      SM_API_KEY:
+        description: 'DigiCert SSM API key'
+        required: true
+      SM_CLIENT_CERT_B64:
+        description: 'Base64-encoded DigiCert client certificate'
+        required: true
+      SM_CLIENT_CERT_PASSWORD:
+        description: 'Password for DigiCert client certificate'
+        required: true
+      SM_KEYPAIR_ALIAS:
+        description: 'DigiCert keypair alias for signing'
+        required: true
+
+jobs:
+  build-msi:
+    name: build msi
+    runs-on: windows-latest
+    env:
+      SM_HOST: ${{ secrets.SM_HOST }}
+      SM_API_KEY: ${{ secrets.SM_API_KEY }}
+      SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+      SM_KEYPAIR_ALIAS: ${{ secrets.SM_KEYPAIR_ALIAS }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download signed Windows artifacts
+        uses: actions/download-artifact@master
+        with:
+          name: autonomi-x86_64-pc-windows-msvc-signed
+          path: artifacts/x86_64-pc-windows-msvc-signed/release
+
+      - name: Set package version
+        id: version
+        shell: bash
+        run: |
+          release_year=$(grep 'release-year:' release-cycle-info | awk '{print $2}')
+          release_month=$(grep 'release-month:' release-cycle-info | awk '{print $2}')
+          release_cycle=$(grep 'release-cycle:' release-cycle-info | awk '{print $2}')
+          release_cycle_counter=$(grep 'release-cycle-counter:' release-cycle-info | awk '{print $2}')
+          version="$release_year.$release_month.$release_cycle.$release_cycle_counter"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Package version: $version"
+
+      - name: Install WiX Toolset
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          # Add WiX extensions for UI
+          wix extension add WixToolset.UI.wixext/5.0.2
+
+      - name: Verify binaries exist
+        shell: pwsh
+        run: |
+          $artifactsPath = "artifacts\x86_64-pc-windows-msvc-signed\release"
+          $requiredBinaries = @("ant.exe", "antnode.exe", "antctl.exe")
+
+          Write-Host "Checking for required binaries in: $artifactsPath"
+          foreach ($binary in $requiredBinaries) {
+            $path = Join-Path $artifactsPath $binary
+            if (Test-Path $path) {
+              Write-Host "  Found: $binary"
+            } else {
+              Write-Error "  Missing: $binary"
+              exit 1
+            }
+          }
+          Write-Host "All required binaries found"
+
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $artifactsPath = (Resolve-Path "artifacts\x86_64-pc-windows-msvc-signed\release").Path
+          $wxsFile = "resources\installer\windows\autonomi.wxs"
+          $outputMsi = "$version.autonomi.x86_64-pc-windows-msvc.msi"
+
+          Write-Host "Building MSI..."
+          Write-Host "  Version: $version"
+          Write-Host "  Artifacts: $artifactsPath"
+          Write-Host "  Output: $outputMsi"
+
+          wix build `
+            -d ProductVersion=$version `
+            -d ArtifactsDir=$artifactsPath `
+            -ext WixToolset.UI.wixext `
+            -o $outputMsi `
+            $wxsFile
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "WiX build failed"
+            exit 1
+          }
+
+          Write-Host "MSI built successfully"
+          Get-Item $outputMsi | Format-List Name, Length
+
+      - name: Create client certificate file from base64
+        id: prepare_cert
+        shell: pwsh
+        run: |
+          $raw = @'
+          ${{ secrets.SM_CLIENT_CERT_B64 }}
+          '@
+
+          $clean = ($raw -replace '\s','')
+
+          if ([string]::IsNullOrWhiteSpace($clean)) {
+            Write-Error "SM_CLIENT_CERT_B64 is empty after normalization."
+            exit 1
+          }
+
+          try {
+            $certBytes = [Convert]::FromBase64String($clean)
+          } catch {
+            Write-Error "SM_CLIENT_CERT_B64 is not valid Base64."
+            exit 1
+          }
+
+          $certPath = Join-Path $env:RUNNER_TEMP "Certificate.p12"
+          [System.IO.File]::WriteAllBytes($certPath, $certBytes)
+
+          if (-not (Test-Path $certPath)) {
+            Write-Error "Failed to create certificate file at: $certPath"
+            exit 1
+          }
+
+          "SM_CLIENT_CERT_FILE=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "cert_path=$certPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "sm_client_cert_b64=$clean" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Setup DigiCert Software Trust Manager tools
+        uses: digicert/ssm-code-signing@v1.1.1
+        with:
+          sm_host: ${{ secrets.SM_HOST }}
+          sm_api_key: ${{ secrets.SM_API_KEY }}
+          sm_client_cert_b64: ${{ steps.prepare_cert.outputs.sm_client_cert_b64 }}
+          sm_client_cert_password: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+
+      - name: Verify smctl installation
+        shell: pwsh
+        run: |
+          smctl -v
+          smctl healthcheck
+
+      - name: Sign MSI
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $msiFile = "$version.autonomi.x86_64-pc-windows-msvc.msi"
+          $alias = $env:SM_KEYPAIR_ALIAS
+
+          Write-Host "Signing MSI: $msiFile"
+
+          $result = & smctl sign --keypair-alias "$alias" --input "$msiFile" 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Signing failed: $result"
+            exit 1
+          }
+
+          Write-Host "MSI signed successfully"
+
+      - name: Verify MSI signature
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $msiFile = "$version.autonomi.x86_64-pc-windows-msvc.msi"
+
+          Write-Host "Verifying signature on: $msiFile"
+
+          $sig = Get-AuthenticodeSignature $msiFile
+          "{0} -> {1}" -f $msiFile, $sig.Status | Write-Host
+
+          if ($sig.Status -eq "Valid") {
+            Write-Host "  Signer: $($sig.SignerCertificate.Subject)"
+            Write-Host "  Issuer: $($sig.SignerCertificate.Issuer)"
+          } else {
+            Write-Error "Signature validation failed"
+            exit 1
+          }
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: autonomi-msi-x86_64-pc-windows-msvc
+          path: ${{ steps.version.outputs.version }}.autonomi.x86_64-pc-windows-msvc.msi
