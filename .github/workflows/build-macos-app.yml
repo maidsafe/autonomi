@@ -1,0 +1,462 @@
+# Reusable workflow for building, signing, and notarizing macOS .app bundle for node-launchpad
+#
+# This workflow creates a signed and notarized .app bundle and DMG for node-launchpad,
+# the Autonomi node management TUI application.
+#
+# Usage from release.yml:
+#   sign-macos-app:
+#     uses: ./.github/workflows/build-macos-app.yml
+#     with:
+#       arch: x86_64-apple-darwin
+#     secrets: inherit
+
+name: build macOS app
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        description: 'Target architecture (x86_64-apple-darwin or aarch64-apple-darwin)'
+        required: true
+        type: string
+    secrets:
+      APPLE_APPLICATION_CERTIFICATE_P12_BASE64:
+        description: 'Base64-encoded Developer ID Application certificate (.p12) for signing'
+        required: true
+      APPLE_APPLICATION_CERTIFICATE_PASSWORD:
+        description: 'Password for the Developer ID Application certificate'
+        required: true
+      APPLE_TEAM_ID:
+        description: 'Apple Developer Team ID'
+        required: true
+      APPLE_ID:
+        description: 'Apple ID for notarization'
+        required: true
+      APPLE_NOTARIZATION_PASSWORD:
+        description: 'App-specific password for notarization'
+        required: true
+
+jobs:
+  build-app:
+    name: build app (${{ inputs.arch }})
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@master
+        with:
+          name: autonomi-${{ inputs.arch }}
+          path: artifacts/${{ inputs.arch }}/release
+
+      - name: Set package version
+        id: version
+        shell: bash
+        run: |
+          release_year=$(grep 'release-year:' release-cycle-info | awk '{print $2}')
+          release_month=$(grep 'release-month:' release-cycle-info | awk '{print $2}')
+          release_cycle=$(grep 'release-cycle:' release-cycle-info | awk '{print $2}')
+          release_cycle_counter=$(grep 'release-cycle-counter:' release-cycle-info | awk '{print $2}')
+          version="$release_year.$release_month.$release_cycle.$release_cycle_counter"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Package version: $version"
+
+      - name: Create keychain and import certificate
+        env:
+          APPLICATION_CERT_P12_BASE64: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_P12_BASE64 }}
+          APPLICATION_CERT_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_PASSWORD }}
+        run: |
+          APPLICATION_CERT_PATH=$RUNNER_TEMP/application-certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          echo "$APPLICATION_CERT_P12_BASE64" | base64 --decode > "$APPLICATION_CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$APPLICATION_CERT_PATH" -P "$APPLICATION_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          echo "Verifying certificate import..."
+          security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Application" || {
+            echo "ERROR: Developer ID Application certificate not found"
+            exit 1
+          }
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
+
+      - name: Create app icon
+        run: |
+          echo "Converting iconset to icns..."
+          iconutil -c icns resources/icons/macos/node-launchpad.iconset -o resources/icons/macos/node-launchpad.icns
+          echo "Icon created:"
+          ls -la resources/icons/macos/node-launchpad.icns
+
+      - name: Create .app bundle structure
+        run: |
+          APP_NAME="Node Launchpad"
+          APP_DIR="${APP_NAME}.app"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          mkdir -p "$APP_DIR/Contents/MacOS"
+          mkdir -p "$APP_DIR/Contents/Resources"
+
+          # Copy the node-launchpad binary
+          cp "artifacts/${{ inputs.arch }}/release/node-launchpad" "$APP_DIR/Contents/Resources/"
+          chmod +x "$APP_DIR/Contents/Resources/node-launchpad"
+
+          # Copy the app icon
+          cp resources/icons/macos/node-launchpad.icns "$APP_DIR/Contents/Resources/"
+
+          # Create the launcher script
+          cat > "$APP_DIR/Contents/MacOS/launcher" << 'LAUNCHER_EOF'
+          #!/bin/bash
+          # Node Launchpad Launcher
+          # Opens Terminal.app and runs the node-launchpad TUI
+
+          SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+          RESOURCES_DIR="$(dirname "$SCRIPT_DIR")/Resources"
+          BINARY_PATH="$RESOURCES_DIR/node-launchpad"
+
+          # Use AppleScript to open Terminal and run the TUI
+          osascript <<EOF
+          tell application "Terminal"
+              activate
+              do script "clear && '$BINARY_PATH'; echo ''; echo 'Press any key to close...'; read -n 1; exit"
+          end tell
+          EOF
+          LAUNCHER_EOF
+          chmod +x "$APP_DIR/Contents/MacOS/launcher"
+
+          # Create Info.plist
+          cat > "$APP_DIR/Contents/Info.plist" << PLIST_EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>Node Launchpad</string>
+              <key>CFBundleDisplayName</key>
+              <string>Node Launchpad</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.autonomi.node-launchpad</string>
+              <key>CFBundleVersion</key>
+              <string>${VERSION}</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${VERSION}</string>
+              <key>CFBundleExecutable</key>
+              <string>launcher</string>
+              <key>CFBundleIconFile</key>
+              <string>node-launchpad</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleSignature</key>
+              <string>????</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>10.13</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+              <key>LSApplicationCategoryType</key>
+              <string>public.app-category.utilities</string>
+              <key>NSHumanReadableCopyright</key>
+              <string>Copyright 2024 MaidSafe. All rights reserved.</string>
+          </dict>
+          </plist>
+          PLIST_EOF
+
+          echo "App bundle structure created:"
+          find "$APP_DIR" -type f
+
+      - name: Sign binary and app bundle
+        run: |
+          APP_DIR="Node Launchpad.app"
+
+          SIGNING_IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+
+          if [ -z "$SIGNING_IDENTITY" ]; then
+            echo "Error: Could not find Developer ID Application certificate"
+            security find-identity -v "$KEYCHAIN_PATH"
+            exit 1
+          fi
+
+          echo "Signing with identity: $SIGNING_IDENTITY"
+
+          # Sign the binary inside Resources
+          echo "Signing node-launchpad binary..."
+          codesign --sign "$SIGNING_IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            --options runtime \
+            --timestamp \
+            --force \
+            "$APP_DIR/Contents/Resources/node-launchpad"
+
+          # Sign the launcher script
+          echo "Signing launcher script..."
+          codesign --sign "$SIGNING_IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            --options runtime \
+            --timestamp \
+            --force \
+            "$APP_DIR/Contents/MacOS/launcher"
+
+          # Sign the entire app bundle
+          echo "Signing app bundle..."
+          codesign --sign "$SIGNING_IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            --options runtime \
+            --timestamp \
+            --force \
+            --deep \
+            "$APP_DIR"
+
+          # Verify signatures
+          echo "Verifying signatures..."
+          codesign --verify --verbose=2 "$APP_DIR/Contents/Resources/node-launchpad"
+          codesign --verify --verbose=2 "$APP_DIR"
+
+          echo "All signatures verified successfully"
+
+      - name: Create zip for notarization
+        run: |
+          APP_DIR="Node Launchpad.app"
+          ZIP_FILE="node-launchpad-app.zip"
+
+          ditto -c -k --keepParent "$APP_DIR" "$ZIP_FILE"
+          echo "Created $ZIP_FILE for notarization"
+          ls -la "$ZIP_FILE"
+
+      - name: Submit app for notarization
+        id: notarize-app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          ZIP_FILE="node-launchpad-app.zip"
+
+          echo "Submitting $ZIP_FILE for notarization..."
+
+          SUBMIT_OUTPUT=$(xcrun notarytool submit "$ZIP_FILE" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_NOTARIZATION_PASSWORD" \
+            --team-id "$TEAM_ID" \
+            --wait \
+            --timeout 30m \
+            --output-format json 2>&1) || true
+
+          echo "Notarization output:"
+          echo "$SUBMIT_OUTPUT"
+
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/"id"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+          STATUS=$(echo "$SUBMIT_OUTPUT" | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/"status"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+
+          echo "Submission ID: $SUBMISSION_ID"
+          echo "Status: $STATUS"
+          echo "submission_id=$SUBMISSION_ID" >> $GITHUB_OUTPUT
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "Notarization failed with status: $STATUS"
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "Fetching notarization log..."
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_NOTARIZATION_PASSWORD" \
+                --team-id "$TEAM_ID" || true
+            fi
+            exit 1
+          fi
+
+          echo "Notarization accepted successfully"
+
+      - name: Staple notarization ticket to app
+        run: |
+          APP_DIR="Node Launchpad.app"
+
+          echo "Stapling notarization ticket to app..."
+
+          max_attempts=10
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "Stapling attempt $attempt of $max_attempts..."
+            if xcrun stapler staple "$APP_DIR"; then
+              echo "Stapling succeeded on attempt $attempt"
+              break
+            else
+              if [ $attempt -eq $max_attempts ]; then
+                echo "Stapling failed after $max_attempts attempts"
+                exit 1
+              fi
+              echo "Stapling failed, waiting 60 seconds before retry..."
+              sleep 60
+              attempt=$((attempt + 1))
+            fi
+          done
+
+          echo "Verifying stapled app..."
+          xcrun stapler validate "$APP_DIR"
+
+      - name: Create DMG
+        run: |
+          APP_DIR="Node Launchpad.app"
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="${VERSION}.node-launchpad.${{ inputs.arch }}.dmg"
+          VOLUME_NAME="Node Launchpad"
+
+          # Create a temporary directory for DMG contents
+          DMG_TEMP="dmg-temp"
+          mkdir -p "$DMG_TEMP"
+
+          # Copy the app to the temp directory
+          cp -R "$APP_DIR" "$DMG_TEMP/"
+
+          # Create symbolic link to Applications
+          ln -s /Applications "$DMG_TEMP/Applications"
+
+          # Create the DMG
+          hdiutil create -volname "$VOLUME_NAME" \
+            -srcfolder "$DMG_TEMP" \
+            -ov -format UDZO \
+            "$DMG_NAME"
+
+          echo "Created DMG: $DMG_NAME"
+          ls -la "$DMG_NAME"
+
+          # Clean up
+          rm -rf "$DMG_TEMP"
+
+      - name: Sign DMG
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="${VERSION}.node-launchpad.${{ inputs.arch }}.dmg"
+
+          # Re-unlock keychain (may have locked during notarization wait)
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          SIGNING_IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+
+          if [ -z "$SIGNING_IDENTITY" ]; then
+            echo "Error: Could not find Developer ID Application certificate"
+            security find-identity -v "$KEYCHAIN_PATH"
+            exit 1
+          fi
+
+          echo "Signing DMG with identity: $SIGNING_IDENTITY"
+
+          codesign --sign "$SIGNING_IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            --timestamp \
+            --force \
+            "$DMG_NAME"
+
+          echo "DMG signed successfully"
+          ls -la "$DMG_NAME"
+
+          # Note: We skip codesign --verify for DMGs because it can produce
+          # spurious "No such process" errors. The notarization step will
+          # validate the signature - if it's invalid, notarization will fail.
+
+      - name: Submit DMG for notarization
+        id: notarize-dmg
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="${VERSION}.node-launchpad.${{ inputs.arch }}.dmg"
+
+          echo "Submitting $DMG_NAME for notarization..."
+
+          SUBMIT_OUTPUT=$(xcrun notarytool submit "$DMG_NAME" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_NOTARIZATION_PASSWORD" \
+            --team-id "$TEAM_ID" \
+            --wait \
+            --timeout 30m \
+            --output-format json 2>&1) || true
+
+          echo "Notarization output:"
+          echo "$SUBMIT_OUTPUT"
+
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/"id"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+          STATUS=$(echo "$SUBMIT_OUTPUT" | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/"status"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+
+          echo "Submission ID: $SUBMISSION_ID"
+          echo "Status: $STATUS"
+          echo "submission_id=$SUBMISSION_ID" >> $GITHUB_OUTPUT
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "Notarization failed with status: $STATUS"
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "Fetching notarization log..."
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_NOTARIZATION_PASSWORD" \
+                --team-id "$TEAM_ID" || true
+            fi
+            exit 1
+          fi
+
+          echo "DMG notarization accepted successfully"
+
+      - name: Staple notarization ticket to DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="${VERSION}.node-launchpad.${{ inputs.arch }}.dmg"
+          SUBMISSION_ID="${{ steps.notarize-dmg.outputs.submission_id }}"
+
+          echo "Stapling notarization ticket to DMG..."
+
+          max_attempts=10
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "Stapling attempt $attempt of $max_attempts..."
+            if xcrun stapler staple "$DMG_NAME"; then
+              echo "Stapling succeeded on attempt $attempt"
+              break
+            else
+              if [ $attempt -eq $max_attempts ]; then
+                echo "Stapling failed after $max_attempts attempts"
+                if [ -n "$SUBMISSION_ID" ]; then
+                  echo "Checking notarization info..."
+                  xcrun notarytool info "$SUBMISSION_ID" \
+                    --apple-id "$APPLE_ID" \
+                    --password "$APPLE_NOTARIZATION_PASSWORD" \
+                    --team-id "$TEAM_ID" || true
+                fi
+                exit 1
+              fi
+              echo "Stapling failed, waiting 60 seconds before retry..."
+              sleep 60
+              attempt=$((attempt + 1))
+            fi
+          done
+
+          echo "Verifying stapled DMG..."
+          xcrun stapler validate "$DMG_NAME"
+
+          # Final verification with spctl
+          echo "Final verification with spctl..."
+          spctl -a -vv -t open --context context:primary-signature "$DMG_NAME"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: node-launchpad-dmg-${{ inputs.arch }}
+          path: ${{ steps.version.outputs.version }}.node-launchpad.${{ inputs.arch }}.dmg
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+          rm -f $RUNNER_TEMP/application-certificate.p12 || true
