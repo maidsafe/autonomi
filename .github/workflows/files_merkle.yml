@@ -21,7 +21,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: pr-bins-${{ matrix.os }}
-          path: target/release/ant*
+          path: |
+            target/release/ant*
+            target/release/evm-testnet*
 
   file_upload_download_tests_merkle:
     name: "File Upload/Download Tests (Merkle Payments)"
@@ -76,12 +78,13 @@ jobs:
           df -h
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: false
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -330,11 +333,10 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_file_upload_download_merkle
-          build: false
 
       - name: Clean up disk space for rust-cache
         if: always()
@@ -375,20 +377,14 @@ jobs:
           name: pr-bins-windows-latest
           path: target/release
 
-      - name: Install antctl
-        shell: pwsh
-        run: |
-          $destination = "$env:USERPROFILE\AppData\Local\Microsoft\WindowsApps"
-          Copy-Item "target\release\antctl.exe" -Destination $destination -Force
-          Write-Host "antctl installed to $destination"
-
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode.exe
-          build: false
+          antctl-path: target/release/antctl.exe
+          evm-testnet-path: target/release/evm-testnet.exe
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: pwsh
@@ -673,11 +669,10 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_file_upload_download_windows_merkle
-          build: false
 
       - name: Clean up disk space for rust-cache
         if: always()

@@ -33,15 +33,16 @@ runs:
     - shell: bash
       run: |
         set -euo pipefail
-        cargo build --profile=ci --bin antnode --bin ant --bin antctl
+        cargo build --profile=ci --bin antnode --bin ant --bin antctl --bin evm-testnet
     - if: runner.os != 'Windows'
       shell: bash
       run: |
         set -euo pipefail
         mkdir -p target/release
-        find target/ci -maxdepth 1 -type f -name 'ant*' -exec cp {} target/release/ \;
+        find target/ci -maxdepth 1 -type f \( -name 'ant*' -o -name 'evm-testnet' \) -exec cp {} target/release/ \;
     - if: runner.os == 'Windows'
       shell: pwsh
       run: |
         New-Item -ItemType Directory -Force -Path "target\\release" | Out-Null
         Copy-Item "target\\ci\\ant*.exe" -Destination "target\\release" -Force
+        Copy-Item "target\\ci\\evm-testnet.exe" -Destination "target\\release" -Force

@@ -34,7 +34,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: pr-bins-${{ matrix.os }}
-          path: target/release/ant*
+          path: |
+            target/release/ant*
+            target/release/evm-testnet*
 
   cargo-udeps:
     name: Unused dependency check
@@ -301,21 +303,14 @@ jobs:
         if: runner.os != 'Windows'
         run: chmod +x target/release/ant*
 
-      - name: Install antctl on Windows
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
-          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
-          Write-Host "antctl installed to $destination"
-
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: false
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -697,11 +692,10 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_e2e
-          build: false
 
   churn:
     name: Network churning tests
@@ -780,12 +774,13 @@ jobs:
         timeout-minutes: 30
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: false
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -816,11 +811,10 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_churn
-          build: false
 
       - name: Get total node count
         shell: bash
@@ -951,12 +945,13 @@ jobs:
         timeout-minutes: 30
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: false
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -996,11 +991,10 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_data_location
-          build: false
 
       - name: Verify restart of nodes using rg
         shell: bash
@@ -1090,21 +1084,14 @@ jobs:
           tar -cvzf test_data_1.tar.gz test_data_1
           ls -l
 
-      - name: Install antctl on Windows
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
-          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
-          Write-Host "antctl installed to $destination"
-
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: false
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -1234,8 +1221,7 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_large_file_upload_no_ws
-          build: false

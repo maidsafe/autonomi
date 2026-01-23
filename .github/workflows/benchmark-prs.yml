@@ -33,14 +33,15 @@ jobs:
         run: wget https://sn-node.s3.eu-west-2.amazonaws.com/the-test-data.zip
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         env:
           ANT_LOG: "all"
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: false
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check ANT_PEERS was set
         shell: bash
@@ -204,11 +205,10 @@ jobs:
 
       - name: Stop the local network
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_benchmark
-          build: false
 
       #########################
       ### Node Mem Analysis ###

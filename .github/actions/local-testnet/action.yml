@@ -1,0 +1,304 @@
+name: Autonomi Local Testnet
+description: Administer local testnets using pre-built binaries
+inputs:
+  action:
+    description: Start or stop a local testnet
+    required: true
+  antctl-path:
+    description: Path to the antctl binary (required for start action)
+  evm-testnet-path:
+    description: Path to the evm-testnet binary (required if enable-evm-testnet is true)
+  enable-evm-testnet:
+    description: Enable the EVM testnet
+    type: boolean
+    default: false
+  join:
+    description: If set, any nodes that are launched will join an existing testnet.
+    type: boolean
+    default: false
+  log_file_prefix:
+    description: The prefix given to the log files that are uploaded. Logs are not uploaded if value not set.
+  node-count:
+    description: The number of nodes for the testnet. Defaults to 25.
+    type: number
+    default: 25
+  node-path:
+    description: The location of the node binary
+  owner:
+    description: >
+      Assign each node this owner. This argument and `owner-prefix` are mutually exclusive.
+  owner-prefix:
+    description: >
+      Each node will be assigned an individual owner, based on this prefix.
+      This argument and `owner-prefix` are mutually exclusive.
+  rewards-address:
+    description: The node reward address
+    default: "0x03B770D9cD32077cC0bF330c13C114a87643B124"
+  set-ant-peers:
+    description: There are some cases where setting ANT_PEERS must be skipped
+    type: boolean
+    default: true
+  sn-log:
+    description: The log level for the node processes
+    default: "v"
+
+runs:
+  using: "composite"
+  steps:
+    #
+    # Setup
+    #
+    - name: install jq and ripgrep ubuntu
+      if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get -y install jq ripgrep
+    - name: install jq and ripgrep mac
+      if: runner.os == 'macOS'
+      shell: bash
+      run: brew install jq ripgrep
+    - name: install jq and ripgrep windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: choco install jq ripgrep
+
+    - name: install foundary
+      if: inputs.enable-evm-testnet == 'true'
+      shell: bash
+      run: curl -L https://foundry.paradigm.xyz | bash
+
+    - name: move foundry bins to path (linux)
+      if: inputs.enable-evm-testnet == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: sudo mv /home/runner/.config/.foundry/bin/* /usr/local/bin
+
+    - name: move foundry bins to path (macos)
+      if: inputs.enable-evm-testnet == 'true' && runner.os == 'macOS'
+      shell: bash
+      run: sudo mv /Users/runner/.foundry/bin/* /usr/local/bin
+
+    - name: move foundry bins to path (windows)
+      if: inputs.enable-evm-testnet == 'true' && runner.os == 'Windows'
+      shell: pwsh
+      run: Copy-Item -Path C:\Users\runneradmin\.foundry\bin\* -Destination C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps
+
+    - name: run foundry
+      if: inputs.enable-evm-testnet == 'true'
+      shell: bash
+      run: foundryup
+
+    - name: move anvil and other bins to path (linux)
+      if: inputs.enable-evm-testnet == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: sudo mv /home/runner/.config/.foundry/bin/* /usr/local/bin
+
+    - name: move anvil and other bins to path (macos)
+      if: inputs.enable-evm-testnet == 'true' && runner.os == 'macOS'
+      shell: bash
+      run: sudo mv /Users/runner/.foundry/bin/* /usr/local/bin
+
+    - name: move anvil and other bins to path (windows)
+      if: inputs.enable-evm-testnet == 'true' && runner.os == 'Windows'
+      shell: pwsh
+      run: Copy-Item -Path C:\Users\runneradmin\.foundry\bin\* -Destination C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps
+    #
+    # Starting the Network - Install pre-built binaries
+    #
+    - name: install antctl (linux)
+      if: runner.os == 'Linux' && inputs.action == 'start'
+      shell: bash
+      run: |
+        sudo cp ${{ inputs.antctl-path }} /usr/local/bin/antctl
+        sudo chmod +x /usr/local/bin/antctl
+        if [[ "${{ inputs.enable-evm-testnet }}" == "true" ]]; then
+          sudo cp ${{ inputs.evm-testnet-path }} /usr/local/bin/evm-testnet
+          sudo chmod +x /usr/local/bin/evm-testnet
+        fi
+
+    - name: install antctl (macOS)
+      if: runner.os == 'macOS' && inputs.action == 'start'
+      shell: bash
+      run: |
+        sudo cp ${{ inputs.antctl-path }} /usr/local/bin/antctl
+        sudo chmod +x /usr/local/bin/antctl
+        if [[ "${{ inputs.enable-evm-testnet }}" == "true" ]]; then
+          sudo cp ${{ inputs.evm-testnet-path }} /usr/local/bin/evm-testnet
+          sudo chmod +x /usr/local/bin/evm-testnet
+        fi
+
+    - name: install antctl (windows)
+      if: runner.os == 'Windows' && inputs.action == 'start'
+      shell: pwsh
+      run: |
+        $destination = "C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps"
+        Copy-Item ${{ inputs.antctl-path }} -Destination "$destination\antctl.exe"
+        if ("${{ inputs.enable-evm-testnet }}" -eq "true") {
+          Copy-Item ${{ inputs.evm-testnet-path }} -Destination "$destination\evm-testnet.exe"
+        }
+
+    - name: start evm testnet
+      if : inputs.action == 'start' && inputs.enable-evm-testnet == 'true'
+      shell: bash
+      run: |
+        evm-testnet &
+
+    - name: Set ANT_LOG (unix)
+      if: |
+        runner.os != 'Windows' &&
+        inputs.action == 'start' &&
+        inputs.sn-log != ''
+      shell: bash
+      run: |
+        echo "ANT_LOG=${{ inputs.sn-log }}" >> $GITHUB_ENV
+
+    - name: Set ANT_LOG (windows)
+      if: |
+        runner.os == 'Windows' &&
+        inputs.action == 'start' &&
+        inputs.sn-log != ''
+      shell: pwsh
+      run: |
+        Add-Content -Path $env:GITHUB_ENV -Value "ANT_LOG=${{ inputs.sn-log }}"
+
+    - name: start local autonomi testnet (Linux/macOS)
+      if: runner.os != 'Windows' && inputs.action == 'start'
+      shell: bash
+      run: |
+        command="antctl "
+        if [[ "${{ inputs.join }}" == "true" ]]; then
+          command="$command local join "
+        else
+          command="$command local run "
+        fi
+
+        command="$command --count ${{ inputs.node-count }} "
+        command="$command --node-path ${{ inputs.node-path }} "
+
+        # These arguments are mutually exclusive, but `antctl` will assert that at the
+        # beginning, so there's no need for us to do it here.
+        [[ -n "${{ inputs.owner }}" ]] && command="$command --owner ${{ inputs.owner }}"
+        [[ -n "${{ inputs.owner-prefix }}" ]] && command="$command --owner-prefix ${{ inputs.owner-prefix }}"
+        [[ "${{ inputs.enable-evm-testnet }}" == "true" ]] && command="$command --rewards-address ${{ inputs.rewards-address }}"
+        [[ "${{ inputs.enable-evm-testnet }}" == "true" ]] && command="$command evm-local"
+
+        echo "Will run antctl with: $command"
+        eval $command
+
+    - name: start local autonomi testnet (Windows)
+      if: runner.os == 'Windows' && inputs.action == 'start'
+      shell: pwsh
+      run: |
+        $command = "antctl "
+        if ("${{ inputs.join }}" -eq "true") {
+          $command += "local join "
+        } else {
+          $command += "local run "
+        }
+
+        $command += "--count ${{ inputs.node-count }} "
+        $command += "--node-path ${{ inputs.node-path }} "
+
+        if (-not [string]::IsNullOrEmpty("${{ inputs.owner }}")) {
+          $command += "--owner ${{ inputs.owner }} "
+        }
+        if (-not [string]::IsNullOrEmpty("${{ inputs.owner-prefix }}")) {
+          $command += "--owner-prefix ${{ inputs.owner-prefix }} "
+        }
+        if ("${{ inputs.enable-evm-testnet }}" -eq "true") {
+          $command += "--rewards-address ${{ inputs.rewards-address }} "
+        }
+        if ("${{ inputs.enable-evm-testnet }}" -eq "true") {
+          $command += "evm-local "
+        }
+
+        Write-Host "Will run antctl with: $command"
+        Invoke-Expression $command
+
+    - name: Set ANT_PEERS and EVM_NETWORK (Linux)
+      if: |
+        runner.os == 'Linux' &&
+        inputs.action == 'start' &&
+        inputs.set-ant-peers == 'true'
+      shell: bash
+      run: |
+        manager_registry_path="/home/runner/.local/share/autonomi/local_node_registry.json"
+        listen_addr=$(jq -r '.nodes[0].listen_addr[0]' $manager_registry_path)
+        echo "listen_addr: $listen_addr"
+        echo "ANT_PEERS=$listen_addr" >> $GITHUB_ENV
+        echo "EVM_NETWORK=local" >> $GITHUB_ENV
+
+    - name: Set ANT_PEERS and EVM_NETWORK (macOS)
+      if: |
+        runner.os == 'macOS' &&
+        inputs.action == 'start' &&
+        inputs.set-ant-peers == 'true'
+      shell: bash
+      run: |
+        manager_registry_path="/Users/runner/Library/Application Support/autonomi/local_node_registry.json"
+        listen_addr=$(jq -r '.nodes[0].listen_addr[0]' "$manager_registry_path")
+        echo "listen_addr: $listen_addr"
+        echo "ANT_PEERS=$listen_addr" >> $GITHUB_ENV
+        echo "EVM_NETWORK=local" >> $GITHUB_ENV
+
+    - name: Set ANT_PEERS and EVM_NETWORK (windows)
+      if: |
+        runner.os == 'Windows' &&
+        inputs.action == 'start' &&
+        inputs.set-ant-peers == 'true'
+      shell: pwsh
+      run: |
+        $manager_registry_path = "C:\Users\runneradmin\AppData\Roaming\autonomi\local_node_registry.json"
+        $listen_addr = jq -r '.nodes[0].listen_addr[0]' $manager_registry_path
+        Write-Host "listen_addr: $listen_addr"
+        Add-Content -Path $env:GITHUB_ENV -Value "ANT_PEERS=$listen_addr"
+        Add-Content -Path $env:GITHUB_ENV -Value "EVM_NETWORK=local"
+    #
+    # Stopping the Network
+    #
+    - name: Kill evm testnet (Linux/macOS)
+      if: runner.os != 'Windows' && inputs.action == 'stop'
+      shell: bash
+      run: pkill -f evm-testnet || true
+
+    - name: Kill evm testnet (Windows)
+      if: runner.os == 'Windows' && inputs.action == 'stop'
+      shell: pwsh
+      run: Stop-Process -Name evm-testnet -ErrorAction SilentlyContinue
+
+    - name: Kill all nodes (unix)
+      if: runner.os != 'Windows' && inputs.action == 'stop'
+      shell: bash
+      run: antctl local kill --keep-directories
+
+    - name: Kill all nodes (windows)
+      if: runner.os == 'Windows' && inputs.action == 'stop'
+      shell: pwsh
+      run: antctl local kill --keep-directories
+
+    - name: Upload log files (Linux)
+      if: runner.os == 'Linux' && inputs.action == 'stop' && inputs.log_file_prefix != ''
+      env:
+        ROOT_DIR: "/home/runner/.local/share/autonomi"
+      uses: actions/upload-artifact@main
+      with:
+        compression-level: 9
+        name: ${{inputs.log_file_prefix}}_${{runner.os}}
+        path: |
+          ~/.local/share/autonomi/**/*.log*
+
+    - name: Upload log files (macOs)
+      if: runner.os == 'macOS' && inputs.action == 'stop' && inputs.log_file_prefix != ''
+      uses: actions/upload-artifact@main
+      with:
+        compression-level: 9
+        name: ${{inputs.log_file_prefix}}_${{runner.os}}
+        path: |
+          /Users/runner/Library/Application Support/autonomi/**/*.log*
+
+    - name: Upload log files (Windows)
+      if: runner.os == 'Windows' && inputs.action == 'stop' && inputs.log_file_prefix != ''
+      uses: actions/upload-artifact@main
+      with:
+        compression-level: 9
+        name: ${{inputs.log_file_prefix}}_${{runner.os}}
+        path: |
+          C:\Users\runneradmin\AppData\Roaming\autonomi\**\*.log*

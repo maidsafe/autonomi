@@ -134,8 +134,11 @@ jobs:
         timeout-minutes: 30
       - uses: actions/upload-artifact@v4
         with:
-          name: pr-antnode-${{ matrix.settings.target }}
-          path: target/release/antnode*
+          name: pr-bins-${{ matrix.settings.target }}
+          path: |
+            target/release/antnode*
+            target/release/antctl*
+            target/release/evm-testnet*
   test:
     name: Tests (${{ matrix.settings.target }})
     needs:
@@ -188,18 +191,19 @@ jobs:
         run: npm install
       - uses: actions/download-artifact@v4
         with:
-          name: pr-antnode-${{ matrix.settings.target }}
+          name: pr-bins-${{ matrix.settings.target }}
           path: target/release
       - name: Ensure binaries are executable
         if: runner.os != 'Windows'
-        run: chmod +x "${{ github.workspace }}/target/release/antnode"
+        run: chmod +x "${{ github.workspace }}/target/release/"*
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: false
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
       - name: Download artifacts
         uses: actions/download-artifact@v7
         with:
