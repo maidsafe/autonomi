@@ -48,11 +48,19 @@ jobs:
           # we need rustfmt here while we have a build step
           components: rustfmt
       - uses: mozilla/sccache-action@v0.0.3
-      - name: Enable sccache
+      - name: Test and enable sccache
         shell: bash
         run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          # Test if sccache can start successfully with GHA cache
+          export SCCACHE_GHA_ENABLED=true
+          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
+            echo "sccache is working, enabling it"
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+            echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          else
+            echo "::warning::sccache failed to start, building without cache"
+            sccache --stop-server 2>/dev/null || true
+          fi
       - name: Install mold (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y mold
@@ -90,11 +98,19 @@ jobs:
           components: rustfmt, clippy
 
       - uses: mozilla/sccache-action@v0.0.3
-      - name: Enable sccache
+      - name: Test and enable sccache
         shell: bash
         run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          # Test if sccache can start successfully with GHA cache
+          export SCCACHE_GHA_ENABLED=true
+          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
+            echo "sccache is working, enabling it"
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+            echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          else
+            echo "::warning::sccache failed to start, building without cache"
+            sccache --stop-server 2>/dev/null || true
+          fi
       - name: Install mold (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y mold
@@ -146,11 +162,19 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: mozilla/sccache-action@v0.0.3
-      - name: Enable sccache
+      - name: Test and enable sccache
         shell: bash
         run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          # Test if sccache can start successfully with GHA cache
+          export SCCACHE_GHA_ENABLED=true
+          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
+            echo "sccache is working, enabling it"
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+            echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          else
+            echo "::warning::sccache failed to start, building without cache"
+            sccache --stop-server 2>/dev/null || true
+          fi
       - name: Install mold (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y mold
@@ -248,11 +272,19 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: mozilla/sccache-action@v0.0.3
-      - name: Enable sccache
+      - name: Test and enable sccache
         shell: bash
         run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          # Test if sccache can start successfully with GHA cache
+          export SCCACHE_GHA_ENABLED=true
+          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
+            echo "sccache is working, enabling it"
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+            echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          else
+            echo "::warning::sccache failed to start, building without cache"
+            sccache --stop-server 2>/dev/null || true
+          fi
       - name: Install mold (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y mold
@@ -693,11 +725,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: mozilla/sccache-action@v0.0.3
-      - name: Enable sccache
+      - name: Test and enable sccache
         shell: bash
         run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          # Test if sccache can start successfully with GHA cache
+          export SCCACHE_GHA_ENABLED=true
+          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
+            echo "sccache is working, enabling it"
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+            echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          else
+            echo "::warning::sccache failed to start, building without cache"
+            sccache --stop-server 2>/dev/null || true
+          fi
       - name: Install mold (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y mold
@@ -872,11 +912,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: mozilla/sccache-action@v0.0.3
-      - name: Enable sccache
+      - name: Test and enable sccache
         shell: bash
         run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          # Test if sccache can start successfully with GHA cache
+          export SCCACHE_GHA_ENABLED=true
+          if sccache --start-server 2>/dev/null && sccache --show-stats 2>/dev/null; then
+            echo "sccache is working, enabling it"
+            echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+            echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          else
+            echo "::warning::sccache failed to start, building without cache"
+            sccache --stop-server 2>/dev/null || true
+          fi
       - name: Install mold (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y mold
