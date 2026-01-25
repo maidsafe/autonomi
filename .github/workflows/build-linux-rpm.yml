@@ -42,7 +42,7 @@ jobs:
 
       - name: Install RPM build tools
         run: |
-          dnf install -y rpm-build rpm-sign gnupg2 expect
+          dnf install -y rpm-build rpm-sign gnupg2
 
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
@@ -124,57 +124,37 @@ jobs:
           echo "output_rpm=$output_rpm" >> $GITHUB_OUTPUT
 
       - name: Import GPG key
-        id: gpg
         run: |
           echo "Importing GPG key..."
-
-          # Configure GPG for non-interactive use (no pinentry)
-          mkdir -p ~/.gnupg
-          chmod 700 ~/.gnupg
-          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
-          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-
-          # Decode and import the key
           echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
 
           # Get the key ID
           key_id=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
           echo "GPG Key ID: $key_id"
           echo "key_id=$key_id" >> $GITHUB_OUTPUT
-
-          # Restart gpg-agent to pick up new config
-          gpgconf --kill gpg-agent || true
-
-          # Configure RPM to use our GPG key
-          echo "%_gpg_name $key_id" >> ~/.rpmmacros
+        id: gpg
 
       - name: Sign RPM package
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           output_rpm="${{ steps.build.outputs.output_rpm }}"
+          key_id="${{ steps.gpg.outputs.key_id }}"
 
           echo "Signing package: $output_rpm"
 
-          # Use expect inline to handle passphrase prompt
-          expect -c "
-            set timeout 60
-            log_user 1
-            spawn rpm --addsign \"$output_rpm\"
-            expect {
-              -nocase -re \"pass.?phrase\" {
-                send \"\$env(GPG_PASSPHRASE)\r\"
-                exp_continue
-              }
-              timeout {
-                puts \"ERROR: Timeout waiting for passphrase prompt\"
-                exit 1
-              }
-              eof
-            }
-            catch wait result
-            exit \[lindex \$result 3\]
-          "
+          # Configure GPG for non-interactive use
+          mkdir -p ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          gpg-connect-agent reloadagent /bye || true
+
+          # Configure RPM to use GPG with passphrase
+          echo "%_gpg_name $key_id" >> ~/.rpmmacros
+          echo "%__gpg_sign_cmd %{__gpg} gpg --batch --pinentry-mode loopback --passphrase \"\$GPG_PASSPHRASE\" -u \"%{_gpg_name}\" -sbo %{__signature_filename} %{__plaintext_filename}" >> ~/.rpmmacros
+
+          # Sign the RPM
+          rpm --addsign "$output_rpm"
 
           echo "Package signed successfully"
 
