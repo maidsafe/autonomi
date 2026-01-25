@@ -56,19 +56,10 @@ jobs:
           gh release download "${{ inputs.release_tag }}" \
             --repo ${{ github.repository }} \
             --pattern "$deb_file" \
-            --pattern "$deb_file.asc" \
-            --pattern "$deb_file.sha256"
+            --pattern "$deb_file.asc"
 
           echo "Downloaded files:"
           ls -la
-
-      - name: Verify checksum
-        run: |
-          version="${{ steps.version.outputs.version }}"
-          deb_file="${version}.autonomi.${{ matrix.target }}.deb"
-
-          echo "Verifying checksum..."
-          sha256sum -c "$deb_file.sha256"
 
       - name: Import GPG key and verify signature
         run: |

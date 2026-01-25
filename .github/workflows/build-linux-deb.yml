@@ -161,14 +161,6 @@ jobs:
           echo "Verifying signature on: $output_deb"
           gpg --verify "$output_deb.asc" "$output_deb"
 
-      - name: Generate checksum
-        run: |
-          output_deb="${{ steps.build.outputs.output_deb }}"
-
-          sha256sum "$output_deb" > "$output_deb.sha256"
-          echo "Checksum:"
-          cat "$output_deb.sha256"
-
       - name: Upload deb artifact
         uses: actions/upload-artifact@v4
         with:
@@ -176,4 +168,3 @@ jobs:
           path: |
             ${{ steps.build.outputs.output_deb }}
             ${{ steps.build.outputs.output_deb }}.asc
-            ${{ steps.build.outputs.output_deb }}.sha256
