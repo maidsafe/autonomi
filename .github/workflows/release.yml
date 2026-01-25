@@ -904,7 +904,7 @@ jobs:
             echo ""
             echo "**Verify the signature (optional):**"
             echo "\`\`\`bash"
-            echo "dpkg-sig --verify ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb"
+            echo "gpg --verify ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb.asc ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb"
             echo "\`\`\`"
             echo ""
             echo "The binaries will be installed to \`/usr/local/bin\`."

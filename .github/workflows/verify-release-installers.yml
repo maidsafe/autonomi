@@ -56,6 +56,7 @@ jobs:
           gh release download "${{ inputs.release_tag }}" \
             --repo ${{ github.repository }} \
             --pattern "$deb_file" \
+            --pattern "$deb_file.asc" \
             --pattern "$deb_file.sha256"
 
           echo "Downloaded files:"
@@ -78,8 +79,7 @@ jobs:
           curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/main/resources/keys/autonomi-signing-key.asc" | gpg --import
 
           echo "Verifying package signature..."
-          sudo apt-get update && sudo apt-get install -y dpkg-sig
-          dpkg-sig --verify "$deb_file"
+          gpg --verify "$deb_file.asc" "$deb_file"
 
       - name: Install deb package
         run: |

@@ -38,12 +38,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install packaging tools
-        run: |
-          sudo add-apt-repository -y universe
-          sudo apt-get update
-          sudo apt-get install -y dpkg-sig
-
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
@@ -148,19 +142,20 @@ jobs:
           echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
           gpg-connect-agent reloadagent /bye || true
 
-          # Sign the package
-          dpkg-sig --sign builder -k "$key_id" \
-            --gpg-options "--batch --pinentry-mode loopback --passphrase ${{ secrets.GPG_PASSPHRASE }}" \
-            "$output_deb"
+          # Create detached armored signature
+          echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --pinentry-mode loopback \
+            --passphrase-fd 0 --default-key "$key_id" \
+            --detach-sign --armor "$output_deb"
 
           echo "Package signed successfully"
+          ls -la "$output_deb.asc"
 
       - name: Verify package signature
         run: |
           output_deb="${{ steps.build.outputs.output_deb }}"
 
           echo "Verifying signature on: $output_deb"
-          dpkg-sig --verify "$output_deb"
+          gpg --verify "$output_deb.asc" "$output_deb"
 
       - name: Generate checksum
         run: |
@@ -176,4 +171,5 @@ jobs:
           name: autonomi-deb-${{ matrix.target }}
           path: |
             ${{ steps.build.outputs.output_deb }}
+            ${{ steps.build.outputs.output_deb }}.asc
             ${{ steps.build.outputs.output_deb }}.sha256
