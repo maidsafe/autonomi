@@ -166,14 +166,6 @@ jobs:
           # Verify detached signature
           gpg --verify "$output_rpm.asc" "$output_rpm"
 
-      - name: Generate checksum
-        run: |
-          output_rpm="${{ steps.build.outputs.output_rpm }}"
-
-          sha256sum "$output_rpm" > "$output_rpm.sha256"
-          echo "Checksum:"
-          cat "$output_rpm.sha256"
-
       - name: Upload rpm artifact
         uses: actions/upload-artifact@v4
         with:
@@ -181,4 +173,3 @@ jobs:
           path: |
             ${{ steps.build.outputs.output_rpm }}
             ${{ steps.build.outputs.output_rpm }}.asc
-            ${{ steps.build.outputs.output_rpm }}.sha256

@@ -177,19 +177,10 @@ jobs:
           gh release download "${{ inputs.release_tag }}" \
             --repo ${{ github.repository }} \
             --pattern "$rpm_file" \
-            --pattern "$rpm_file.asc" \
-            --pattern "$rpm_file.sha256"
+            --pattern "$rpm_file.asc"
 
           echo "Downloaded files:"
           ls -la
-
-      - name: Verify checksum
-        run: |
-          version="${{ steps.version.outputs.version }}"
-          rpm_file="${version}.autonomi.${{ matrix.target }}.rpm"
-
-          echo "Verifying checksum..."
-          sha256sum -c "$rpm_file.sha256"
 
       - name: Import GPG key and verify signature
         run: |
