@@ -1,0 +1,32 @@
+Name:           autonomi
+Version:        VERSION_PLACEHOLDER
+Release:        1%{?dist}
+Summary:        Autonomi Network CLI Suite
+
+License:        GPL-3.0
+URL:            https://autonomi.com
+Packager:       MaidSafe.net Limited <support@autonomi.com>
+
+# Disable automatic dependency detection for static binaries
+AutoReqProv:    no
+
+%description
+Command-line tools for interacting with the Autonomi Network.
+
+This package includes:
+ - ant: Client CLI for uploading/downloading data
+ - antnode: Node binary for running a network node
+ - antctl: Node management and control utility
+
+For more information, visit https://docs.autonomi.com/
+
+%install
+mkdir -p %{buildroot}/usr/local/bin
+install -m 755 %{_sourcedir}/ant %{buildroot}/usr/local/bin/ant
+install -m 755 %{_sourcedir}/antnode %{buildroot}/usr/local/bin/antnode
+install -m 755 %{_sourcedir}/antctl %{buildroot}/usr/local/bin/antctl
+
+%files
+/usr/local/bin/ant
+/usr/local/bin/antnode
+/usr/local/bin/antctl

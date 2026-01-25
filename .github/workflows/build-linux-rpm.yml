@@ -1,0 +1,187 @@
+# Reusable workflow for building and signing Linux RPM packages
+#
+# This workflow creates GPG-signed .rpm packages for the Autonomi CLI suite
+# containing ant, antnode, and antctl binaries for all Linux architectures.
+#
+# Usage from release.yml:
+#   build-linux-rpm:
+#     uses: ./.github/workflows/build-linux-rpm.yml
+#     secrets: inherit
+
+name: build Linux rpm packages
+
+on:
+  workflow_call:
+    secrets:
+      GPG_PRIVATE_KEY:
+        description: 'GPG private key for package signing (base64 encoded, armored)'
+        required: true
+      GPG_PASSPHRASE:
+        description: 'Passphrase for GPG private key'
+        required: true
+
+jobs:
+  build-rpm:
+    name: build rpm (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            rpm_arch: x86_64
+          - target: aarch64-unknown-linux-musl
+            rpm_arch: aarch64
+          - target: armv7-unknown-linux-musleabihf
+            rpm_arch: armv7hl
+          - target: arm-unknown-linux-musleabi
+            rpm_arch: armv5tel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install RPM build tools
+        run: |
+          dnf install -y rpm-build rpm-sign gnupg2 pinentry
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: autonomi-${{ matrix.target }}
+          path: artifacts/${{ matrix.target }}/release
+
+      - name: Set package version
+        id: version
+        run: |
+          release_year=$(grep 'release-year:' release-cycle-info | awk '{print $2}')
+          release_month=$(grep 'release-month:' release-cycle-info | awk '{print $2}')
+          release_cycle=$(grep 'release-cycle:' release-cycle-info | awk '{print $2}')
+          release_cycle_counter=$(grep 'release-cycle-counter:' release-cycle-info | awk '{print $2}')
+          version="$release_year.$release_month.$release_cycle.$release_cycle_counter"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Package version: $version"
+
+      - name: Verify binaries exist
+        run: |
+          artifacts_path="artifacts/${{ matrix.target }}/release"
+          echo "Checking for required binaries in: $artifacts_path"
+
+          for binary in ant antnode antctl; do
+            if [[ -f "$artifacts_path/$binary" ]]; then
+              echo "  Found: $binary"
+            else
+              echo "  Missing: $binary"
+              exit 1
+            fi
+          done
+          echo "All required binaries found"
+
+      - name: Set up RPM build environment
+        run: |
+          version="${{ steps.version.outputs.version }}"
+
+          # Create RPM build directory structure
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+          # Copy binaries to SOURCES
+          cp artifacts/${{ matrix.target }}/release/ant ~/rpmbuild/SOURCES/
+          cp artifacts/${{ matrix.target }}/release/antnode ~/rpmbuild/SOURCES/
+          cp artifacts/${{ matrix.target }}/release/antctl ~/rpmbuild/SOURCES/
+
+          # Generate spec file from template
+          sed -e "s/VERSION_PLACEHOLDER/$version/" \
+              resources/installer/linux/rpm/autonomi.spec.template > ~/rpmbuild/SPECS/autonomi.spec
+
+          echo "Spec file contents:"
+          cat ~/rpmbuild/SPECS/autonomi.spec
+
+      - name: Build RPM package
+        id: build
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          rpm_arch="${{ matrix.rpm_arch }}"
+
+          echo "Building RPM package for $rpm_arch..."
+
+          # Build the RPM (binary package only, no source)
+          rpmbuild -bb \
+            --define "_topdir $HOME/rpmbuild" \
+            --define "_rpmdir $PWD" \
+            --target "$rpm_arch" \
+            ~/rpmbuild/SPECS/autonomi.spec
+
+          # Find the built RPM
+          built_rpm=$(find . -name "autonomi-${version}*.rpm" -type f | head -1)
+          echo "Built RPM: $built_rpm"
+
+          # Rename to match release naming convention
+          output_rpm="${version}.autonomi.${{ matrix.target }}.rpm"
+          mv "$built_rpm" "$output_rpm"
+
+          echo "Package renamed to: $output_rpm"
+          ls -lh "$output_rpm"
+
+          echo "output_rpm=$output_rpm" >> $GITHUB_OUTPUT
+
+      - name: Import GPG key
+        id: gpg
+        run: |
+          echo "Importing GPG key..."
+
+          # Decode and import the key
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
+
+          # Get the key ID
+          key_id=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
+          echo "GPG Key ID: $key_id"
+          echo "key_id=$key_id" >> $GITHUB_OUTPUT
+
+      - name: Sign RPM package
+        run: |
+          output_rpm="${{ steps.build.outputs.output_rpm }}"
+          key_id="${{ steps.gpg.outputs.key_id }}"
+
+          echo "Signing package: $output_rpm"
+
+          # Configure GPG for non-interactive use
+          mkdir -p ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          gpgconf --kill gpg-agent || true
+
+          # Configure RPM to use our GPG key
+          echo "%_gpg_name $key_id" >> ~/.rpmmacros
+          echo "%__gpg_sign_cmd %{__gpg} gpg --batch --pinentry-mode loopback --passphrase '${{ secrets.GPG_PASSPHRASE }}' -u '%{_gpg_name}' -sbo %{__signature_filename} %{__plaintext_filename}" >> ~/.rpmmacros
+
+          # Sign the RPM
+          rpm --addsign "$output_rpm"
+
+          echo "Package signed successfully"
+
+      - name: Verify package signature
+        run: |
+          output_rpm="${{ steps.build.outputs.output_rpm }}"
+
+          echo "Verifying signature on: $output_rpm"
+
+          # Import public key for verification
+          rpm --import resources/keys/autonomi-signing-key.asc
+
+          # Verify signature
+          rpm --checksig "$output_rpm"
+
+      - name: Generate checksum
+        run: |
+          output_rpm="${{ steps.build.outputs.output_rpm }}"
+
+          sha256sum "$output_rpm" > "$output_rpm.sha256"
+          echo "Checksum:"
+          cat "$output_rpm.sha256"
+
+      - name: Upload rpm artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomi-rpm-${{ matrix.target }}
+          path: |
+            ${{ steps.build.outputs.output_rpm }}
+            ${{ steps.build.outputs.output_rpm }}.sha256

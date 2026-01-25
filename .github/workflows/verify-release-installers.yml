@@ -21,6 +21,7 @@ on:
         type: choice
         options:
           - deb
+          - rpm
         default: deb
 
 jobs:
@@ -136,6 +137,126 @@ jobs:
           echo ""
           echo "antctl --help:"
           antctl --help | head -20
+
+          echo ""
+          echo "Basic functionality tests passed"
+
+  verify-rpm:
+    if: ${{ inputs.package_type == 'rpm' }}
+    name: verify rpm (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+    steps:
+      - name: Install required tools
+        run: |
+          dnf install -y gh gnupg2
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          # Extract version from tag like "stable-2025.12.3.3" or "rc-2025.12.3.3"
+          tag="${{ inputs.release_tag }}"
+          version="${tag#*-}"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Extracted version: $version"
+
+      - name: Download rpm package from release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          rpm_file="${version}.autonomi.${{ matrix.target }}.rpm"
+
+          echo "Downloading $rpm_file from release ${{ inputs.release_tag }}..."
+
+          gh release download "${{ inputs.release_tag }}" \
+            --repo ${{ github.repository }} \
+            --pattern "$rpm_file" \
+            --pattern "$rpm_file.sha256"
+
+          echo "Downloaded files:"
+          ls -la
+
+      - name: Verify checksum
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          rpm_file="${version}.autonomi.${{ matrix.target }}.rpm"
+
+          echo "Verifying checksum..."
+          sha256sum -c "$rpm_file.sha256"
+
+      - name: Import GPG key and verify signature
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          rpm_file="${version}.autonomi.${{ matrix.target }}.rpm"
+
+          echo "Fetching Autonomi GPG signing key..."
+          curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/main/resources/keys/autonomi-signing-key.asc" | rpm --import -
+
+          echo "Verifying package signature..."
+          rpm --checksig "$rpm_file"
+
+      - name: Install rpm package
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          rpm_file="${version}.autonomi.${{ matrix.target }}.rpm"
+
+          echo "Installing $rpm_file..."
+          rpm -i "$rpm_file"
+
+      - name: Verify binaries are installed
+        run: |
+          echo "Checking binary locations..."
+
+          for binary in ant antnode antctl; do
+            path="/usr/local/bin/$binary"
+            if [[ -x "$path" ]]; then
+              echo "  $binary: OK ($path)"
+            else
+              echo "  $binary: MISSING or not executable"
+              exit 1
+            fi
+          done
+
+          echo "All binaries installed correctly"
+
+      - name: Verify binaries execute
+        run: |
+          echo "Testing binary execution..."
+
+          echo "ant --version:"
+          /usr/local/bin/ant --version
+
+          echo ""
+          echo "antnode --version:"
+          /usr/local/bin/antnode --version
+
+          echo ""
+          echo "antctl --version:"
+          /usr/local/bin/antctl --version
+
+          echo ""
+          echo "All binaries execute correctly"
+
+      - name: Test basic functionality
+        run: |
+          echo "Testing basic functionality..."
+
+          echo "ant --help:"
+          /usr/local/bin/ant --help | head -20
+
+          echo ""
+          echo "antnode --help:"
+          /usr/local/bin/antnode --help | head -20
+
+          echo ""
+          echo "antctl --help:"
+          /usr/local/bin/antctl --help | head -20
 
           echo ""
           echo "Basic functionality tests passed"

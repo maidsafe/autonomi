@@ -536,6 +536,18 @@ jobs:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
+  build-linux-rpm:
+    if: ${{
+        github.repository_owner == 'maidsafe' &&
+        (github.ref == 'refs/heads/stable' || startsWith(github.ref, 'refs/heads/rc'))
+      }}
+    name: build linux rpm
+    needs: [build]
+    uses: ./.github/workflows/build-linux-rpm.yml
+    secrets:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
   s3-release:
     if: ${{
         github.repository_owner == 'maidsafe' &&
@@ -644,7 +656,7 @@ jobs:
       }}
     name: github release
     runs-on: ubuntu-latest
-    needs: [build, sign-windows-binaries, sign-macos-pkg-x86_64, sign-macos-pkg-aarch64, sign-macos-app-x86_64, sign-macos-app-aarch64, build-windows-msi, build-windows-msix, build-linux-deb, s3-release]
+    needs: [build, sign-windows-binaries, sign-macos-pkg-x86_64, sign-macos-pkg-aarch64, sign-macos-app-x86_64, sign-macos-app-aarch64, build-windows-msi, build-windows-msix, build-linux-deb, build-linux-rpm, s3-release]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@master
@@ -719,6 +731,22 @@ jobs:
         with:
           name: autonomi-deb-arm-unknown-linux-musleabi
           path: deb-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-rpm-x86_64-unknown-linux-musl
+          path: rpm-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-rpm-aarch64-unknown-linux-musl
+          path: rpm-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-rpm-armv7-unknown-linux-musleabihf
+          path: rpm-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-rpm-arm-unknown-linux-musleabi
+          path: rpm-artifacts
 
       - uses: cargo-bins/cargo-binstall@main
       - name: install just
@@ -887,6 +915,45 @@ jobs:
             echo "antnode --version"
             echo "antctl --version"
             echo "\`\`\`"
+            echo ""
+            echo "### Linux CLI Suite (Fedora/RHEL/CentOS)"
+            echo ""
+            echo "Install \`ant\`, \`antnode\`, and \`antctl\` using the signed rpm package."
+            echo ""
+            echo "Download the appropriate rpm file for your architecture:"
+            echo "- **x86_64:** \`${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.rpm\`"
+            echo "- **ARM64 (aarch64):** \`${{ env.PACKAGE_VERSION }}.autonomi.aarch64-unknown-linux-musl.rpm\`"
+            echo "- **ARMv7:** \`${{ env.PACKAGE_VERSION }}.autonomi.armv7-unknown-linux-musleabihf.rpm\`"
+            echo "- **ARM:** \`${{ env.PACKAGE_VERSION }}.autonomi.arm-unknown-linux-musleabi.rpm\`"
+            echo ""
+            echo "**Import the GPG signing key (first time only):**"
+            echo "\`\`\`bash"
+            echo "curl -fsSL https://github.com/maidsafe/autonomi/raw/main/resources/keys/autonomi-signing-key.asc | sudo rpm --import -"
+            echo "\`\`\`"
+            echo ""
+            echo "**Install the package:**"
+            echo "\`\`\`bash"
+            echo "sudo rpm -i ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.rpm"
+            echo "\`\`\`"
+            echo ""
+            echo "Or using dnf:"
+            echo "\`\`\`bash"
+            echo "sudo dnf install ./${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.rpm"
+            echo "\`\`\`"
+            echo ""
+            echo "**Verify the signature (optional):**"
+            echo "\`\`\`bash"
+            echo "rpm --checksig ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.rpm"
+            echo "\`\`\`"
+            echo ""
+            echo "The binaries will be installed to \`/usr/local/bin\`."
+            echo ""
+            echo "Verify the installation:"
+            echo "\`\`\`bash"
+            echo "ant --version"
+            echo "antnode --version"
+            echo "antctl --version"
+            echo "\`\`\`"
           } > release-description.md
 
       # For the next two steps, it seems to be necessary to set `GITHUB_TOKEN` on the step rather
@@ -971,6 +1038,19 @@ jobs:
         run: |
           echo "Uploading Linux deb packages..."
           for file in deb-artifacts/*; do
+            if [ -f "$file" ]; then
+              echo "Uploading $file"
+              gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} "$file"
+            fi
+          done
+
+      - name: upload Linux rpm packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.AUTONOMI_PAT }}
+        shell: bash
+        run: |
+          echo "Uploading Linux rpm packages..."
+          for file in rpm-artifacts/*; do
             if [ -f "$file" ]; then
               echo "Uploading $file"
               gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} "$file"
