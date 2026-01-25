@@ -42,7 +42,7 @@ jobs:
 
       - name: Install RPM build tools
         run: |
-          dnf install -y rpm-build rpm-sign gnupg2 pinentry
+          dnf install -y rpm-build rpm-sign gnupg2 expect
 
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
@@ -123,15 +123,10 @@ jobs:
 
           echo "output_rpm=$output_rpm" >> $GITHUB_OUTPUT
 
-      - name: Import GPG key and configure signing
+      - name: Import GPG key
         id: gpg
         run: |
           echo "Importing GPG key..."
-
-          # Configure GPG for non-interactive use
-          mkdir -p ~/.gnupg
-          chmod 700 ~/.gnupg
-          echo "allow-preset-passphrase" >> ~/.gnupg/gpg-agent.conf
 
           # Decode and import the key
           echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
@@ -141,33 +136,38 @@ jobs:
           echo "GPG Key ID: $key_id"
           echo "key_id=$key_id" >> $GITHUB_OUTPUT
 
-          # Get the keygrip for the signing subkey
-          keygrip=$(gpg --list-secret-keys --with-keygrip 2>/dev/null | grep -A1 "^ssb" | grep Keygrip | awk '{print $3}')
-          if [ -z "$keygrip" ]; then
-            # If no subkey, use the primary key's keygrip
-            keygrip=$(gpg --list-secret-keys --with-keygrip 2>/dev/null | grep -A1 "^sec" | grep Keygrip | awk '{print $3}')
-          fi
-          echo "Keygrip: $keygrip"
-          echo "keygrip=$keygrip" >> $GITHUB_OUTPUT
-
-          # Restart gpg-agent with new config
-          gpgconf --kill gpg-agent || true
-          gpg-agent --daemon || true
-
-          # Preset the passphrase in the agent
-          echo "${{ secrets.GPG_PASSPHRASE }}" | /usr/libexec/gpg-preset-passphrase --preset "$keygrip"
-
           # Configure RPM to use our GPG key
           echo "%_gpg_name $key_id" >> ~/.rpmmacros
 
       - name: Sign RPM package
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           output_rpm="${{ steps.build.outputs.output_rpm }}"
 
           echo "Signing package: $output_rpm"
 
-          # Sign the RPM (passphrase already cached in gpg-agent)
-          rpm --addsign "$output_rpm"
+          # Create expect script for non-interactive signing
+          cat > /tmp/sign-rpm.exp << 'EXPECT_SCRIPT'
+          set timeout 30
+          set rpm_file [lindex $argv 0]
+          spawn rpm --addsign $rpm_file
+          expect {
+            "Enter pass phrase:" {
+              send "$env(GPG_PASSPHRASE)\r"
+              exp_continue
+            }
+            "Pass phrase is good" {
+              exp_continue
+            }
+            eof
+          }
+          catch wait result
+          exit [lindex $result 3]
+          EXPECT_SCRIPT
+
+          # Run the expect script
+          expect /tmp/sign-rpm.exp "$output_rpm"
 
           echo "Package signed successfully"
 
