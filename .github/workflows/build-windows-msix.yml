@@ -73,7 +73,35 @@ jobs:
             exit 1
           }
 
-      # Setup DigiCert FIRST so we can extract certificate subject for manifest
+      - name: Extract certificate subject for MSIX Publisher
+        id: cert_subject
+        shell: pwsh
+        run: |
+          # Extract the certificate subject from the already-signed node-launchpad.exe
+          # This is the most reliable method as it guarantees the Publisher matches the signature
+          $signedBinary = "artifacts\x86_64-pc-windows-msvc-signed\release\node-launchpad.exe"
+
+          Write-Host "Extracting certificate subject from: $signedBinary"
+
+          $sig = Get-AuthenticodeSignature $signedBinary
+          if ($sig.Status -ne "Valid") {
+            Write-Error "Binary is not properly signed. Status: $($sig.Status)"
+            exit 1
+          }
+
+          $subject = $sig.SignerCertificate.Subject
+          Write-Host "Certificate Subject: $subject"
+
+          if ([string]::IsNullOrWhiteSpace($subject)) {
+            Write-Error "Could not extract certificate subject"
+            exit 1
+          }
+
+          # Output for use in subsequent steps
+          "publisher=$subject" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Publisher set to: $subject"
+
+      # Setup DigiCert for signing the MSIX package
       - name: Create client certificate file from base64
         id: prepare_cert
         shell: pwsh
@@ -121,45 +149,6 @@ jobs:
         run: |
           smctl -v
           smctl healthcheck
-
-      - name: Extract certificate subject for MSIX Publisher
-        id: cert_subject
-        shell: pwsh
-        run: |
-          # Get certificate information from DigiCert SSM
-          # The keypair ls command shows certificate details including the Subject
-          $keypairInfo = smctl keypair ls 2>&1
-          Write-Host "Keypair info:"
-          Write-Host $keypairInfo
-
-          # Extract the certificate and get its subject
-          # Using smctl certificate to get the actual certificate subject
-          $alias = $env:SM_KEYPAIR_ALIAS
-          $certInfo = smctl keypair describe --keypair-alias "$alias" 2>&1
-          Write-Host "Certificate info for alias $alias`:"
-          Write-Host $certInfo
-
-          # Parse the Subject from the certificate info
-          # The subject format should be like: CN=Company Name, O=Company Name, L=City, S=State, C=Country
-          $subjectMatch = $certInfo | Select-String -Pattern 'Subject:\s*(.+)$'
-          if ($subjectMatch) {
-            $subject = $subjectMatch.Matches[0].Groups[1].Value.Trim()
-          } else {
-            # Alternative: try to get from certificate details
-            # Look for the distinguished name pattern
-            $dnMatch = $certInfo | Select-String -Pattern '(CN=[^,]+.*)'
-            if ($dnMatch) {
-              $subject = $dnMatch.Matches[0].Groups[1].Value.Trim()
-            } else {
-              Write-Error "Could not extract certificate subject from smctl output"
-              Write-Host "Full output for debugging:"
-              Write-Host $certInfo
-              exit 1
-            }
-          }
-
-          Write-Host "Extracted Publisher subject: $subject"
-          "publisher=$subject" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Prepare MSIX package directory
         shell: pwsh
