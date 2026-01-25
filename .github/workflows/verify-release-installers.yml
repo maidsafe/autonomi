@@ -177,6 +177,7 @@ jobs:
           gh release download "${{ inputs.release_tag }}" \
             --repo ${{ github.repository }} \
             --pattern "$rpm_file" \
+            --pattern "$rpm_file.asc" \
             --pattern "$rpm_file.sha256"
 
           echo "Downloaded files:"
@@ -196,10 +197,10 @@ jobs:
           rpm_file="${version}.autonomi.${{ matrix.target }}.rpm"
 
           echo "Fetching Autonomi GPG signing key..."
-          curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/main/resources/keys/autonomi-signing-key.asc" | rpm --import -
+          curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/main/resources/keys/autonomi-signing-key.asc" | gpg --import
 
           echo "Verifying package signature..."
-          rpm --checksig "$rpm_file"
+          gpg --verify "$rpm_file.asc" "$rpm_file"
 
       - name: Install rpm package
         run: |

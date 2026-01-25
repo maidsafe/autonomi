@@ -149,14 +149,13 @@ jobs:
           echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
           gpg-connect-agent reloadagent /bye || true
 
-          # Configure RPM to use GPG with passphrase
-          echo "%_gpg_name $key_id" >> ~/.rpmmacros
-          echo "%__gpg_sign_cmd %{__gpg} gpg --batch --pinentry-mode loopback --passphrase \"\$GPG_PASSPHRASE\" -u \"%{_gpg_name}\" -sbo %{__signature_filename} %{__plaintext_filename}" >> ~/.rpmmacros
-
-          # Sign the RPM
-          rpm --addsign "$output_rpm"
+          # Create detached armored signature (same approach as DEB)
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$GPG_PASSPHRASE" --default-key "$key_id" \
+            --detach-sign --armor "$output_rpm"
 
           echo "Package signed successfully"
+          ls -la "$output_rpm.asc"
 
       - name: Verify package signature
         run: |
@@ -164,11 +163,8 @@ jobs:
 
           echo "Verifying signature on: $output_rpm"
 
-          # Import public key for verification
-          rpm --import resources/keys/autonomi-signing-key.asc
-
-          # Verify signature
-          rpm --checksig "$output_rpm"
+          # Verify detached signature
+          gpg --verify "$output_rpm.asc" "$output_rpm"
 
       - name: Generate checksum
         run: |
@@ -184,4 +180,5 @@ jobs:
           name: autonomi-rpm-${{ matrix.target }}
           path: |
             ${{ steps.build.outputs.output_rpm }}
+            ${{ steps.build.outputs.output_rpm }}.asc
             ${{ steps.build.outputs.output_rpm }}.sha256
