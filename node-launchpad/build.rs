@@ -13,10 +13,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .all_git()
         .emit()?;
 
-    // Embed Windows icon resource when building for Windows
-    // Note: We check CARGO_CFG_TARGET_OS because build.rs runs on the host,
-    // so #[cfg(target_os = "windows")] would check the host OS, not the target.
-    if std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() == "windows" {
+    // Embed Windows icon resource when building ON Windows FOR Windows.
+    // This uses compile-time cfg because winresource is only available as a
+    // build dependency when the host is Windows.
+    #[cfg(windows)]
+    {
         let mut res = winresource::WindowsResource::new();
         res.set_icon("../resources/icons/windows/node-launchpad/node-launchpad.ico");
         res.set("ProductName", "Node Launchpad");
