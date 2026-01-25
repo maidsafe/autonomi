@@ -132,6 +132,8 @@ jobs:
         id: gpg
 
       - name: Sign deb package
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           output_deb="${{ steps.build.outputs.output_deb }}"
           key_id="${{ steps.gpg.outputs.key_id }}"
@@ -139,12 +141,14 @@ jobs:
           echo "Signing package: $output_deb"
 
           # Configure GPG for non-interactive use
+          mkdir -p ~/.gnupg
           echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
           gpg-connect-agent reloadagent /bye || true
 
           # Create detached armored signature
-          echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --pinentry-mode loopback \
-            --passphrase-fd 0 --default-key "$key_id" \
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$GPG_PASSPHRASE" --default-key "$key_id" \
             --detach-sign --armor "$output_deb"
 
           echo "Package signed successfully"
