@@ -38,6 +38,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-sig
+
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
