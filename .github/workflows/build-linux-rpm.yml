@@ -128,6 +128,12 @@ jobs:
         run: |
           echo "Importing GPG key..."
 
+          # Configure GPG for non-interactive use (no pinentry)
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+
           # Decode and import the key
           echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
 
@@ -135,6 +141,9 @@ jobs:
           key_id=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
           echo "GPG Key ID: $key_id"
           echo "key_id=$key_id" >> $GITHUB_OUTPUT
+
+          # Restart gpg-agent to pick up new config
+          gpgconf --kill gpg-agent || true
 
           # Configure RPM to use our GPG key
           echo "%_gpg_name $key_id" >> ~/.rpmmacros
