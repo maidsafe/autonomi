@@ -156,27 +156,25 @@ jobs:
 
           echo "Signing package: $output_rpm"
 
-          # Create expect script for non-interactive signing
-          cat > /tmp/sign-rpm.exp << 'EXPECT_SCRIPT'
-          set timeout 30
-          set rpm_file [lindex $argv 0]
-          spawn rpm --addsign $rpm_file
-          expect {
-            "Enter pass phrase:" {
-              send "$env(GPG_PASSPHRASE)\r"
-              exp_continue
+          # Use expect inline to handle passphrase prompt
+          expect -c "
+            set timeout 60
+            log_user 1
+            spawn rpm --addsign \"$output_rpm\"
+            expect {
+              -nocase -re \"pass.?phrase\" {
+                send \"\$env(GPG_PASSPHRASE)\r\"
+                exp_continue
+              }
+              timeout {
+                puts \"ERROR: Timeout waiting for passphrase prompt\"
+                exit 1
+              }
+              eof
             }
-            "Pass phrase is good" {
-              exp_continue
-            }
-            eof
-          }
-          catch wait result
-          exit [lindex $result 3]
-          EXPECT_SCRIPT
-
-          # Run the expect script
-          expect /tmp/sign-rpm.exp "$output_rpm"
+            catch wait result
+            exit \[lindex \$result 3\]
+          "
 
           echo "Package signed successfully"
 
