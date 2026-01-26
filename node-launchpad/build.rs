@@ -18,8 +18,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // build dependency when the host is Windows.
     #[cfg(windows)]
     {
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+            .expect("CARGO_MANIFEST_DIR should be set by cargo");
+        let icon_path = std::path::Path::new(&manifest_dir)
+            .join("../resources/icons/windows/node-launchpad/node-launchpad.ico");
+
+        if !icon_path.exists() {
+            panic!(
+                "Icon file not found at: {}. Current dir: {:?}",
+                icon_path.display(),
+                std::env::current_dir()
+            );
+        }
+
+        println!("cargo:rerun-if-changed={}", icon_path.display());
+
         let mut res = winresource::WindowsResource::new();
-        res.set_icon("../resources/icons/windows/node-launchpad/node-launchpad.ico");
+        res.set_icon(icon_path.to_str().expect("Icon path should be valid UTF-8"));
         res.set("ProductName", "Node Launchpad");
         res.set(
             "FileDescription",
