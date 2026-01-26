@@ -892,19 +892,21 @@ jobs:
             echo "- **ARMv7 (armhf):** \`${{ env.PACKAGE_VERSION }}.autonomi.armv7-unknown-linux-musleabihf.deb\`"
             echo "- **ARM (armel):** \`${{ env.PACKAGE_VERSION }}.autonomi.arm-unknown-linux-musleabi.deb\`"
             echo ""
-            echo "**Import the GPG signing key (first time only):**"
+            echo "**Import and trust the GPG signing key (first time only):**"
             echo "\`\`\`bash"
-            echo "curl -fsSL https://github.com/maidsafe/autonomi/raw/main/resources/keys/autonomi-signing-key.asc | sudo gpg --dearmor -o /usr/share/keyrings/autonomi-archive-keyring.gpg"
+            echo "curl -fsSL https://github.com/maidsafe/autonomi/releases/download/\$RELEASE_TAG/autonomi-signing-key.asc -o /tmp/autonomi-signing-key.asc"
+            echo "gpg --import /tmp/autonomi-signing-key.asc"
+            echo "echo 'D39ABED4DC364A8D0812F539C19B57B73D6EA0AB:6:' | gpg --import-ownertrust"
+            echo "\`\`\`"
+            echo ""
+            echo "**Verify the signature:**"
+            echo "\`\`\`bash"
+            echo "gpg --verify ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb.asc ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb"
             echo "\`\`\`"
             echo ""
             echo "**Install the package:**"
             echo "\`\`\`bash"
             echo "sudo dpkg -i ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb"
-            echo "\`\`\`"
-            echo ""
-            echo "**Verify the signature (optional):**"
-            echo "\`\`\`bash"
-            echo "gpg --verify ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb.asc ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb"
             echo "\`\`\`"
             echo ""
             echo "The binaries will be installed to \`/usr/local/bin\`."
@@ -1045,6 +1047,14 @@ jobs:
               gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} "$file"
             fi
           done
+
+      - name: upload GPG signing key
+        env:
+          GITHUB_TOKEN: ${{ secrets.AUTONOMI_PAT }}
+        shell: bash
+        run: |
+          echo "Uploading GPG signing key..."
+          gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} resources/keys/autonomi-signing-key.asc
 
       - name: upload Linux rpm packages
         env:
