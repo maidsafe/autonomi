@@ -193,6 +193,7 @@ jobs:
           }
           $latestVersion = $versions[0].Name
           $makeAppxPath = Join-Path $sdkPath "$latestVersion\x64\makeappx.exe"
+          $makePriPath = Join-Path $sdkPath "$latestVersion\x64\makepri.exe"
           $signToolPath = Join-Path $sdkPath "$latestVersion\x64\signtool.exe"
 
           if (-not (Test-Path $makeAppxPath)) {
@@ -200,12 +201,54 @@ jobs:
             exit 1
           }
 
+          if (-not (Test-Path $makePriPath)) {
+            Write-Error "MakePri.exe not found at: $makePriPath"
+            exit 1
+          }
+
           Write-Host "Found Windows SDK $latestVersion"
           Write-Host "MakeAppx: $makeAppxPath"
+          Write-Host "MakePri: $makePriPath"
           Write-Host "SignTool: $signToolPath"
 
           "makeappx_path=$makeAppxPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "makepri_path=$makePriPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "signtool_path=$signToolPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Generate resource index (resources.pri)
+        shell: pwsh
+        run: |
+          $makePri = "${{ steps.find-sdk.outputs.makepri_path }}"
+          $packageDir = "msix-package"
+
+          Write-Host "Creating priconfig.xml..."
+
+          # Create MakePri configuration file
+          & $makePri createconfig /cf priconfig.xml /dq en-US /o
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to create priconfig.xml"
+            exit 1
+          }
+
+          Write-Host "Generating resources.pri..."
+
+          # Generate the resource index file
+          & $makePri new /pr $packageDir /cf priconfig.xml /of "$packageDir\resources.pri" /o
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to generate resources.pri"
+            exit 1
+          }
+
+          Write-Host "resources.pri generated successfully"
+          Get-Item "$packageDir\resources.pri" | Format-List Name, Length
+
+          # List indexed resources for debugging
+          Write-Host ""
+          Write-Host "Indexed resources:"
+          & $makePri dump /if "$packageDir\resources.pri" /of resources_dump.txt /o
+          Get-Content resources_dump.txt | Select-Object -First 100
 
       - name: Build MSIX
         shell: pwsh
