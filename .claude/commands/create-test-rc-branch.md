@@ -36,8 +36,10 @@ Please follow these steps:
 - Create a `chore(release): release candidate
   <release-year>.<release-month>.<release-cycle>.<release-cycle-counter>` commit. Use the body of
   the commit message to indicate it is a testing RC and will be removed.
-- We need to make sure there are no previous test binaries with the same RC version. You can use the
-  `remove-s3-ant-rc-binaries.sh` script to do this.
+- We need to make sure there are no previous `ant` test binaries with the same RC version. You can
+  use the `remove-s3-ant-rc-binaries.sh` script to do this.
+- We need to make sure there are no previous `node-launchpad` test binaries with the same RC
+  version. You can use the `remove-s3-node-launchpad-rc-binaries.sh` script to do this.
 - We also need to make sure the `upstream` repository does not have a tag in the form
   `rc-<release-year>.<release-month>.<release-cycle>.<release-cycle-counter>`. This is because the
   fake release candidate we will use is going to need this tag, and it may have been left behind
