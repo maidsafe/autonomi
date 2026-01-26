@@ -244,11 +244,12 @@ jobs:
           Write-Host "resources.pri generated successfully"
           Get-Item "$packageDir\resources.pri" | Format-List Name, Length
 
-          # List indexed resources for debugging
+          # List all PRI files created (MakePri may create split files for different scales)
           Write-Host ""
-          Write-Host "Indexed resources:"
-          & $makePri dump /if "$packageDir\resources.pri" /of resources_dump.txt /o
-          Get-Content resources_dump.txt | Select-Object -First 100
+          Write-Host "PRI files in package directory:"
+          Get-ChildItem "$packageDir\*.pri" | ForEach-Object {
+            Write-Host "  $($_.Name) ($($_.Length) bytes)"
+          }
 
       - name: Build MSIX
         shell: pwsh
