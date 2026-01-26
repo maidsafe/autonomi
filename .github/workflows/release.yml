@@ -894,7 +894,7 @@ jobs:
             echo ""
             echo "**Import and trust the GPG signing key (first time only):**"
             echo "\`\`\`bash"
-            echo "curl -fsSL https://github.com/maidsafe/autonomi/releases/download/\$RELEASE_TAG/autonomi-signing-key.asc -o /tmp/autonomi-signing-key.asc"
+            echo "curl -fsSL https://raw.githubusercontent.com/maidsafe/autonomi/main/resources/keys/autonomi-signing-key.asc -o /tmp/autonomi-signing-key.asc"
             echo "gpg --import /tmp/autonomi-signing-key.asc"
             echo "echo 'D39ABED4DC364A8D0812F539C19B57B73D6EA0AB:6:' | gpg --import-ownertrust"
             echo "\`\`\`"
@@ -1047,14 +1047,6 @@ jobs:
               gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} "$file"
             fi
           done
-
-      - name: upload GPG signing key
-        env:
-          GITHUB_TOKEN: ${{ secrets.AUTONOMI_PAT }}
-        shell: bash
-        run: |
-          echo "Uploading GPG signing key..."
-          gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} resources/keys/autonomi-signing-key.asc
 
       - name: upload Linux rpm packages
         env:
