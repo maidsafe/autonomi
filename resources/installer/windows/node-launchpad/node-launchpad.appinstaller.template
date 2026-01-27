@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller
+  Uri="APPINSTALLER_URI_PLACEHOLDER"
+  Version="VERSION_PLACEHOLDER"
+  xmlns="http://schemas.microsoft.com/appx/appinstaller/2021">
+
+  <MainPackage
+    Name="Autonomi.NodeLaunchpad"
+    Publisher="PUBLISHER_PLACEHOLDER"
+    Version="VERSION_PLACEHOLDER"
+    ProcessorArchitecture="x64"
+    Uri="MSIX_URI_PLACEHOLDER" />
+
+  <UpdateSettings>
+    <OnLaunch
+      HoursBetweenUpdateChecks="24"
+      ShowPrompt="true"
+      UpdateBlocksActivation="false" />
+  </UpdateSettings>
+
+</AppInstaller>

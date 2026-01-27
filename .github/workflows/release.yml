@@ -509,6 +509,45 @@ jobs:
       SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
       SM_KEYPAIR_ALIAS: ${{ secrets.SM_KEYPAIR_ALIAS }}
 
+  build-windows-msix:
+    if: ${{
+        github.repository_owner == 'maidsafe' &&
+        (github.ref == 'refs/heads/stable' || startsWith(github.ref, 'refs/heads/rc'))
+      }}
+    name: build windows msix
+    needs: [sign-windows-binaries]
+    uses: ./.github/workflows/build-windows-msix.yml
+    secrets:
+      SM_HOST: ${{ secrets.SM_HOST }}
+      SM_API_KEY: ${{ secrets.SM_API_KEY }}
+      SM_CLIENT_CERT_B64: ${{ secrets.SM_CLIENT_CERT_B64 }}
+      SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+      SM_KEYPAIR_ALIAS: ${{ secrets.SM_KEYPAIR_ALIAS }}
+
+  build-linux-deb:
+    if: ${{
+        github.repository_owner == 'maidsafe' &&
+        (github.ref == 'refs/heads/stable' || startsWith(github.ref, 'refs/heads/rc'))
+      }}
+    name: build linux deb
+    needs: [build]
+    uses: ./.github/workflows/build-linux-deb.yml
+    secrets:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+  build-linux-rpm:
+    if: ${{
+        github.repository_owner == 'maidsafe' &&
+        (github.ref == 'refs/heads/stable' || startsWith(github.ref, 'refs/heads/rc'))
+      }}
+    name: build linux rpm
+    needs: [build]
+    uses: ./.github/workflows/build-linux-rpm.yml
+    secrets:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
   s3-release:
     if: ${{
         github.repository_owner == 'maidsafe' &&
@@ -617,7 +656,7 @@ jobs:
       }}
     name: github release
     runs-on: ubuntu-latest
-    needs: [build, sign-windows-binaries, sign-macos-pkg-x86_64, sign-macos-pkg-aarch64, sign-macos-app-x86_64, sign-macos-app-aarch64, build-windows-msi, s3-release]
+    needs: [build, sign-windows-binaries, sign-macos-pkg-x86_64, sign-macos-pkg-aarch64, sign-macos-app-x86_64, sign-macos-app-aarch64, build-windows-msi, build-windows-msix, build-linux-deb, build-linux-rpm, s3-release]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@master
@@ -672,6 +711,42 @@ jobs:
         with:
           name: autonomi-msi-x86_64-pc-windows-msvc
           path: msi-artifacts
+      - uses: actions/download-artifact@master
+        with:
+          name: node-launchpad-msix-x86_64-pc-windows-msvc
+          path: msix-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-deb-x86_64-unknown-linux-musl
+          path: deb-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-deb-aarch64-unknown-linux-musl
+          path: deb-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-deb-armv7-unknown-linux-musleabihf
+          path: deb-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-deb-arm-unknown-linux-musleabi
+          path: deb-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-rpm-x86_64-unknown-linux-musl
+          path: rpm-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-rpm-aarch64-unknown-linux-musl
+          path: rpm-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-rpm-armv7-unknown-linux-musleabihf
+          path: rpm-artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: autonomi-rpm-arm-unknown-linux-musleabi
+          path: rpm-artifacts
 
       - uses: cargo-bins/cargo-binstall@main
       - name: install just
@@ -761,6 +836,8 @@ jobs:
             echo "antctl --version"
             echo "\`\`\`"
             echo ""
+            echo "---"
+            echo ""
             echo "### macOS Node Launchpad App"
             echo ""
             echo "Node Launchpad is a TUI application for managing Autonomi nodes."
@@ -771,6 +848,8 @@ jobs:
             echo ""
             echo "Open the DMG and drag Node Launchpad to your Applications folder."
             echo "The app will open Terminal and run the Node Launchpad TUI."
+            echo ""
+            echo "---"
             echo ""
             echo "### Windows CLI Suite"
             echo ""
@@ -783,6 +862,108 @@ jobs:
             echo ""
             echo "Verify the installation (open a new Command Prompt or PowerShell):"
             echo "\`\`\`powershell"
+            echo "ant --version"
+            echo "antnode --version"
+            echo "antctl --version"
+            echo "\`\`\`"
+            echo ""
+            echo "---"
+            echo ""
+            echo "### Windows Node Launchpad App"
+            echo ""
+            echo "Node Launchpad is a TUI application for managing Autonomi nodes."
+            echo ""
+            echo "**Option 1: Direct MSIX Install**"
+            echo ""
+            echo "Download: \`${{ env.PACKAGE_VERSION }}.node-launchpad.x86_64-pc-windows-msvc.msix\`"
+            echo ""
+            echo "Double-click the downloaded file to install. The app will appear in your Start Menu."
+            echo ""
+            echo "**Option 2: Install with Auto-Updates (Recommended)**"
+            echo ""
+            echo "Download: \`${{ env.PACKAGE_VERSION }}.node-launchpad.x86_64-pc-windows-msvc.appinstaller\`"
+            echo ""
+            echo "Double-click the .appinstaller file. This will install the app and enable automatic updates."
+            echo "When a new version is released, you'll be prompted to update on app launch."
+            echo ""
+            echo "After installation, you can run Node Launchpad from the Start Menu or by typing \`node-launchpad.exe\` in any terminal."
+            echo ""
+            echo "---"
+            echo ""
+            echo "### Linux CLI Suite (Debian/Ubuntu)"
+            echo ""
+            echo "Install \`ant\`, \`antnode\`, and \`antctl\` using the signed deb package."
+            echo ""
+            echo "Download the appropriate deb file for your architecture:"
+            echo "- **x86_64 (AMD64):** \`${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb\`"
+            echo "- **ARM64 (aarch64):** \`${{ env.PACKAGE_VERSION }}.autonomi.aarch64-unknown-linux-musl.deb\`"
+            echo "- **ARMv7 (armhf):** \`${{ env.PACKAGE_VERSION }}.autonomi.armv7-unknown-linux-musleabihf.deb\`"
+            echo "- **ARM (armel):** \`${{ env.PACKAGE_VERSION }}.autonomi.arm-unknown-linux-musleabi.deb\`"
+            echo ""
+            echo "**Import and trust the GPG signing key (first time only):**"
+            echo "\`\`\`bash"
+            echo "curl -fsSL https://raw.githubusercontent.com/maidsafe/autonomi/main/resources/keys/autonomi-signing-key.asc -o /tmp/autonomi-signing-key.asc"
+            echo "gpg --import /tmp/autonomi-signing-key.asc"
+            echo "echo 'D39ABED4DC364A8D0812F539C19B57B73D6EA0AB:6:' | gpg --import-ownertrust"
+            echo "\`\`\`"
+            echo ""
+            echo "**Verify the signature:**"
+            echo "\`\`\`bash"
+            echo "gpg --verify ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb.asc ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb"
+            echo "\`\`\`"
+            echo ""
+            echo "**Install the package:**"
+            echo "\`\`\`bash"
+            echo "sudo dpkg -i ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.deb"
+            echo "\`\`\`"
+            echo ""
+            echo "The binaries will be installed to \`/usr/local/bin\`."
+            echo ""
+            echo "Verify the installation:"
+            echo "\`\`\`bash"
+            echo "ant --version"
+            echo "antnode --version"
+            echo "antctl --version"
+            echo "\`\`\`"
+            echo ""
+            echo "---"
+            echo ""
+            echo "### Linux CLI Suite (Fedora/RHEL/CentOS)"
+            echo ""
+            echo "Install \`ant\`, \`antnode\`, and \`antctl\` using the signed rpm package."
+            echo ""
+            echo "Download the appropriate rpm file for your architecture:"
+            echo "- **x86_64:** \`${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.rpm\`"
+            echo "- **ARM64 (aarch64):** \`${{ env.PACKAGE_VERSION }}.autonomi.aarch64-unknown-linux-musl.rpm\`"
+            echo "- **ARMv7:** \`${{ env.PACKAGE_VERSION }}.autonomi.armv7-unknown-linux-musleabihf.rpm\`"
+            echo "- **ARM:** \`${{ env.PACKAGE_VERSION }}.autonomi.arm-unknown-linux-musleabi.rpm\`"
+            echo ""
+            echo "**Import the GPG signing key (first time only):**"
+            echo "\`\`\`bash"
+            echo "curl -fsSL https://github.com/maidsafe/autonomi/raw/main/resources/keys/autonomi-signing-key.asc | gpg --import"
+            echo "\`\`\`"
+            echo ""
+            echo "**Verify the signature (optional):**"
+            echo ""
+            echo "Download the \`.asc\` signature file alongside the rpm, then:"
+            echo "\`\`\`bash"
+            echo "gpg --verify ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.rpm.asc ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.rpm"
+            echo "\`\`\`"
+            echo ""
+            echo "**Install the package:**"
+            echo "\`\`\`bash"
+            echo "sudo rpm -i ${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.rpm"
+            echo "\`\`\`"
+            echo ""
+            echo "Or using dnf:"
+            echo "\`\`\`bash"
+            echo "sudo dnf install ./${{ env.PACKAGE_VERSION }}.autonomi.x86_64-unknown-linux-musl.rpm"
+            echo "\`\`\`"
+            echo ""
+            echo "The binaries will be installed to \`/usr/local/bin\`."
+            echo ""
+            echo "Verify the installation:"
+            echo "\`\`\`bash"
             echo "ant --version"
             echo "antnode --version"
             echo "antctl --version"
@@ -848,6 +1029,45 @@ jobs:
             if [ -f "$msi" ]; then
               echo "Uploading $msi"
               gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} "$msi"
+            fi
+          done
+
+      - name: upload Windows MSIX installer
+        env:
+          GITHUB_TOKEN: ${{ secrets.AUTONOMI_PAT }}
+        shell: bash
+        run: |
+          echo "Uploading Windows MSIX installer..."
+          for file in msix-artifacts/*; do
+            if [ -f "$file" ]; then
+              echo "Uploading $file"
+              gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} "$file"
+            fi
+          done
+
+      - name: upload Linux deb packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.AUTONOMI_PAT }}
+        shell: bash
+        run: |
+          echo "Uploading Linux deb packages..."
+          for file in deb-artifacts/*; do
+            if [ -f "$file" ]; then
+              echo "Uploading $file"
+              gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} "$file"
+            fi
+          done
+
+      - name: upload Linux rpm packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.AUTONOMI_PAT }}
+        shell: bash
+        run: |
+          echo "Uploading Linux rpm packages..."
+          for file in rpm-artifacts/*; do
+            if [ -f "$file" ]; then
+              echo "Uploading $file"
+              gh release upload ${{ env.RELEASE_PREFIX }}-${{ env.PACKAGE_VERSION }} "$file"
             fi
           done
 

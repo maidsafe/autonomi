@@ -6,12 +6,7 @@
 <WixLocalization Culture="en-US" xmlns="http://wixtoolset.org/schemas/v4/wxl">
 
   <!-- Welcome dialog customization -->
-  <String Id="WelcomeDlgDescription">This will install the Autonomi command-line tools on your computer:
-
-    - ant: Client CLI for file operations on the Autonomi Network
-    - antnode: Node software for running an Autonomi node
-    - antctl: Node management and control tool
-
-Click Install to continue or Cancel to exit Setup.</String>
+  <!-- WiX v5 requires Value attribute instead of inner text -->
+  <String Id="WelcomeDlgDescription" Value="This will install the Autonomi command-line tools on your computer:&#10;&#10;    - ant: Client CLI for file operations on the Autonomi Network&#10;    - antnode: Node software for running an Autonomi node&#10;    - antctl: Node management and control tool&#10;&#10;Click Install to continue or Cancel to exit Setup." />
 
 </WixLocalization>
