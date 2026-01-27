@@ -8,11 +8,12 @@
 
 use ant_protocol::constants::{KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, REPLICATION_FACTOR};
 
+use crate::ReachabilityStatus;
 use crate::networking::{
     CLOSE_GROUP_SIZE, NetworkEvent,
     circular_vec::CircularVec,
     driver::{
-        BLOCKLIST_CACHE_SIZE, InitialBootstrapTrigger, NodeBehaviour, SwarmDriver,
+        BLOCKLIST_CACHE_SIZE, InitialBootstrapTrigger, NodeBehaviour, SwarmDriver, behaviour::upnp,
         network_discovery::NetworkDiscovery, network_wide_replication::NetworkWideReplication,
     },
     error::{NetworkError, Result},
@@ -31,6 +32,7 @@ use ant_protocol::{
     version::{IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR, get_network_id_str},
 };
 use libp2p::Transport as _;
+use libp2p::core::transport::ListenerId;
 use libp2p::{
     Multiaddr, PeerId,
     identity::Keypair,
@@ -68,6 +70,9 @@ const NETWORKING_CHANNEL_SIZE: usize = 10_000;
 /// Time before a Kad query times out if no response is received
 const KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(120);
 
+/// Timeout for listening on a local address
+const LISTEN_TIMEOUT_S: Duration = Duration::from_secs(120);
+
 #[derive(Debug)]
 pub(crate) struct NetworkConfig {
     pub keypair: Keypair,
@@ -77,6 +82,8 @@ pub(crate) struct NetworkConfig {
     pub shutdown_rx: tokio::sync::watch::Receiver<bool>,
     pub bootstrap: Bootstrap,
     pub no_upnp: bool,
+    /// The reachability status found using the reachability swarm
+    pub reachability_status: Option<ReachabilityStatus>,
     pub custom_request_timeout: Option<Duration>,
     #[cfg(feature = "open-metrics")]
     pub metrics_registries: MetricsRegistries,
@@ -176,9 +183,8 @@ pub(super) fn init_driver(
     let addr_quic = Multiaddr::from(listen_socket_addr.ip())
         .with(Protocol::Udp(listen_socket_addr.port()))
         .with(Protocol::QuicV1);
-    swarm_driver
-        .listen_on(addr_quic)
-        .expect("Multiaddr should be supported by our configured transports");
+    let listener_id = listen_on_with_retry(&mut swarm_driver.swarm, addr_quic.clone())?;
+    info!("Listening on QUIC address: {addr_quic:?} on {listener_id}");
 
     Ok((swarm_driver, events_receiver))
 }
@@ -225,7 +231,8 @@ fn init_swarm_driver(
 
     #[cfg(feature = "open-metrics")]
     let metrics_recorder = if let Some(port) = config.metrics_server_port {
-        let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
+        let metrics_recorder =
+            NetworkMetricsRecorder::new(&mut metrics_registries, &config.reachability_status);
         let metadata_sub_reg = metrics_registries
             .metadata
             .sub_registry_with_prefix("ant_networking");
@@ -316,7 +323,7 @@ fn init_swarm_driver(
 
     let upnp = if !config.local && !config.no_upnp {
         debug!("Enabling UPnP port opening behavior");
-        Some(libp2p::upnp::tokio::Behaviour::default())
+        Some(upnp::behaviour::Behaviour::default())
     } else {
         None
     }
@@ -385,6 +392,32 @@ fn init_swarm_driver(
     };
 
     (network_event_receiver, swarm_driver)
+}
+
+pub(crate) fn listen_on_with_retry<TBehaviour: libp2p::swarm::NetworkBehaviour>(
+    swarm: &mut Swarm<TBehaviour>,
+    addr: libp2p::core::multiaddr::Multiaddr,
+) -> Result<ListenerId> {
+    let start_time = std::time::Instant::now();
+    loop {
+        match swarm.listen_on(addr.clone()) {
+            Ok(listener_id) => {
+                return Ok(listener_id);
+            }
+            Err(err) => {
+                error!("Failed to listen on QUIC address {addr:?}: {err}");
+
+                if start_time.elapsed() > LISTEN_TIMEOUT_S {
+                    error!(
+                        "Failed to listen on QUIC address {addr:?} after {} seconds",
+                        LISTEN_TIMEOUT_S.as_secs()
+                    );
+                    return Err(NetworkError::ListenFailed(addr));
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        }
+    }
 }
 
 fn check_and_wipe_storage_dir_if_necessary(

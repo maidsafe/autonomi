@@ -1,4 +1,4 @@
-// Copyright 2024 MaidSafe.net limited.
+// Copyright (C) 2026 MaidSafe.net limited.
 //
 // This SAFE Network Software is licensed to you under The General Public License (GPL), version 3.
 // Unless required by applicable law or agreed to in writing, the SAFE Network Software distributed
@@ -6,5 +6,14 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-pub(crate) mod do_not_disturb;
-pub(crate) mod upnp;
+//! Implementation of UPnP port mapping for libp2p.
+//!
+//! This crate provides a `tokio::Behaviour` which
+//! implements the [`libp2p_swarm::NetworkBehaviour`] trait.
+//! This struct will automatically try to map the ports externally to internal
+//! addresses on the gateway.
+
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+
+pub(crate) mod behaviour;
+pub(crate) mod tokio;

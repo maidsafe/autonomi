@@ -40,6 +40,7 @@ const CLOSEST_PEERS_RETRY_MIN_WAIT_SECS: u64 = 2;
 const CLOSEST_PEERS_RETRY_MAX_WAIT_SECS: u64 = 8;
 
 pub(crate) use init::NetworkConfig;
+pub(crate) use init::listen_on_with_retry;
 
 #[derive(Clone, Debug)]
 /// API to interact with the underlying Swarm

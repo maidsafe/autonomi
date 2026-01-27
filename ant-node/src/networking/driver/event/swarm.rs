@@ -9,6 +9,8 @@
 use super::SwarmDriver;
 use crate::networking::{
     NetworkEvent, NodeIssue, Result,
+    driver::behaviour::upnp,
+    endpoint_str,
     error::{dial_error_to_str, listen_error_to_str},
     interface::TerminateNodeReason,
 };
@@ -62,7 +64,7 @@ impl SwarmDriver {
                 event_string = "upnp_event";
                 info!(?upnp_event, "UPnP event");
                 match upnp_event {
-                    libp2p::upnp::Event::GatewayNotFound => {
+                    upnp::behaviour::Event::GatewayNotFound => {
                         warn!(
                             "UPnP is not enabled/supported on the gateway. Please rerun with the `--no-upnp` flag"
                         );
@@ -70,16 +72,20 @@ impl SwarmDriver {
                             reason: TerminateNodeReason::UpnpGatewayNotFound,
                         });
                     }
-                    libp2p::upnp::Event::NewExternalAddr(addr) => {
-                        info!("UPnP: New external address: {addr:?}");
+                    upnp::behaviour::Event::NewExternalAddr { addr, local_addr } => {
+                        info!(
+                            "UPnP: New external address: {addr:?} mapped from local address: {local_addr:?}"
+                        );
                         self.initial_bootstrap_trigger.upnp_gateway_result_obtained = true;
                     }
-                    libp2p::upnp::Event::NonRoutableGateway => {
+                    upnp::behaviour::Event::ExpiredExternalAddr { addr, local_addr } => {
+                        warn!(
+                            "UPnP: External address mapping expired: {addr:?} from local address: {local_addr:?}"
+                        );
+                    }
+                    upnp::behaviour::Event::NonRoutableGateway => {
                         warn!("UPnP gateway is not routable");
                         self.initial_bootstrap_trigger.upnp_gateway_result_obtained = true;
-                    }
-                    _ => {
-                        debug!("UPnP event: {upnp_event:?}");
                     }
                 }
             }
@@ -559,18 +565,6 @@ impl SwarmDriver {
             };
 
             let _ = self.latest_established_connection_ids.remove(&oldest_key);
-        }
-    }
-}
-
-/// Helper function to print formatted connection role info.
-fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
-    match endpoint {
-        libp2p::core::ConnectedPoint::Dialer { address, .. } => {
-            format!("outgoing ({address})")
-        }
-        libp2p::core::ConnectedPoint::Listener { send_back_addr, .. } => {
-            format!("incoming ({send_back_addr})")
         }
     }
 }
