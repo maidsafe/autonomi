@@ -43,6 +43,9 @@ contract MerklePaymentVault is IMerklePaymentVault {
     /// Maximum cost unit for capacity calculation
     uint256 public maxCostUnit = 1e24;
 
+    /// Default cost unit assigned to each data type
+    uint256 public constant DEFAULT_COST_UNIT = 1e18;
+
     /// Cost unit per data type
     mapping(DataType => uint256) public costUnitPerDataType;
 
@@ -53,10 +56,10 @@ contract MerklePaymentVault is IMerklePaymentVault {
         antToken = IERC20(_antToken);
 
         // Initialize cost units per data type
-        costUnitPerDataType[DataType.Chunk] = 1e18;
-        costUnitPerDataType[DataType.GraphEntry] = 1e18;
-        costUnitPerDataType[DataType.Scratchpad] = 1e18;
-        costUnitPerDataType[DataType.Pointer] = 1e18;
+        costUnitPerDataType[DataType.Chunk] = DEFAULT_COST_UNIT;
+        costUnitPerDataType[DataType.GraphEntry] = DEFAULT_COST_UNIT;
+        costUnitPerDataType[DataType.Scratchpad] = DEFAULT_COST_UNIT;
+        costUnitPerDataType[DataType.Pointer] = DEFAULT_COST_UNIT;
     }
 
     // ============ Main Functions ============
@@ -259,10 +262,10 @@ contract MerklePaymentVault is IMerklePaymentVault {
         // Formula components:
         // partOne = (-s/ANT) * logDiff
         // partTwo = pMin * linearPart / PRECISION
-        // partThree = linearPart / ANT (scaled by PRECISION)
+        // partThree = linearPart / ANT
         int256 partOne = (-int256(scalingFactor) * logDiff) / int256(ANT_PRICE * PRECISION);
         uint256 partTwo = (linearPart * minPrice) / PRECISION;
-        uint256 partThree = (linearPart * PRECISION) / ANT_PRICE / PRECISION;
+        uint256 partThree = linearPart / ANT_PRICE;
 
         // Combine: price = partOne + partTwo - partThree
         int256 price = partOne + int256(partTwo) - int256(partThree);
@@ -281,8 +284,6 @@ contract MerklePaymentVault is IMerklePaymentVault {
             Record calldata record = metrics.recordsPerType[i];
             total += costUnitPerDataType[record.dataType] * record.records;
         }
-        // Also add the closeRecordsStored as a base contribution
-        total += metrics.closeRecordsStored * PRECISION / 1000; // Scale down close records
         return total;
     }
 
@@ -305,7 +306,7 @@ contract MerklePaymentVault is IMerklePaymentVault {
     /// Calculate natural logarithm using PRB Math
     function _calculateLn(uint256 x) internal pure returns (int256) {
         if (x == 0) {
-            return type(int256).min; // Return minimum for log(0)
+            revert("ln(0) undefined");
         }
         // Convert to SD59x18 (scaled by 1e18)
         SD59x18 value = sd(int256(x));
