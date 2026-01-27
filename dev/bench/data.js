@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769513736585,
+  "lastUpdate": 1769513738793,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -23085,6 +23085,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 25281,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fab560450aa0e17c2792d80762caff57c717ca81",
+          "message": "Merge pull request #3423 from grumbach/consistent_local_merkle_pricing\n\nfeat: local merkle pricing with the correct formula",
+          "timestamp": "2026-01-27T10:17:13Z",
+          "tree_id": "8cc16ca8547661a6564ed71adf2d56a3bad71d0d",
+          "url": "https://github.com/maidsafe/autonomi/commit/fab560450aa0e17c2792d80762caff57c717ca81"
+        },
+        "date": 1769513737922,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10301,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 21223,
             "unit": "ms"
           },
           {
