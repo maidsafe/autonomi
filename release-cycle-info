@@ -14,5 +14,5 @@
 # number for all the released binaries.
 release-year: 2025
 release-month: 12
-release-cycle: 3
-release-cycle-counter: 3
+release-cycle: 4
+release-cycle-counter: 1
