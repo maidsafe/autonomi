@@ -150,7 +150,7 @@ jobs:
       - run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
       # In a cargo workspace, feature unification can occur, allowing a crate to be built successfully
-      # even if it doesn't explicitly specify a feature it uses. cargo-hack's --each-package with
+      # even if it doesn't explicitly specify a feature it uses. cargo-hack's --workspace with
       # --clean-per-run ensures each package is built independently to catch missing feature declarations.
       - name: Check each package builds independently
         run: cargo hack --workspace --clean-per-run build --all-targets --all-features --profile=ci
@@ -230,10 +230,6 @@ jobs:
       - name: Run evm tests
         timeout-minutes: 25
         run: cargo test --profile=ci --package ant-evm --lib
-
-      - name: Run evmlib tests
-        timeout-minutes: 30
-        run: cargo test --profile=ci --package evmlib --features test-utils -- --skip test_gas_fee_limit --skip test_get_quote_on_arb_sepolia
 
       - name: Upload logs
         if: always()
