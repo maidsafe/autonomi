@@ -128,7 +128,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/build-binaries
         timeout-minutes: 30
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: pr-bins-${{ matrix.settings.target }}
           path: |
