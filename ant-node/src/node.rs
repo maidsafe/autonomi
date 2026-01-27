@@ -637,6 +637,33 @@ impl Node {
                 event_header = "NetworkWideReplication";
                 self.perform_network_wide_replication(keys);
             }
+            NetworkEvent::PeerVersionChecked {
+                peer_id,
+                detected_version,
+                peer_type,
+                meets_minimum,
+                is_legacy,
+            } => {
+                event_header = "PeerVersionChecked";
+                // Phase 1: Log for observability, no enforcement
+                if is_legacy {
+                    debug!(
+                        target: "version_gate",
+                        peer_id = %peer_id,
+                        peer_type = %peer_type,
+                        "Legacy peer connected (no version in agent string)"
+                    );
+                } else if let Some(version) = detected_version {
+                    trace!(
+                        target: "version_gate",
+                        peer_id = %peer_id,
+                        version = %version,
+                        peer_type = %peer_type,
+                        meets_minimum = %meets_minimum,
+                        "Peer version checked"
+                    );
+                }
+            }
         }
 
         trace!(

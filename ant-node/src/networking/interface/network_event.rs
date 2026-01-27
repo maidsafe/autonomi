@@ -71,6 +71,19 @@ pub(crate) enum NetworkEvent {
     NetworkWideReplication {
         keys: Vec<(NetworkAddress, ValidationType)>,
     },
+    /// A peer was checked for version requirements (for metrics/observability)
+    PeerVersionChecked {
+        /// The peer that was checked
+        peer_id: PeerId,
+        /// The detected version string (if parseable)
+        detected_version: Option<String>,
+        /// The peer type (node/client)
+        peer_type: String,
+        /// Whether the peer meets minimum requirements
+        meets_minimum: bool,
+        /// Whether this is a legacy peer (no version in agent string)
+        is_legacy: bool,
+    },
 }
 
 /// Terminate node for the following reason
@@ -157,6 +170,18 @@ impl std::fmt::Debug for NetworkEvent {
             }
             NetworkEvent::NetworkWideReplication { keys } => {
                 write!(f, "NetworkEvent::NetworkWideReplication({keys:?})")
+            }
+            NetworkEvent::PeerVersionChecked {
+                peer_id,
+                detected_version,
+                peer_type,
+                meets_minimum,
+                is_legacy,
+            } => {
+                write!(
+                    f,
+                    "NetworkEvent::PeerVersionChecked({peer_id:?}, version={detected_version:?}, type={peer_type}, meets_min={meets_minimum}, legacy={is_legacy})"
+                )
             }
         }
     }

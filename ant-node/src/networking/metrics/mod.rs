@@ -40,6 +40,25 @@ pub(crate) struct VersionLabels {
     version: String,
 }
 
+// Version gate metric labels
+#[derive(Clone, Hash, PartialEq, Eq, Debug, EncodeLabelSet)]
+pub(crate) struct VersionCheckLabels {
+    peer_type: String,
+    result: String,
+}
+
+#[derive(Clone, Hash, PartialEq, Eq, Debug, EncodeLabelSet)]
+pub(crate) struct VersionRejectedLabels {
+    peer_type: String,
+    detected_major: String,
+    detected_minor: String,
+}
+
+#[derive(Clone, Hash, PartialEq, Eq, Debug, EncodeLabelSet)]
+pub(crate) struct LegacyPeerLabels {
+    peer_type: String,
+}
+
 /// The shared recorders that are used to record metrics.
 pub(crate) struct NetworkMetricsRecorder {
     // Records libp2p related metrics
@@ -97,6 +116,11 @@ pub(crate) struct NetworkMetricsRecorder {
 
     // helpers
     bad_nodes_notifier: tokio::sync::mpsc::Sender<BadNodeMetricsMsg>,
+
+    // version gate metrics
+    version_check_total: Family<VersionCheckLabels, Counter>,
+    version_rejected_total: Family<VersionRejectedLabels, Counter>,
+    legacy_peers_total: Family<LegacyPeerLabels, Counter>,
 }
 
 impl NetworkMetricsRecorder {
@@ -329,6 +353,29 @@ impl NetworkMetricsRecorder {
             shunned_by_close_group.clone(),
             shunned_by_old_close_group.clone(),
         );
+
+        // Version gate metrics
+        let version_check_total = Family::default();
+        sub_registry.register(
+            "version_check_total",
+            "Total peer version checks performed",
+            version_check_total.clone(),
+        );
+
+        let version_rejected_total = Family::default();
+        sub_registry.register(
+            "version_rejected_total",
+            "Peers rejected due to version requirements",
+            version_rejected_total.clone(),
+        );
+
+        let legacy_peers_total = Family::default();
+        sub_registry.register(
+            "legacy_peers_total",
+            "Legacy peers encountered without version info",
+            legacy_peers_total.clone(),
+        );
+
         let network_metrics = Self {
             libp2p_metrics,
             upnp_events,
@@ -371,6 +418,10 @@ impl NetworkMetricsRecorder {
             process_cpu_usage_percentage,
 
             bad_nodes_notifier,
+
+            version_check_total,
+            version_rejected_total,
+            legacy_peers_total,
         };
 
         network_metrics.system_metrics_recorder_task();
@@ -557,6 +608,43 @@ impl NetworkMetricsRecorder {
                 error!("Failed to send shunned report via notifier: {err:?}");
             }
         });
+    }
+
+    /// Record a version check result for metrics
+    pub(crate) fn record_version_check(
+        &self,
+        peer_type: &str,
+        result: &str,
+        detected_version: Option<(u16, u16)>,
+    ) {
+        let _ = self
+            .version_check_total
+            .get_or_create(&VersionCheckLabels {
+                peer_type: peer_type.to_string(),
+                result: result.to_string(),
+            })
+            .inc();
+
+        // Also record specific metrics for rejections and legacy peers
+        if result == "rejected" {
+            if let Some((major, minor)) = detected_version {
+                let _ = self
+                    .version_rejected_total
+                    .get_or_create(&VersionRejectedLabels {
+                        peer_type: peer_type.to_string(),
+                        detected_major: major.to_string(),
+                        detected_minor: minor.to_string(),
+                    })
+                    .inc();
+            }
+        } else if result == "legacy" {
+            let _ = self
+                .legacy_peers_total
+                .get_or_create(&LegacyPeerLabels {
+                    peer_type: peer_type.to_string(),
+                })
+                .inc();
+        }
     }
 
     pub(crate) fn update_node_versions(&self, versions: &HashMap<PeerId, String>) {

@@ -31,6 +31,8 @@ pub(crate) mod peer_id_serde;
 pub mod storage;
 /// Network versioning
 pub mod version;
+/// Version gating for peer validation
+pub mod version_gate;
 
 // this includes code generated from .proto files
 #[expect(clippy::unwrap_used, clippy::clone_on_ref_ptr)]

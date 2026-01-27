@@ -12,6 +12,7 @@ use crate::networking::{
     relay_manager::{RelayManager, is_a_relayed_peer},
 };
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
+use ant_protocol::version_gate::{PeerType, VersionCheckResult, check_peer_version};
 use itertools::Itertools;
 use libp2p::Multiaddr;
 use libp2p::identify::Info;
@@ -132,6 +133,85 @@ impl SwarmDriver {
             }
 
             return;
+        }
+
+        // Phase 1: Version gating - collect metrics only, no enforcement
+        // TODO: In Phase 2, add enforcement based on external config
+        let peer_type = PeerType::from_agent_string(&info.agent_version);
+        let version_result = check_peer_version(&info.agent_version, None); // No minimum set in Phase 1
+
+        // Record metrics for version checks
+        #[cfg(feature = "open-metrics")]
+        if let Some(metrics) = &self.metrics_recorder {
+            let (result_str, detected_version) = match &version_result {
+                VersionCheckResult::Accepted { version } => {
+                    ("accepted", Some((version.major, version.minor)))
+                }
+                VersionCheckResult::Rejected { detected, .. } => {
+                    ("rejected", Some((detected.major, detected.minor)))
+                }
+                VersionCheckResult::Legacy => ("legacy", None),
+                VersionCheckResult::ParseError { .. } => ("parse_error", None),
+            };
+            metrics.record_version_check(&peer_type.to_string(), result_str, detected_version);
+        }
+
+        // Emit event for observability
+        let (detected_version_str, meets_minimum, is_legacy) = match &version_result {
+            VersionCheckResult::Accepted { version } => (Some(version.to_string()), true, false),
+            VersionCheckResult::Rejected { detected, .. } => {
+                (Some(detected.to_string()), false, false)
+            }
+            VersionCheckResult::Legacy => (None, true, true), // Legacy allowed in Phase 1
+            VersionCheckResult::ParseError { .. } => (None, false, false),
+        };
+
+        self.send_event(NetworkEvent::PeerVersionChecked {
+            peer_id,
+            detected_version: detected_version_str,
+            peer_type: peer_type.to_string(),
+            meets_minimum,
+            is_legacy,
+        });
+
+        // Log version info for observability
+        match &version_result {
+            VersionCheckResult::Accepted { version } => {
+                trace!(
+                    target: "version_gate",
+                    peer_id = %peer_id,
+                    version = %version,
+                    peer_type = %peer_type,
+                    "Peer version accepted"
+                );
+            }
+            VersionCheckResult::Legacy => {
+                debug!(
+                    target: "version_gate",
+                    peer_id = %peer_id,
+                    peer_type = %peer_type,
+                    agent_version = %info.agent_version,
+                    "Legacy peer detected (no version in agent string)"
+                );
+            }
+            VersionCheckResult::ParseError { agent_string } => {
+                debug!(
+                    target: "version_gate",
+                    peer_id = %peer_id,
+                    agent_string = %agent_string,
+                    "Could not parse peer version from agent string"
+                );
+            }
+            VersionCheckResult::Rejected { detected, minimum } => {
+                // This won't happen in Phase 1 since min_version is None
+                warn!(
+                    target: "version_gate",
+                    peer_id = %peer_id,
+                    detected = %detected,
+                    minimum = %minimum,
+                    "Peer version below minimum (enforcement disabled in Phase 1)"
+                );
+            }
         }
 
         let has_dialed = self.dialed_peers.contains(&peer_id);
