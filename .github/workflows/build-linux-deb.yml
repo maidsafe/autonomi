@@ -1,0 +1,170 @@
+# Reusable workflow for building and signing Linux Debian packages
+#
+# This workflow creates GPG-signed .deb packages for the Autonomi CLI suite
+# containing ant, antnode, and antctl binaries for all Linux architectures.
+#
+# Usage from release.yml:
+#   build-linux-deb:
+#     uses: ./.github/workflows/build-linux-deb.yml
+#     secrets: inherit
+
+name: build Linux deb packages
+
+on:
+  workflow_call:
+    secrets:
+      GPG_PRIVATE_KEY:
+        description: 'GPG private key for package signing (base64 encoded, armored)'
+        required: true
+      GPG_PASSPHRASE:
+        description: 'Passphrase for GPG private key'
+        required: true
+
+jobs:
+  build-deb:
+    name: build deb (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            deb_arch: amd64
+          - target: aarch64-unknown-linux-musl
+            deb_arch: arm64
+          - target: armv7-unknown-linux-musleabihf
+            deb_arch: armhf
+          - target: arm-unknown-linux-musleabi
+            deb_arch: armel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: autonomi-${{ matrix.target }}
+          path: artifacts/${{ matrix.target }}/release
+
+      - name: Set package version
+        id: version
+        run: |
+          release_year=$(grep 'release-year:' release-cycle-info | awk '{print $2}')
+          release_month=$(grep 'release-month:' release-cycle-info | awk '{print $2}')
+          release_cycle=$(grep 'release-cycle:' release-cycle-info | awk '{print $2}')
+          release_cycle_counter=$(grep 'release-cycle-counter:' release-cycle-info | awk '{print $2}')
+          version="$release_year.$release_month.$release_cycle.$release_cycle_counter"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Package version: $version"
+
+      - name: Verify binaries exist
+        run: |
+          artifacts_path="artifacts/${{ matrix.target }}/release"
+          echo "Checking for required binaries in: $artifacts_path"
+
+          for binary in ant antnode antctl; do
+            if [[ -f "$artifacts_path/$binary" ]]; then
+              echo "  Found: $binary"
+            else
+              echo "  Missing: $binary"
+              exit 1
+            fi
+          done
+          echo "All required binaries found"
+
+      - name: Create package structure
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          pkg_name="autonomi_${version}_${{ matrix.deb_arch }}"
+
+          echo "Creating package structure for: $pkg_name"
+
+          # Create directory structure
+          mkdir -p "$pkg_name/DEBIAN"
+          mkdir -p "$pkg_name/usr/local/bin"
+
+          # Copy binaries
+          cp artifacts/${{ matrix.target }}/release/ant "$pkg_name/usr/local/bin/"
+          cp artifacts/${{ matrix.target }}/release/antnode "$pkg_name/usr/local/bin/"
+          cp artifacts/${{ matrix.target }}/release/antctl "$pkg_name/usr/local/bin/"
+
+          # Set executable permissions
+          chmod 755 "$pkg_name/usr/local/bin/"*
+
+          # Calculate installed size (in KB)
+          installed_size=$(du -sk "$pkg_name/usr" | cut -f1)
+
+          # Generate control file from template
+          sed -e "s/VERSION_PLACEHOLDER/$version/" \
+              -e "s/ARCH_PLACEHOLDER/${{ matrix.deb_arch }}/" \
+              -e "s/SIZE_PLACEHOLDER/$installed_size/" \
+              resources/installer/linux/debian/control.template > "$pkg_name/DEBIAN/control"
+
+          echo "Control file contents:"
+          cat "$pkg_name/DEBIAN/control"
+
+          echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
+        id: package
+
+      - name: Build deb package
+        run: |
+          pkg_name="${{ steps.package.outputs.pkg_name }}"
+          version="${{ steps.version.outputs.version }}"
+          output_deb="${version}.autonomi.${{ matrix.target }}.deb"
+
+          echo "Building deb package: $output_deb"
+
+          dpkg-deb --build --root-owner-group "$pkg_name" "$output_deb"
+
+          echo "Package built successfully"
+          ls -lh "$output_deb"
+
+          echo "output_deb=$output_deb" >> $GITHUB_OUTPUT
+        id: build
+
+      - name: Import GPG key
+        run: |
+          echo "Importing GPG key..."
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
+
+          # Get the key ID
+          key_id=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
+          echo "GPG Key ID: $key_id"
+          echo "key_id=$key_id" >> $GITHUB_OUTPUT
+        id: gpg
+
+      - name: Sign deb package
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          output_deb="${{ steps.build.outputs.output_deb }}"
+          key_id="${{ steps.gpg.outputs.key_id }}"
+
+          echo "Signing package: $output_deb"
+
+          # Configure GPG for non-interactive use
+          mkdir -p ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          gpg-connect-agent reloadagent /bye || true
+
+          # Create detached armored signature
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$GPG_PASSPHRASE" --default-key "$key_id" \
+            --detach-sign --armor "$output_deb"
+
+          echo "Package signed successfully"
+          ls -la "$output_deb.asc"
+
+      - name: Verify package signature
+        run: |
+          output_deb="${{ steps.build.outputs.output_deb }}"
+
+          echo "Verifying signature on: $output_deb"
+          gpg --verify "$output_deb.asc" "$output_deb"
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomi-deb-${{ matrix.target }}
+          path: |
+            ${{ steps.build.outputs.output_deb }}
+            ${{ steps.build.outputs.output_deb }}.asc
