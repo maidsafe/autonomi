@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769520173732,
+  "lastUpdate": 1769520175439,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -16891,6 +16891,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/bfc68572b34097ce34b1cfb24e31cb9328f97fbb"
         },
         "date": 1769516022407,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1576656ea848dec5f8def07eef34f870363867f6",
+          "message": "Merge pull request #3421 from RolandSherwin/ci_speedup\n\nci: centralize binary build step",
+          "timestamp": "2026-01-27T12:56:32Z",
+          "tree_id": "e6e185c9c1a1ef0274b25d5abcfa5beb0d7bf637",
+          "url": "https://github.com/maidsafe/autonomi/commit/1576656ea848dec5f8def07eef34f870363867f6"
+        },
+        "date": 1769520174905,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
