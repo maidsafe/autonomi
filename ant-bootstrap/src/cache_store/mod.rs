@@ -271,7 +271,8 @@ fn duration_with_variance(duration: Duration, variance: u32) -> Duration {
 
 #[cfg(test)]
 mod tests {
-    use super::duration_with_variance;
+    use super::{CacheDataLatest, duration_with_variance};
+    use libp2p::{Multiaddr, PeerId};
     use std::time::Duration;
 
     #[tokio::test]
@@ -288,5 +289,381 @@ mod tests {
                 panic!("new_duration: {new_duration:?} is not within the expected range",);
             }
         }
+    }
+
+    // Duration variance additional tests (3 more)
+    #[test]
+    #[should_panic(expected = "cannot sample empty range")]
+    fn test_duration_variance_zero_duration() {
+        // Zero duration results in zero variance which causes gen_range(0..0) to panic
+        let _ = duration_with_variance(Duration::ZERO, 50);
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot sample empty range")]
+    fn test_duration_variance_zero_percent() {
+        // Zero percent variance causes gen_range(0..0) to panic
+        let base = Duration::from_secs(100);
+        let _ = duration_with_variance(base, 0);
+    }
+
+    #[test]
+    fn test_duration_variance_bounds_check() {
+        let base = Duration::from_secs(100);
+        let variance_pct = 20;
+        // Run 100 times to verify bounds
+        for _ in 0..100 {
+            let result = duration_with_variance(base, variance_pct);
+            let min = Duration::from_secs(80);
+            let max = Duration::from_secs(120);
+            assert!(
+                result >= min && result <= max,
+                "Result {result:?} outside bounds [{min:?}, {max:?}]"
+            );
+        }
+    }
+
+    // CacheData sync() tests (9 tests)
+    #[test]
+    fn test_sync_empty_self_nonempty_other() {
+        let mut self_cache = CacheDataLatest::default();
+        let mut other_cache = CacheDataLatest::default();
+
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let addr: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        other_cache.add_peer(peer_id, [addr.clone()].iter(), 10, 10);
+
+        self_cache.sync(&other_cache, 10, 10);
+
+        assert_eq!(self_cache.peers.len(), 1);
+    }
+
+    #[test]
+    fn test_sync_nonempty_self_empty_other() {
+        let mut self_cache = CacheDataLatest::default();
+        let other_cache = CacheDataLatest::default();
+
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let addr: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        self_cache.add_peer(peer_id, [addr.clone()].iter(), 10, 10);
+
+        self_cache.sync(&other_cache, 10, 10);
+
+        assert_eq!(self_cache.peers.len(), 1);
+    }
+
+    #[test]
+    fn test_sync_overlapping_peers_merges_addresses() {
+        let mut self_cache = CacheDataLatest::default();
+        let mut other_cache = CacheDataLatest::default();
+
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let addr1: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        let addr2: Multiaddr = "/ip4/127.0.0.2/udp/8080/quic-v1".parse().unwrap();
+
+        self_cache.add_peer(peer_id, [addr1.clone()].iter(), 10, 10);
+        other_cache.add_peer(peer_id, [addr2.clone()].iter(), 10, 10);
+
+        self_cache.sync(&other_cache, 10, 10);
+
+        assert_eq!(self_cache.peers.len(), 1);
+        let (_, addrs) = self_cache.peers.front().unwrap();
+        assert_eq!(addrs.len(), 2); // Both addresses merged
+    }
+
+    #[test]
+    fn test_sync_address_deduplication() {
+        let mut self_cache = CacheDataLatest::default();
+        let mut other_cache = CacheDataLatest::default();
+
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let addr: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+
+        self_cache.add_peer(peer_id, [addr.clone()].iter(), 10, 10);
+        other_cache.add_peer(peer_id, [addr.clone()].iter(), 10, 10);
+
+        self_cache.sync(&other_cache, 10, 10);
+
+        let (_, addrs) = self_cache.peers.front().unwrap();
+        assert_eq!(addrs.len(), 1); // No duplicate
+    }
+
+    #[test]
+    fn test_sync_truncates_addrs_to_max_per_peer() {
+        let mut self_cache = CacheDataLatest::default();
+        let mut other_cache = CacheDataLatest::default();
+
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let addr1: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        let addr2: Multiaddr = "/ip4/127.0.0.2/udp/8080/quic-v1".parse().unwrap();
+        let addr3: Multiaddr = "/ip4/127.0.0.3/udp/8080/quic-v1".parse().unwrap();
+
+        self_cache.add_peer(peer_id, [addr1.clone()].iter(), 10, 10);
+        other_cache.add_peer(peer_id, [addr2.clone(), addr3.clone()].iter(), 10, 10);
+
+        self_cache.sync(&other_cache, 2, 10); // max 2 addrs per peer
+
+        let (_, addrs) = self_cache.peers.front().unwrap();
+        assert_eq!(addrs.len(), 2);
+    }
+
+    #[test]
+    fn test_sync_truncates_peers_to_max_peers() {
+        let mut self_cache = CacheDataLatest::default();
+        let other_cache = CacheDataLatest::default();
+
+        // Add 3 peers to self
+        let peer1: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let peer2: PeerId = "12D3KooWD8QYTnpFcBfACHYmrAFHCRdeH5N6eFg6mes3FKJR8Xbc"
+            .parse()
+            .unwrap();
+        let peer3: PeerId = "12D3KooWSBTB1jzXPyBGpWLMqXfN7MPMNwSsVWCbfkeLXPZr9Dm3"
+            .parse()
+            .unwrap();
+
+        let addr1: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        let addr2: Multiaddr = "/ip4/127.0.0.2/udp/8080/quic-v1".parse().unwrap();
+        let addr3: Multiaddr = "/ip4/127.0.0.3/udp/8080/quic-v1".parse().unwrap();
+
+        self_cache.add_peer(peer1, [addr1].iter(), 10, 10);
+        self_cache.add_peer(peer2, [addr2].iter(), 10, 10);
+        self_cache.add_peer(peer3, [addr3].iter(), 10, 10);
+
+        self_cache.sync(&other_cache, 10, 2); // max 2 peers
+
+        assert_eq!(self_cache.peers.len(), 2);
+    }
+
+    #[test]
+    fn test_sync_self_peers_at_front_other_at_back() {
+        let mut self_cache = CacheDataLatest::default();
+        let mut other_cache = CacheDataLatest::default();
+
+        let self_peer: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let other_peer: PeerId = "12D3KooWD8QYTnpFcBfACHYmrAFHCRdeH5N6eFg6mes3FKJR8Xbc"
+            .parse()
+            .unwrap();
+
+        let addr1: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        let addr2: Multiaddr = "/ip4/127.0.0.2/udp/8080/quic-v1".parse().unwrap();
+
+        self_cache.add_peer(self_peer, [addr1].iter(), 10, 10);
+        other_cache.add_peer(other_peer, [addr2].iter(), 10, 10);
+
+        self_cache.sync(&other_cache, 10, 10);
+
+        // Self peer should be at front
+        let (front_peer, _) = self_cache.peers.front().unwrap();
+        assert_eq!(*front_peer, self_peer);
+
+        // Other peer should be at back
+        let (back_peer, _) = self_cache.peers.back().unwrap();
+        assert_eq!(*back_peer, other_peer);
+    }
+
+    #[test]
+    fn test_sync_preserves_other_peer_order() {
+        let mut self_cache = CacheDataLatest::default();
+        let mut other_cache = CacheDataLatest::default();
+
+        // Add peers to other in specific order
+        let peer1: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let peer2: PeerId = "12D3KooWD8QYTnpFcBfACHYmrAFHCRdeH5N6eFg6mes3FKJR8Xbc"
+            .parse()
+            .unwrap();
+
+        let addr1: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        let addr2: Multiaddr = "/ip4/127.0.0.2/udp/8080/quic-v1".parse().unwrap();
+
+        other_cache.add_peer(peer1, [addr1].iter(), 10, 10);
+        other_cache.add_peer(peer2, [addr2].iter(), 10, 10);
+        // Order in other_cache: [peer2, peer1] (peer2 added last, at front)
+
+        self_cache.sync(&other_cache, 10, 10);
+
+        // Should preserve other's order
+        let peers: Vec<_> = self_cache.peers.iter().map(|(id, _)| *id).collect();
+        assert_eq!(peers, vec![peer2, peer1]);
+    }
+
+    #[test]
+    fn test_sync_max_peers_zero_truncates_all() {
+        let mut self_cache = CacheDataLatest::default();
+        let other_cache = CacheDataLatest::default();
+
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let addr: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        self_cache.add_peer(peer_id, [addr].iter(), 10, 10);
+
+        self_cache.sync(&other_cache, 10, 0); // max 0 peers
+
+        assert!(self_cache.peers.is_empty());
+    }
+
+    // CacheData add_peer() tests (5 tests)
+    #[test]
+    fn test_add_peer_to_empty_cache() {
+        let mut cache = CacheDataLatest::default();
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let addr: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+
+        cache.add_peer(peer_id, [addr.clone()].iter(), 10, 10);
+
+        assert_eq!(cache.peers.len(), 1);
+        let (stored_peer, stored_addrs) = cache.peers.front().unwrap();
+        assert_eq!(*stored_peer, peer_id);
+        assert_eq!(stored_addrs.front().unwrap(), &addr);
+    }
+
+    #[test]
+    fn test_add_peer_existing_adds_addrs_to_front() {
+        let mut cache = CacheDataLatest::default();
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let addr1: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        let addr2: Multiaddr = "/ip4/127.0.0.2/udp/8080/quic-v1".parse().unwrap();
+
+        cache.add_peer(peer_id, [addr1.clone()].iter(), 10, 10);
+        cache.add_peer(peer_id, [addr2.clone()].iter(), 10, 10);
+
+        assert_eq!(cache.peers.len(), 1);
+        let (_, addrs) = cache.peers.front().unwrap();
+        // Newer address should be at front
+        assert_eq!(addrs.front().unwrap(), &addr2);
+    }
+
+    #[test]
+    fn test_add_peer_no_duplicate_addresses() {
+        let mut cache = CacheDataLatest::default();
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let addr: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+
+        cache.add_peer(peer_id, [addr.clone()].iter(), 10, 10);
+        cache.add_peer(peer_id, [addr.clone()].iter(), 10, 10);
+
+        let (_, addrs) = cache.peers.front().unwrap();
+        assert_eq!(addrs.len(), 1);
+    }
+
+    #[test]
+    fn test_add_peer_truncates_to_max_addrs() {
+        let mut cache = CacheDataLatest::default();
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+
+        let addrs: Vec<Multiaddr> = (1..=5)
+            .map(|i| {
+                format!("/ip4/127.0.0.{i}/udp/8080/quic-v1")
+                    .parse()
+                    .unwrap()
+            })
+            .collect();
+
+        cache.add_peer(peer_id, addrs.iter(), 2, 10); // max 2 addrs
+
+        let (_, stored_addrs) = cache.peers.front().unwrap();
+        assert_eq!(stored_addrs.len(), 2);
+    }
+
+    #[test]
+    fn test_add_peer_evicts_oldest_when_at_max_peers() {
+        let mut cache = CacheDataLatest::default();
+
+        // Add 3 peers with max_peers=2
+        let peer1: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let peer2: PeerId = "12D3KooWD8QYTnpFcBfACHYmrAFHCRdeH5N6eFg6mes3FKJR8Xbc"
+            .parse()
+            .unwrap();
+        let peer3: PeerId = "12D3KooWSBTB1jzXPyBGpWLMqXfN7MPMNwSsVWCbfkeLXPZr9Dm3"
+            .parse()
+            .unwrap();
+
+        let addr1: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        let addr2: Multiaddr = "/ip4/127.0.0.2/udp/8080/quic-v1".parse().unwrap();
+        let addr3: Multiaddr = "/ip4/127.0.0.3/udp/8080/quic-v1".parse().unwrap();
+
+        cache.add_peer(peer1, [addr1].iter(), 10, 2);
+        cache.add_peer(peer2, [addr2].iter(), 10, 2);
+        cache.add_peer(peer3, [addr3].iter(), 10, 2);
+
+        assert_eq!(cache.peers.len(), 2);
+        // First peer (oldest) should be evicted
+        assert!(!cache.peers.iter().any(|(id, _)| *id == peer1));
+    }
+
+    // CacheData remove_peer() tests (2 tests)
+    #[test]
+    fn test_remove_peer_exists() {
+        let mut cache = CacheDataLatest::default();
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let addr: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+
+        cache.add_peer(peer_id, [addr].iter(), 10, 10);
+        cache.remove_peer(&peer_id);
+
+        assert!(cache.peers.is_empty());
+    }
+
+    #[test]
+    fn test_remove_peer_not_exists_no_op() {
+        let mut cache = CacheDataLatest::default();
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+
+        // Should not panic
+        cache.remove_peer(&peer_id);
+        assert!(cache.peers.is_empty());
+    }
+
+    // CacheData get_all_addrs() tests (2 tests)
+    #[test]
+    fn test_get_all_addrs_returns_first_addr_per_peer() {
+        let mut cache = CacheDataLatest::default();
+        let peer_id: PeerId = "12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+        let addr1: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        let addr2: Multiaddr = "/ip4/127.0.0.2/udp/8080/quic-v1".parse().unwrap();
+
+        cache.add_peer(peer_id, [addr1.clone(), addr2.clone()].iter(), 10, 10);
+
+        let all_addrs: Vec<_> = cache.get_all_addrs().collect();
+        assert_eq!(all_addrs.len(), 1); // Only first addr per peer
+    }
+
+    #[test]
+    fn test_get_all_addrs_empty_cache() {
+        let cache = CacheDataLatest::default();
+        let all_addrs: Vec<_> = cache.get_all_addrs().collect();
+        assert!(all_addrs.is_empty());
     }
 }

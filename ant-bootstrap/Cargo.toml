@@ -34,6 +34,7 @@ workspace = true
 
 [dev-dependencies]
 color-eyre = "0.6.3"
+serial_test = "3.2"
 wiremock = "0.5"
 tokio = { version = "1.43", features = ["full", "test-util"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

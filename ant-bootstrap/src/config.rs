@@ -133,6 +133,24 @@ impl BootstrapCacheConfig {
         self.disable_cache_writing = disable;
         self
     }
+
+    /// Sets the minimum cache save duration (initial interval for periodic sync)
+    pub fn with_min_cache_save_duration(mut self, duration: Duration) -> Self {
+        self.min_cache_save_duration = duration;
+        self
+    }
+
+    /// Sets the maximum cache save duration (cap for periodic sync interval)
+    pub fn with_max_cache_save_duration(mut self, duration: Duration) -> Self {
+        self.max_cache_save_duration = duration;
+        self
+    }
+
+    /// Sets the cache save scaling factor (multiplier for interval growth)
+    pub fn with_cache_save_scaling_factor(mut self, factor: u32) -> Self {
+        self.cache_save_scaling_factor = factor;
+        self
+    }
 }
 
 /// Returns the default dir that should contain the bootstrap cache file
