@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769520175439,
+  "lastUpdate": 1769520177153,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -23372,6 +23372,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver average long handling time",
             "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1576656ea848dec5f8def07eef34f870363867f6",
+          "message": "Merge pull request #3421 from RolandSherwin/ci_speedup\n\nci: centralize binary build step",
+          "timestamp": "2026-01-27T12:56:32Z",
+          "tree_id": "e6e185c9c1a1ef0274b25d5abcfa5beb0d7bf637",
+          "url": "https://github.com/maidsafe/autonomi/commit/1576656ea848dec5f8def07eef34f870363867f6"
+        },
+        "date": 1769520176634,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 14027,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 28636,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
             "unit": "ms"
           }
         ]
