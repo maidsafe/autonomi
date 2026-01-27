@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769516020985,
+  "lastUpdate": 1769516023475,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -16799,6 +16799,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Average memory usage w/ upload",
             "value": 13,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "anselmega@gmail.com",
+            "name": "Anselme",
+            "username": "grumbach"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "bfc68572b34097ce34b1cfb24e31cb9328f97fbb",
+          "message": "Merge pull request #3422 from grumbach/cli_consistency_fixes\n\nCli consistency fixes",
+          "timestamp": "2026-01-27T11:01:57Z",
+          "tree_id": "4a696019a7fb984360a0da89ea10387827b04bfa",
+          "url": "https://github.com/maidsafe/autonomi/commit/bfc68572b34097ce34b1cfb24e31cb9328f97fbb"
+        },
+        "date": 1769516022407,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
             "unit": "MB"
           }
         ]
