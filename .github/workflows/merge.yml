@@ -275,7 +275,7 @@ jobs:
         run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: pr-bins-${{ matrix.os }}
           path: target/release
@@ -716,7 +716,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: pr-bins-${{ matrix.os }}
           path: target/release
@@ -898,7 +898,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: pr-bins-${{ matrix.os }}
           path: target/release
@@ -1018,7 +1018,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: pr-bins-ubuntu-latest
           path: target/release
