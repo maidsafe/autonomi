@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769516026101,
+  "lastUpdate": 1769519914162,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -6434,6 +6434,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.65459139921078,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1576656ea848dec5f8def07eef34f870363867f6",
+          "message": "Merge pull request #3421 from RolandSherwin/ci_speedup\n\nci: centralize binary build step",
+          "timestamp": "2026-01-27T12:56:32Z",
+          "tree_id": "e6e185c9c1a1ef0274b25d5abcfa5beb0d7bf637",
+          "url": "https://github.com/maidsafe/autonomi/commit/1576656ea848dec5f8def07eef34f870363867f6"
+        },
+        "date": 1769519906470,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.005281301613781,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.4289591331508635,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.584797861356406,
             "unit": "MiB/s"
           }
         ]
