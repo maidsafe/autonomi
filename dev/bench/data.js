@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769513640077,
+  "lastUpdate": 1769513734472,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -11124,6 +11124,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 274,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fab560450aa0e17c2792d80762caff57c717ca81",
+          "message": "Merge pull request #3423 from grumbach/consistent_local_merkle_pricing\n\nfeat: local merkle pricing with the correct formula",
+          "timestamp": "2026-01-27T10:17:13Z",
+          "tree_id": "8cc16ca8547661a6564ed71adf2d56a3bad71d0d",
+          "url": "https://github.com/maidsafe/autonomi/commit/fab560450aa0e17c2792d80762caff57c717ca81"
+        },
+        "date": 1769513733639,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 199,
             "unit": "MB"
           }
         ]
