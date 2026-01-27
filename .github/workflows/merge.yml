@@ -150,26 +150,9 @@ jobs:
       - name: Check we're on the right commit
         run: git log -1 --oneline
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: mozilla/sccache-action@v0.0.9
-        with:
-          version: "v0.10.0"
-        continue-on-error: true
-      - name: Enable sccache
-        shell: bash
-        run: |
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-      - name: Install mold (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y mold
-      - name: Use mold linker (Linux)
-        if: runner.os == 'Linux'
-        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
-
-      - uses: Swatinem/rust-cache@v2
+      # Build all tests first using the shared action (sets up sccache, mold, rust-cache)
+      - uses: ./.github/actions/build-tests
+        timeout-minutes: 45
 
       - name: Set ANT_LOG environment variable
         run: echo "ANT_LOG=all" >> $GITHUB_ENV
@@ -230,6 +213,10 @@ jobs:
       - name: Run evm tests
         timeout-minutes: 25
         run: cargo test --profile=ci --package ant-evm --lib
+
+      - name: Run evmlib tests
+        timeout-minutes: 30
+        run: cargo test --profile=ci --package evmlib --features test-utils -- --skip test_gas_fee_limit --skip test_get_quote_on_arb_sepolia
 
       - name: Upload logs
         if: always()
