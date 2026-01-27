@@ -49,7 +49,7 @@ strip = "debuginfo"
 
 [profile.ci]
 inherits = "dev"
-opt-level = 1
+opt-level = 3
 debug = 0
 strip = "debuginfo"
 lto = "off"

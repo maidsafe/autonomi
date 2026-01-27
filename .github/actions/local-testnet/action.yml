@@ -56,10 +56,10 @@ runs:
       if: runner.os == 'macOS'
       shell: bash
       run: brew install jq ripgrep
-    - name: install jq and ripgrep windows
+    - name: install ripgrep windows (jq is pre-installed)
       if: runner.os == 'Windows'
       shell: pwsh
-      run: choco install jq ripgrep
+      run: choco install ripgrep
 
     - name: install foundary
       if: inputs.enable-evm-testnet == 'true'
