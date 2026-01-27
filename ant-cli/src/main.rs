@@ -37,6 +37,7 @@ use crate::commands::SubCmd;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    println!("Welcome to ant");
     color_eyre::install().expect("Failed to initialise error handler");
     let mut opt = Opt::parse();
 
