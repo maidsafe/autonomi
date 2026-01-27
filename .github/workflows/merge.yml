@@ -83,17 +83,15 @@ jobs:
         with:
           fetch-depth: 0
 
-  checks:
-    name: various checks
+  # Split checks into parallel jobs for faster CI
+  clippy:
+    name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-
+          components: clippy
       - uses: mozilla/sccache-action@v0.0.9
         with:
           version: "v0.10.0"
@@ -103,40 +101,59 @@ jobs:
         run: |
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-      - name: Install mold (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y mold
-      - name: Use mold linker (Linux)
-        if: runner.os == 'Linux'
-        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
-
+      - run: sudo apt-get update && sudo apt-get install -y mold
+      - run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
-
-      - shell: bash
+      - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -Dwarnings
 
-      - name: Check documentation
-        # Deny certain `rustdoc` lints that are unwanted with `RUSTDOCFLAGS`. See
-        # https://doc.rust-lang.org/rustdoc/lints.html for lints that are 'warning' by default.
-        #
-        # We exclude autonomi-cli because it is not published and conflicts with the `autonomi` crate name,
-        # resulting in an error when building docs.
-        run: RUSTDOCFLAGS="--deny=warnings" cargo doc --no-deps --workspace --exclude=autonomi-cli
-
-      - name: Clean out the target directory
-        run: cargo clean
-
-      # In a cargo workspace, feature unification can occur, allowing a crate to be built successfully even if it
-      # doesn't explicitly specify a feature it uses, provided another crate in the workspace enables that feature.
-      # To detect such cases, we must build each crate using `--package` flag, building all packages at once does not work.
-      - name: Check the whole workspace can build
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
         shell: bash
         run: |
-          for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[].name'); do
-            cargo build --profile=ci -p "$package" --all-targets --all-features
-          done
-          echo "All packages built successfully. Cleaning up..."
-          cargo clean
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - run: sudo apt-get update && sudo apt-get install -y mold
+      - run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
+      - uses: Swatinem/rust-cache@v2
+      - name: Check documentation
+        # Deny certain `rustdoc` lints that are unwanted with `RUSTDOCFLAGS`.
+        # We exclude autonomi-cli because it conflicts with the `autonomi` crate name.
+        run: RUSTDOCFLAGS="--deny=warnings" cargo doc --no-deps --workspace --exclude=autonomi-cli
+
+  feature-check:
+    name: Feature Unification Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - run: sudo apt-get update && sudo apt-get install -y mold
+      - run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
+      - uses: Swatinem/rust-cache@v2
+      # In a cargo workspace, feature unification can occur, allowing a crate to be built successfully
+      # even if it doesn't explicitly specify a feature it uses. cargo-hack's --each-package with
+      # --clean-per-run ensures each package is built independently to catch missing feature declarations.
+      - name: Check each package builds independently
+        run: cargo hack --workspace --clean-per-run build --all-targets --all-features --profile=ci
 
   unit:
     name: Unit Tests
