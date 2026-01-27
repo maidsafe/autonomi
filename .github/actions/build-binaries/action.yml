@@ -1,0 +1,38 @@
+name: Build Rust binaries
+description: Build Rust binaries with CI profile and common cache/linker setup.
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: mozilla/sccache-action@v0.0.9
+      with:
+        version: "v0.10.0"
+      continue-on-error: true
+    - name: Enable sccache
+      shell: bash
+      run: |
+        echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+        echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+    - if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y mold
+    - if: runner.os == 'Linux'
+      shell: bash
+      run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
+    - uses: Swatinem/rust-cache@v2
+    - shell: bash
+      run: |
+        set -euo pipefail
+        cargo build --profile=ci --bin antnode --bin ant --bin antctl --bin evm-testnet
+    - if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p target/release
+        find target/ci -maxdepth 1 -type f \( -name 'ant*' -o -name 'evm-testnet' \) -exec cp {} target/release/ \;
+    - if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path "target\\release" | Out-Null
+        Copy-Item "target\\ci\\ant*.exe" -Destination "target\\release" -Force
+        Copy-Item "target\\ci\\evm-testnet.exe" -Destination "target\\release" -Force

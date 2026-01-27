@@ -7,9 +7,28 @@ on:
     branches: [ "*" ]
 
 jobs:
+  build-binaries:
+    name: Build PR binaries
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/build-binaries
+        timeout-minutes: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-bins-${{ matrix.os }}
+          path: |
+            target/release/ant*
+            target/release/evm-testnet*
+
   file_upload_download_tests:
     name: "File Upload/Download Tests"
     runs-on: ${{ matrix.os }}
+    needs: [ build-binaries ]
     strategy:
       matrix:
         include:
@@ -44,9 +63,13 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant --bin antctl
-        timeout-minutes: 30
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-bins-${{ matrix.os }}
+          path: target/release
+      - name: Ensure binaries are executable
+        if: runner.os != 'Windows'
+        run: chmod +x target/release/ant*
 
       - name: Check disk space after build
         if: matrix.os == 'ubuntu-latest'
@@ -55,12 +78,13 @@ jobs:
           df -h
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: true
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -309,11 +333,10 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_file_upload_download
-          build: true
 
       - name: Clean up disk space for rust-cache
         if: always()
@@ -341,6 +364,7 @@ jobs:
   file_upload_download_tests_windows:
     name: "File Upload/Download Tests (Windows)"
     runs-on: windows-latest
+    needs: [ build-binaries ]
     steps:
       - uses: actions/checkout@v6
 
@@ -348,24 +372,19 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant --bin antctl
-        timeout-minutes: 30
-
-      - name: Install antctl
-        shell: pwsh
-        run: |
-          $destination = "$env:USERPROFILE\AppData\Local\Microsoft\WindowsApps"
-          Copy-Item "target\release\antctl.exe" -Destination $destination -Force
-          Write-Host "antctl installed to $destination"
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-bins-windows-latest
+          path: target/release
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode.exe
-          build: true
+          antctl-path: target/release/antctl.exe
+          evm-testnet-path: target/release/evm-testnet.exe
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: pwsh
@@ -650,11 +669,10 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_file_upload_download_windows
-          build: true
 
       - name: Clean up disk space for rust-cache
         if: always()

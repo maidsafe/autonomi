@@ -47,6 +47,15 @@ unwrap_used = "warn"
 debug = 0
 strip = "debuginfo"
 
+[profile.ci]
+inherits = "dev"
+opt-level = 3
+debug = 0
+strip = "debuginfo"
+lto = "off"
+codegen-units = 16
+incremental = false
+
 [workspace.metadata.release]
 pre-release-commit-message = "chore(release): release commit, tags, deps and changelog updates"
 publish = false

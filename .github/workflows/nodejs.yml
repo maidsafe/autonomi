@@ -70,6 +70,21 @@ jobs:
         with:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - name: Install mold (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mold
+      - name: Use mold linker (Linux)
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
       - name: Cache cargo
         uses: actions/cache@v5
         with:
@@ -94,10 +109,37 @@ jobs:
           name: bindings-${{ matrix.settings.target }}-${{ matrix.packages.app_name }}
           path: ${{ matrix.packages.dir }}/${{ matrix.packages.app_name }}.*.node
           if-no-files-found: error
+  build-antnode:
+    name: Build antnode (${{ matrix.settings.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+          - host: macos-15 # arm64
+            target: aarch64-apple-darwin
+          - host: macos-15-intel # Intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.settings.host }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/build-binaries
+        timeout-minutes: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-bins-${{ matrix.settings.target }}
+          path: |
+            target/release/antnode*
+            target/release/antctl*
+            target/release/evm-testnet*
   test:
     name: Tests (${{ matrix.settings.target }})
     needs:
       - build
+      - build-antnode
     strategy:
       fail-fast: false
       matrix:
@@ -143,16 +185,21 @@ jobs:
 
       - name: Install dependencies
         run: npm install
-      - name: Build node
-        run: cd ../ && cargo build --release --bin antnode
-        timeout-minutes: 30
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-bins-${{ matrix.settings.target }}
+          path: target/release
+      - name: Ensure binaries are executable
+        if: runner.os != 'Windows'
+        run: chmod +x "${{ github.workspace }}/target/release/"*
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: true
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
       - name: Download artifacts
         uses: actions/download-artifact@v7
         with:

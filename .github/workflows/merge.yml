@@ -20,6 +20,24 @@ jobs:
       - name: Display Python version
         run: python --version
 
+  build-binaries:
+    name: Build PR binaries
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/build-binaries
+        timeout-minutes: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-bins-${{ matrix.os }}
+          path: |
+            target/release/ant*
+            target/release/evm-testnet*
+
   cargo-udeps:
     name: Unused dependency check
     runs-on: ubuntu-latest
@@ -31,6 +49,21 @@ jobs:
         with:
           # we need rustfmt here while we have a build step
           components: rustfmt
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - name: Install mold (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mold
+      - name: Use mold linker (Linux)
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
 
       - name: Install cargo-udeps
         run: cargo install cargo-udeps --locked
@@ -50,44 +83,77 @@ jobs:
         with:
           fetch-depth: 0
 
-  checks:
-    name: various checks
+  # Split checks into parallel jobs for faster CI
+  clippy:
+    name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v2
-
-      - shell: bash
-        run: cargo clippy --all-targets --all-features -- -Dwarnings
-
-      - name: Check documentation
-        # Deny certain `rustdoc` lints that are unwanted with `RUSTDOCFLAGS`. See
-        # https://doc.rust-lang.org/rustdoc/lints.html for lints that are 'warning' by default.
-        #
-        # We exclude autonomi-cli because it is not published and conflicts with the `autonomi` crate name,
-        # resulting in an error when building docs.
-        run: RUSTDOCFLAGS="--deny=warnings" cargo doc --no-deps --workspace --exclude=autonomi-cli
-
-      - name: Clean out the target directory
-        run: cargo clean
-
-      # In a cargo workspace, feature unification can occur, allowing a crate to be built successfully even if it
-      # doesn't explicitly specify a feature it uses, provided another crate in the workspace enables that feature.
-      # To detect such cases, we must build each crate using `--package` flag, building all packages at once does not work.
-      - name: Check the whole workspace can build
+          components: clippy
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
         shell: bash
         run: |
-          for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[].name'); do
-            cargo build -p "$package" --all-targets --all-features
-          done
-          echo "All packages built successfully. Cleaning up..."
-          cargo clean
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - run: sudo apt-get update && sudo apt-get install -y mold
+      - run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
+      - uses: Swatinem/rust-cache@v2
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -Dwarnings
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - run: sudo apt-get update && sudo apt-get install -y mold
+      - run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
+      - uses: Swatinem/rust-cache@v2
+      - name: Check documentation
+        # Deny certain `rustdoc` lints that are unwanted with `RUSTDOCFLAGS`.
+        # We exclude autonomi-cli because it conflicts with the `autonomi` crate name.
+        run: RUSTDOCFLAGS="--deny=warnings" cargo doc --no-deps --workspace --exclude=autonomi-cli
+
+  feature-check:
+    name: Feature Unification Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - run: sudo apt-get update && sudo apt-get install -y mold
+      - run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
+      - uses: Swatinem/rust-cache@v2
+      # In a cargo workspace, feature unification can occur, allowing a crate to be built successfully
+      # even if it doesn't explicitly specify a feature it uses. cargo-hack's --workspace with
+      # --clean-per-run ensures each package is built independently to catch missing feature declarations.
+      - name: Check each package builds independently
+        run: cargo hack --workspace --clean-per-run build --all-targets --all-features --profile=ci
 
   unit:
     name: Unit Tests
@@ -101,29 +167,28 @@ jobs:
       - name: Check we're on the right commit
         run: git log -1 --oneline
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
+      # Build all tests first using the shared action (sets up sccache, mold, rust-cache)
+      - uses: ./.github/actions/build-tests
+        timeout-minutes: 45
 
       - name: Set ANT_LOG environment variable
         run: echo "ANT_LOG=all" >> $GITHUB_ENV
 
       - name: Run autonomi tests
         timeout-minutes: 25
-        run: cargo test --release --package autonomi --lib
+        run: cargo test --profile=ci --package autonomi --lib
 
       - name: Run autonomi doc tests
         timeout-minutes: 25
-        run: cargo test --release --package autonomi --doc
+        run: cargo test --profile=ci --package autonomi --doc
 
       - name: Run autonomi self_encryption backward_compatibility unit tests
         timeout-minutes: 25
-        run: cargo test --release test_self_encryption_backward_compatibility
+        run: cargo test --profile=ci test_self_encryption_backward_compatibility
 
       - name: Run bootstrap tests
         timeout-minutes: 25
-        run: cargo test --release --package ant-bootstrap
+        run: cargo test --profile=ci --package ant-bootstrap
 
       # The `can_store_after_restart` can be executed with other package tests together and passing
       # on local machine. However keeps failing (when executed together) on CI machines.
@@ -132,11 +197,11 @@ jobs:
       # and passing standalone is enough.
       - name: Run node tests (except can_store_after_restart)
         timeout-minutes: 25
-        run: cargo test --release --package ant-node -- --skip can_store_after_restart --skip data_availability_during_churn --skip verify_data_location --skip verify_routing_table
+        run: cargo test --profile=ci --package ant-node -- --skip can_store_after_restart --skip data_availability_during_churn --skip verify_data_location --skip verify_routing_table
 
       - name: Run can_store_after_restart separately
         timeout-minutes: 5
-        run: cargo test --release --package ant-node can_store_after_restart
+        run: cargo test --profile=ci --package ant-node can_store_after_restart
 
       # Same set of tests shall be executed with `encrypt-records` flag enabled.
       # With now changed to `always carry out encryption`, no need to re-run the same set again.
@@ -144,27 +209,27 @@ jobs:
       #
       # - name: Run node tests (except can_store_after_restart)
       #   timeout-minutes: 25
-      #   run: cargo test --release --package ant-node --features="open-metrics, encrypt-records" -- --skip can_store_after_restart --skip data_availability_during_churn --skip verify_data_location --skip verify_routing_table
+      #   run: cargo test --profile=ci --package ant-node --features="open-metrics, encrypt-records" -- --skip can_store_after_restart --skip data_availability_during_churn --skip verify_data_location --skip verify_routing_table
 
       # - name: Run can_store_after_restart separately
       #   timeout-minutes: 5
-      #   run: cargo test --release --package ant-node --features="open-metrics, encrypt-records" can_store_after_restart
+      #   run: cargo test --profile=ci --package ant-node --features="open-metrics, encrypt-records" can_store_after_restart
 
       - name: Run launchpad tests
         timeout-minutes: 25
-        run: cargo test --release --package node-launchpad
+        run: cargo test --profile=ci --package node-launchpad
 
       - name: Run protocol tests
         timeout-minutes: 25
-        run: cargo test --release --package ant-protocol
+        run: cargo test --profile=ci --package ant-protocol
 
       - name: Run logging tests
         timeout-minutes: 25
-        run: cargo test --release --package ant-logging
+        run: cargo test --profile=ci --package ant-logging
 
       - name: Run evm tests
         timeout-minutes: 25
-        run: cargo test --release --package ant-evm --lib
+        run: cargo test --profile=ci --package ant-evm --lib
 
       - name: Upload logs
         if: always()
@@ -175,6 +240,7 @@ jobs:
   e2e:
     name: E2E tests
     runs-on: ${{ matrix.os }}
+    needs: [ build-binaries ]
     env:
       MAX_CHUNK_SIZE: 4194304
     strategy:
@@ -191,27 +257,40 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - name: Install mold (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mold
+      - name: Use mold linker (Linux)
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant --bin antctl
-        timeout-minutes: 30
-
-      - name: Install antctl on Windows
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
-          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
-          Write-Host "antctl installed to $destination"
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-bins-${{ matrix.os }}
+          path: target/release
+      - name: Ensure binaries are executable
+        if: runner.os != 'Windows'
+        run: chmod +x target/release/ant*
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: true
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -229,7 +308,7 @@ jobs:
 
       # only these unit tests require a network, the rest are run above in unit test section
       - name: Run autonomi --tests
-        run: cargo test --package autonomi --tests -- --nocapture
+        run: cargo test --profile=ci --package autonomi --tests -- --nocapture
         env:
           ANT_LOG: "v"
           # only set the target dir for windows to bypass the linker issue.
@@ -593,15 +672,15 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_e2e
-          build: true
 
   churn:
     name: Network churning tests
     runs-on: ${{ matrix.os }}
+    needs: [ build-binaries ]
     strategy:
       matrix:
         include:
@@ -619,11 +698,31 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - name: Install mold (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mold
+      - name: Use mold linker (Linux)
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
+
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build binaries
-        run: cargo build --release --bin antnode --bin antctl
-        timeout-minutes: 30
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-bins-${{ matrix.os }}
+          path: target/release
+      - name: Ensure binaries are executable
+        if: runner.os != 'Windows'
+        run: chmod +x target/release/ant*
 
       - name: Install antctl on Windows
         if: matrix.os == 'windows-latest'
@@ -642,7 +741,7 @@ jobs:
           }
 
       - name: Build churn tests
-        run: cargo test --release -p ant-node --test data_with_churn --no-run
+        run: cargo test --profile=ci -p ant-node --test data_with_churn --no-run
         env:
           # only set the target dir for windows to bypass the linker issue.
           # happens if we build the node manager via testnet action
@@ -650,12 +749,13 @@ jobs:
         timeout-minutes: 30
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: true
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -672,7 +772,7 @@ jobs:
           fi
 
       - name: Chunks data integrity during nodes churn
-        run: cargo test --release -p ant-node --test data_with_churn -- --nocapture
+        run: cargo test --profile=ci -p ant-node --test data_with_churn -- --nocapture
         env:
           TEST_DURATION_MINS: 5
           TEST_TOTAL_CHURN_CYCLES: 15
@@ -686,11 +786,10 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_churn
-          build: true
 
       - name: Get total node count
         shell: bash
@@ -763,6 +862,7 @@ jobs:
   verify_data_location_routing_table:
     name: Verify data location and Routing Table
     runs-on: ${{ matrix.os }}
+    needs: [ build-binaries ]
     strategy:
       matrix:
         include:
@@ -780,14 +880,34 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - name: Install mold (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mold
+      - name: Use mold linker (Linux)
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
+
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build binaries
-        run: cargo build --release --bin antnode
-        timeout-minutes: 30
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-bins-${{ matrix.os }}
+          path: target/release
+      - name: Ensure binaries are executable
+        if: runner.os != 'Windows'
+        run: chmod +x target/release/ant*
 
       - name: Build data location and routing table tests
-        run: cargo test --release -p ant-node --test verify_data_location --test verify_routing_table --no-run
+        run: cargo test --profile=ci -p ant-node --test verify_data_location --test verify_routing_table --no-run
         env:
           # only set the target dir for windows to bypass the linker issue.
           # happens if we build the node manager via testnet action
@@ -795,12 +915,13 @@ jobs:
         timeout-minutes: 30
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: true
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -821,13 +942,13 @@ jobs:
         timeout-minutes: 1
 
       - name: Verify the routing tables of the nodes
-        run: cargo test --release -p ant-node --test verify_routing_table -- --nocapture
+        run: cargo test --profile=ci -p ant-node --test verify_routing_table -- --nocapture
         env:
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
         timeout-minutes: 5
 
       - name: Verify the location of the data on the network
-        run: cargo test --release -p ant-node --test verify_data_location -- --nocapture
+        run: cargo test --profile=ci -p ant-node --test verify_data_location -- --nocapture
         env:
           CHURN_COUNT: 6
           ANT_LOG: "all"
@@ -840,11 +961,10 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_data_location
-          build: true
 
       - name: Verify restart of nodes using rg
         shell: bash
@@ -890,12 +1010,21 @@ jobs:
   large_file_upload_test:
     name: Large file upload
     runs-on: ubuntu-latest
+    needs: [ build-binaries ]
     steps:
       - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: pr-bins-ubuntu-latest
+          path: target/release
+      - name: Ensure binaries are executable
+        if: runner.os != 'Windows'
+        run: chmod +x target/release/ant*
 
       - name: install ripgrep
         shell: bash
@@ -925,25 +1054,14 @@ jobs:
           tar -cvzf test_data_1.tar.gz test_data_1
           ls -l
 
-      - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant --bin antctl
-        timeout-minutes: 30
-
-      - name: Install antctl on Windows
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
-          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
-          Write-Host "antctl installed to $destination"
-
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: true
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -1073,8 +1191,7 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_large_file_upload_no_ws
-          build: true
