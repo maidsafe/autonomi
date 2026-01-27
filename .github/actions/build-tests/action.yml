@@ -1,0 +1,33 @@
+name: Build Rust test binaries
+description: Build all Rust test binaries with CI profile and common cache/linker setup.
+inputs:
+  target-dir:
+    description: 'Custom target directory (use for Windows when testnet runs after)'
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: mozilla/sccache-action@v0.0.9
+      with:
+        version: "v0.10.0"
+      continue-on-error: true
+    - name: Enable sccache
+      shell: bash
+      run: |
+        echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+        echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+    - if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y mold
+    - if: runner.os == 'Linux'
+      shell: bash
+      run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
+    - uses: Swatinem/rust-cache@v2
+    - if: inputs.target-dir != ''
+      shell: bash
+      run: echo "CARGO_TARGET_DIR=${{ inputs.target-dir }}" >> $GITHUB_ENV
+    - name: Build all workspace tests
+      shell: bash
+      run: cargo test --profile=ci --workspace --no-run
