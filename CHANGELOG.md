@@ -7,6 +7,115 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2026-01-28
+
+### API
+
+#### Added
+
+- `BulkPaymentOption::ForceMerkle` variant to force merkle tree payments regardless of chunk count.
+- `BulkPaymentOption::ForceRegular` variant to force regular per-batch payments regardless of chunk
+  count.
+- `BulkPaymentOption::is_force_merkle()` method to check if the option forces merkle payment.
+- `BulkPaymentOption::is_force_regular()` method to check if the option forces regular payment.
+- Request/response direct message fallback for mutable data fetch operations (pointers, scratchpads,
+  graph entries), improving reliability when KAD queries fail.
+- `MERKLE_PAYMENT_THRESHOLD` constant is now publicly exported for use by consuming crates.
+
+#### Changed
+
+- The `file_content_upload`, `file_content_upload_public`, `dir_content_upload`, and
+  `dir_content_upload_public` methods now require explicit selection of payment mode via the
+  `--merkle` or `--regular` flags in the CLI, or `ForceMerkle`/`ForceRegular` variants in the API.
+  [BREAKING]
+- Client request timeout extended to 120 seconds to improve reliability on slower connections.
+- Substream timeout increased to 120 seconds to match the request timeout.
+- Cost estimation code improved for more accurate payment calculations.
+- Upload flow refactored to centralise reporting and retry logic.
+
+#### Fixed
+
+- Double slashes in normalised archive paths are now prevented.
+- `GetVersion` query errors are now properly caught and handled instead of propagating unexpected
+  failures.
+
+### Network
+
+#### Added
+
+- `DevGetClosestPeersFromNetwork` query for developer analytics, allowing nodes to perform full
+  network lookups rather than just returning local routing table entries. This query is only
+  available when the `developer` feature is enabled.
+
+#### Changed
+
+- Request timeout increased to 120 seconds to improve reliability for slower network operations.
+- Nodes now approve merkle uploads even when they lack full network knowledge (fewer than K_VALUE
+  peers in routing table), improving upload success rates during network churn.
+
+#### Fixed
+
+- Peers are now removed from the routing table when version fetch operations fail, improving routing
+  table accuracy.
+
+### Payments
+
+#### Changed
+
+- Gas estimation now uses EIP-1559 fee estimation for more accurate and predictable transaction
+  costs.
+- Gas cost information is now printed during payment operations, providing better visibility into
+  transaction costs.
+- Local merkle pricing now uses the correct formula for cost calculations.
+
+#### Fixed
+
+- Invalid gas cost aggregation corrected to provide accurate total cost reporting.
+
+### Ant Client
+
+#### Added
+
+- The `developer closest-peers` command now queries the network for closest peers to a target
+  address, with support for multiple input formats including `PeerId`.
+- The `developer closest-peers` command now supports a comparison mode to compare results from
+  different nodes.
+- The `developer node-version` command queries the version of a specific node on the network.
+- The `developer get-quote` command fetches quotes from specific peers, with the `address` parameter
+  now optional.
+
+#### Changed
+
+- The `file cost` and `file upload` commands now require explicit selection of payment mode using
+  `--merkle` or `--regular` flags. The previous automatic selection based on chunk count threshold
+  has been removed. [BREAKING]
+- Improved consistency between cost estimation and upload commands.
+- Payment selection logging improved to reduce confusion.
+
+### General
+
+#### Added
+
+- macOS signed and notarized pkg installer for the CLI suite (`ant`, `antnode`, `antctl`), providing
+  a standard macOS installation experience with binaries installed to `/usr/local/bin`.
+- Windows signed MSI installer for the CLI suite (`ant`, `antnode`, `antctl`), installing to
+  `C:\Program Files\Autonomi\` and adding binaries to PATH.
+- Linux signed Debian package (`.deb`) for the CLI suite (`ant`, `antnode`, `antctl`) on
+  Debian/Ubuntu systems, with support for x86_64, aarch64, armv7, and arm architectures. Includes
+  detached GPG signature for verification.
+- Linux signed RPM package (`.rpm`) for the CLI suite (`ant`, `antnode`, `antctl`) on
+  Fedora/RHEL/CentOS systems, with the same architecture support and GPG signing as the Debian
+  package.
+
+### Launchpad
+
+#### Added
+
+- macOS signed and notarized app bundle (`.dmg`) for Node Launchpad, allowing users to drag the
+  application to their Applications folder for standard macOS app installation.
+- Windows signed MSIX installer for Node Launchpad, with automatic update support via
+  `.appinstaller` files and Start Menu integration.
+
 ## 2026-01-09
 
 ### Network
