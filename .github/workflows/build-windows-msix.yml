@@ -1,0 +1,350 @@
+# Reusable workflow for building and signing Windows MSIX installer
+#
+# This workflow creates a signed MSIX installer for node-launchpad.
+#
+# Usage from release.yml:
+#   build-windows-msix:
+#     uses: ./.github/workflows/build-windows-msix.yml
+#     secrets: inherit
+
+name: build Windows MSIX
+
+on:
+  workflow_call:
+    secrets:
+      SM_HOST:
+        description: 'DigiCert SSM host endpoint'
+        required: true
+      SM_API_KEY:
+        description: 'DigiCert SSM API key'
+        required: true
+      SM_CLIENT_CERT_B64:
+        description: 'Base64-encoded DigiCert client certificate'
+        required: true
+      SM_CLIENT_CERT_PASSWORD:
+        description: 'Password for DigiCert client certificate'
+        required: true
+      SM_KEYPAIR_ALIAS:
+        description: 'DigiCert keypair alias for signing'
+        required: true
+
+jobs:
+  build-msix:
+    name: build msix
+    runs-on: windows-latest
+    env:
+      SM_HOST: ${{ secrets.SM_HOST }}
+      SM_API_KEY: ${{ secrets.SM_API_KEY }}
+      SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+      SM_KEYPAIR_ALIAS: ${{ secrets.SM_KEYPAIR_ALIAS }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download signed Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: autonomi-x86_64-pc-windows-msvc-signed
+          path: artifacts/x86_64-pc-windows-msvc-signed/release
+
+      - name: Set package version
+        id: version
+        shell: bash
+        run: |
+          release_year=$(grep 'release-year:' release-cycle-info | awk '{print $2}')
+          release_month=$(grep 'release-month:' release-cycle-info | awk '{print $2}')
+          release_cycle=$(grep 'release-cycle:' release-cycle-info | awk '{print $2}')
+          release_cycle_counter=$(grep 'release-cycle-counter:' release-cycle-info | awk '{print $2}')
+          version="$release_year.$release_month.$release_cycle.$release_cycle_counter"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Package version: $version"
+
+      - name: Verify node-launchpad binary exists
+        shell: pwsh
+        run: |
+          $artifactsPath = "artifacts\x86_64-pc-windows-msvc-signed\release"
+          $binary = "node-launchpad.exe"
+          $path = Join-Path $artifactsPath $binary
+
+          Write-Host "Checking for node-launchpad.exe in: $artifactsPath"
+          if (Test-Path $path) {
+            Write-Host "  Found: $binary"
+          } else {
+            Write-Error "  Missing: $binary"
+            exit 1
+          }
+
+      - name: Extract certificate subject for MSIX Publisher
+        id: cert_subject
+        shell: pwsh
+        run: |
+          # Extract the certificate subject from the already-signed node-launchpad.exe
+          # This is the most reliable method as it guarantees the Publisher matches the signature
+          $signedBinary = "artifacts\x86_64-pc-windows-msvc-signed\release\node-launchpad.exe"
+
+          Write-Host "Extracting certificate subject from: $signedBinary"
+
+          $sig = Get-AuthenticodeSignature $signedBinary
+          if ($sig.Status -ne "Valid") {
+            Write-Error "Binary is not properly signed. Status: $($sig.Status)"
+            exit 1
+          }
+
+          $subject = $sig.SignerCertificate.Subject
+          Write-Host "Certificate Subject: $subject"
+
+          if ([string]::IsNullOrWhiteSpace($subject)) {
+            Write-Error "Could not extract certificate subject"
+            exit 1
+          }
+
+          # Output for use in subsequent steps
+          "publisher=$subject" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Publisher set to: $subject"
+
+      # Setup DigiCert for signing the MSIX package
+      - name: Create client certificate file from base64
+        id: prepare_cert
+        shell: pwsh
+        run: |
+          $raw = @'
+          ${{ secrets.SM_CLIENT_CERT_B64 }}
+          '@
+
+          $clean = ($raw -replace '\s','')
+
+          if ([string]::IsNullOrWhiteSpace($clean)) {
+            Write-Error "SM_CLIENT_CERT_B64 is empty after normalization."
+            exit 1
+          }
+
+          try {
+            $certBytes = [Convert]::FromBase64String($clean)
+          } catch {
+            Write-Error "SM_CLIENT_CERT_B64 is not valid Base64."
+            exit 1
+          }
+
+          $certPath = Join-Path $env:RUNNER_TEMP "Certificate.p12"
+          [System.IO.File]::WriteAllBytes($certPath, $certBytes)
+
+          if (-not (Test-Path $certPath)) {
+            Write-Error "Failed to create certificate file at: $certPath"
+            exit 1
+          }
+
+          "SM_CLIENT_CERT_FILE=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "cert_path=$certPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "sm_client_cert_b64=$clean" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Setup DigiCert Software Trust Manager tools
+        uses: digicert/ssm-code-signing@v1.1.1
+        with:
+          sm_host: ${{ secrets.SM_HOST }}
+          sm_api_key: ${{ secrets.SM_API_KEY }}
+          sm_client_cert_b64: ${{ steps.prepare_cert.outputs.sm_client_cert_b64 }}
+          sm_client_cert_password: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+
+      - name: Verify smctl installation
+        shell: pwsh
+        run: |
+          smctl -v
+          smctl healthcheck
+
+      - name: Prepare MSIX package directory
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $publisher = "${{ steps.cert_subject.outputs.publisher }}"
+          $packageDir = "msix-package"
+
+          Write-Host "Using Publisher: $publisher"
+
+          # Create package directory structure
+          New-Item -ItemType Directory -Force -Path "$packageDir\Assets"
+
+          # Copy the signed binary
+          Copy-Item "artifacts\x86_64-pc-windows-msvc-signed\release\node-launchpad.exe" "$packageDir\"
+
+          # Copy icon assets
+          Copy-Item "resources\icons\windows\node-launchpad\Assets\*" "$packageDir\Assets\" -Recurse
+
+          # Process AppxManifest.xml - replace placeholders
+          $manifest = Get-Content "resources\installer\windows\node-launchpad\AppxManifest.xml" -Raw
+          $manifest = $manifest -replace 'VERSION_PLACEHOLDER', $version
+          $manifest = $manifest -replace 'PUBLISHER_PLACEHOLDER', $publisher
+          $manifest | Set-Content "$packageDir\AppxManifest.xml" -Encoding UTF8
+
+          Write-Host "Package directory prepared:"
+          Get-ChildItem $packageDir -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+
+          Write-Host ""
+          Write-Host "AppxManifest.xml content:"
+          Get-Content "$packageDir\AppxManifest.xml"
+
+      - name: Find Windows SDK
+        id: find-sdk
+        shell: pwsh
+        run: |
+          $sdkPath = "C:\Program Files (x86)\Windows Kits\10\bin"
+          $versions = Get-ChildItem $sdkPath -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } | Sort-Object Name -Descending
+          if ($versions.Count -eq 0) {
+            Write-Error "No Windows SDK found"
+            exit 1
+          }
+          $latestVersion = $versions[0].Name
+          $makeAppxPath = Join-Path $sdkPath "$latestVersion\x64\makeappx.exe"
+          $makePriPath = Join-Path $sdkPath "$latestVersion\x64\makepri.exe"
+          $signToolPath = Join-Path $sdkPath "$latestVersion\x64\signtool.exe"
+
+          if (-not (Test-Path $makeAppxPath)) {
+            Write-Error "MakeAppx.exe not found at: $makeAppxPath"
+            exit 1
+          }
+
+          if (-not (Test-Path $makePriPath)) {
+            Write-Error "MakePri.exe not found at: $makePriPath"
+            exit 1
+          }
+
+          Write-Host "Found Windows SDK $latestVersion"
+          Write-Host "MakeAppx: $makeAppxPath"
+          Write-Host "MakePri: $makePriPath"
+          Write-Host "SignTool: $signToolPath"
+
+          "makeappx_path=$makeAppxPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "makepri_path=$makePriPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "signtool_path=$signToolPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Generate resource index (resources.pri)
+        shell: pwsh
+        run: |
+          $makePri = "${{ steps.find-sdk.outputs.makepri_path }}"
+          $packageDir = "msix-package"
+
+          Write-Host "Creating priconfig.xml..."
+
+          # Create MakePri configuration file
+          & $makePri createconfig /cf priconfig.xml /dq en-US /o
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to create priconfig.xml"
+            exit 1
+          }
+
+          Write-Host "Generating resources.pri..."
+
+          # Generate the resource index file
+          & $makePri new /pr $packageDir /cf priconfig.xml /of "$packageDir\resources.pri" /o
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to generate resources.pri"
+            exit 1
+          }
+
+          Write-Host "resources.pri generated successfully"
+          Get-Item "$packageDir\resources.pri" | Format-List Name, Length
+
+          # List all PRI files created (MakePri may create split files for different scales)
+          Write-Host ""
+          Write-Host "PRI files in package directory:"
+          Get-ChildItem "$packageDir\*.pri" | ForEach-Object {
+            Write-Host "  $($_.Name) ($($_.Length) bytes)"
+          }
+
+      - name: Build MSIX
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $makeAppx = "${{ steps.find-sdk.outputs.makeappx_path }}"
+          $outputMsix = "$version.node-launchpad.x86_64-pc-windows-msvc.msix"
+
+          Write-Host "Building MSIX..."
+          Write-Host "  Version: $version"
+          Write-Host "  Output: $outputMsix"
+
+          & $makeAppx pack /d "msix-package" /p $outputMsix /o
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "MakeAppx build failed"
+            exit 1
+          }
+
+          Write-Host "MSIX built successfully"
+          Get-Item $outputMsix | Format-List Name, Length
+
+      - name: Sign MSIX
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $msixFile = "$version.node-launchpad.x86_64-pc-windows-msvc.msix"
+          $alias = $env:SM_KEYPAIR_ALIAS
+
+          Write-Host "Signing MSIX: $msixFile"
+
+          $result = & smctl sign --keypair-alias "$alias" --input "$msixFile" 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Signing failed: $result"
+            exit 1
+          }
+
+          Write-Host "MSIX signed successfully"
+
+      - name: Verify MSIX signature
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $msixFile = "$version.node-launchpad.x86_64-pc-windows-msvc.msix"
+
+          Write-Host "Verifying signature on: $msixFile"
+
+          $sig = Get-AuthenticodeSignature $msixFile
+          "{0} -> {1}" -f $msixFile, $sig.Status | Write-Host
+
+          if ($sig.Status -eq "Valid") {
+            Write-Host "  Signer: $($sig.SignerCertificate.Subject)"
+            Write-Host "  Issuer: $($sig.SignerCertificate.Issuer)"
+          } else {
+            Write-Error "Signature validation failed"
+            exit 1
+          }
+
+      - name: Generate App Installer file
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $publisher = "${{ steps.cert_subject.outputs.publisher }}"
+
+          # Determine release prefix based on branch
+          if ("${{ github.ref }}" -eq "refs/heads/stable") {
+            $releasePrefix = "stable"
+          } else {
+            $releasePrefix = "rc"
+          }
+
+          $msixFileName = "$version.node-launchpad.x86_64-pc-windows-msvc.msix"
+          $appInstallerFileName = "$version.node-launchpad.x86_64-pc-windows-msvc.appinstaller"
+
+          # GitHub release download URLs
+          $baseUrl = "https://github.com/maidsafe/autonomi/releases/download/$releasePrefix-$version"
+          $msixUri = "$baseUrl/$msixFileName"
+          $appInstallerUri = "$baseUrl/$appInstallerFileName"
+
+          # Read template and replace placeholders
+          $template = Get-Content "resources\installer\windows\node-launchpad\node-launchpad.appinstaller.template" -Raw
+          $template = $template -replace 'VERSION_PLACEHOLDER', $version
+          $template = $template -replace 'PUBLISHER_PLACEHOLDER', $publisher
+          $template = $template -replace 'MSIX_URI_PLACEHOLDER', $msixUri
+          $template = $template -replace 'APPINSTALLER_URI_PLACEHOLDER', $appInstallerUri
+
+          $template | Set-Content $appInstallerFileName -Encoding UTF8
+
+          Write-Host "Generated App Installer file: $appInstallerFileName"
+          Get-Content $appInstallerFileName
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-launchpad-msix-x86_64-pc-windows-msvc
+          path: |
+            ${{ steps.version.outputs.version }}.node-launchpad.x86_64-pc-windows-msvc.msix
+            ${{ steps.version.outputs.version }}.node-launchpad.x86_64-pc-windows-msvc.appinstaller

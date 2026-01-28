@@ -1,0 +1,396 @@
+# Reusable workflow for building, signing, and notarizing macOS pkg installers
+#
+# This workflow creates a signed and notarized pkg installer for the Autonomi CLI suite
+# containing antnode, antctl, and ant binaries.
+#
+# Usage from release.yml:
+#   sign-macos-pkg:
+#     uses: ./.github/workflows/build-macos-pkg.yml
+#     with:
+#       arch: x86_64-apple-darwin
+#     secrets: inherit
+
+name: build macOS pkg
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        description: 'Target architecture (x86_64-apple-darwin or aarch64-apple-darwin)'
+        required: true
+        type: string
+    secrets:
+      APPLE_APPLICATION_CERTIFICATE_P12_BASE64:
+        description: 'Base64-encoded Developer ID Application certificate (.p12) for signing binaries'
+        required: true
+      APPLE_APPLICATION_CERTIFICATE_PASSWORD:
+        description: 'Password for the Developer ID Application certificate'
+        required: true
+      APPLE_INSTALLER_CERTIFICATE_P12_BASE64:
+        description: 'Base64-encoded Developer ID Installer certificate (.p12) for signing pkg'
+        required: true
+      APPLE_INSTALLER_CERTIFICATE_PASSWORD:
+        description: 'Password for the Developer ID Installer certificate'
+        required: true
+      APPLE_TEAM_ID:
+        description: 'Apple Developer Team ID'
+        required: true
+      APPLE_ID:
+        description: 'Apple ID for notarization'
+        required: true
+      APPLE_NOTARIZATION_PASSWORD:
+        description: 'App-specific password for notarization'
+        required: true
+
+jobs:
+  build-pkg:
+    name: build pkg (${{ inputs.arch }})
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: autonomi-${{ inputs.arch }}
+          path: artifacts/${{ inputs.arch }}/release
+
+      - name: Set package version
+        id: version
+        shell: bash
+        run: |
+          release_year=$(grep 'release-year:' release-cycle-info | awk '{print $2}')
+          release_month=$(grep 'release-month:' release-cycle-info | awk '{print $2}')
+          release_cycle=$(grep 'release-cycle:' release-cycle-info | awk '{print $2}')
+          release_cycle_counter=$(grep 'release-cycle-counter:' release-cycle-info | awk '{print $2}')
+          version="$release_year.$release_month.$release_cycle.$release_cycle_counter"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Package version: $version"
+
+      - name: Create keychain and import certificates
+        env:
+          APPLICATION_CERT_P12_BASE64: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_P12_BASE64 }}
+          APPLICATION_CERT_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERTIFICATE_PASSWORD }}
+          INSTALLER_CERT_P12_BASE64: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_P12_BASE64 }}
+          INSTALLER_CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create variables
+          APPLICATION_CERT_PATH=$RUNNER_TEMP/application-certificate.p12
+          INSTALLER_CERT_PATH=$RUNNER_TEMP/installer-certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          # Decode certificates
+          echo "$APPLICATION_CERT_P12_BASE64" | base64 --decode > "$APPLICATION_CERT_PATH"
+          echo "$INSTALLER_CERT_P12_BASE64" | base64 --decode > "$INSTALLER_CERT_PATH"
+
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import both certificates to keychain
+          security import "$APPLICATION_CERT_PATH" -P "$APPLICATION_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security import "$INSTALLER_CERT_PATH" -P "$INSTALLER_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # Verify certificates were imported
+          echo "Verifying certificate imports..."
+          echo "Application certificate:"
+          security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Application" || echo "WARNING: Developer ID Application certificate not found"
+          echo "Installer certificate:"
+          security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" || echo "WARNING: Developer ID Installer certificate not found"
+
+          # Store keychain path for later steps
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
+
+      - name: Prepare and sign binaries
+        run: |
+          mkdir -p pkg-root/usr/local/bin
+
+          # Copy the three binaries we want in the package
+          cp artifacts/${{ inputs.arch }}/release/antnode pkg-root/usr/local/bin/
+          cp artifacts/${{ inputs.arch }}/release/antctl pkg-root/usr/local/bin/
+          cp artifacts/${{ inputs.arch }}/release/ant pkg-root/usr/local/bin/
+
+          # Make them executable
+          chmod +x pkg-root/usr/local/bin/*
+
+          # Find the Developer ID Application signing identity
+          APP_SIGNING_IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+
+          if [ -z "$APP_SIGNING_IDENTITY" ]; then
+            echo "Error: Could not find Developer ID Application certificate"
+            security find-identity -v "$KEYCHAIN_PATH"
+            exit 1
+          fi
+
+          echo "Signing binaries with identity: $APP_SIGNING_IDENTITY"
+
+          # Sign each binary with hardened runtime and secure timestamp
+          for binary in ant antnode antctl; do
+            echo "Signing $binary..."
+            codesign --sign "$APP_SIGNING_IDENTITY" \
+              --keychain "$KEYCHAIN_PATH" \
+              --options runtime \
+              --timestamp \
+              --force \
+              "pkg-root/usr/local/bin/$binary"
+
+            # Verify signature
+            echo "Verifying $binary signature..."
+            codesign --verify --verbose=2 "pkg-root/usr/local/bin/$binary"
+          done
+
+          # List contents for verification
+          echo "Package contents:"
+          ls -la pkg-root/usr/local/bin/
+
+      - name: Build component package
+        run: |
+          pkgbuild \
+            --root pkg-root \
+            --identifier com.autonomi.cli \
+            --version "${{ steps.version.outputs.version }}" \
+            --install-location / \
+            autonomi-component.pkg
+
+          echo "Component package created"
+          ls -la autonomi-component.pkg
+
+      - name: Create distribution XML
+        run: |
+          cat > distribution.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <installer-gui-script minSpecVersion="2">
+              <title>Autonomi CLI Suite</title>
+              <organization>com.autonomi</organization>
+              <domains enable_localSystem="true"/>
+              <options customize="never" require-scripts="false" hostArchitectures="x86_64,arm64"/>
+
+              <welcome file="welcome.html"/>
+              <conclusion file="conclusion.html"/>
+
+              <choices-outline>
+                  <line choice="default">
+                      <line choice="com.autonomi.cli"/>
+                  </line>
+              </choices-outline>
+
+              <choice id="default"/>
+              <choice id="com.autonomi.cli" visible="false">
+                  <pkg-ref id="com.autonomi.cli"/>
+              </choice>
+
+              <pkg-ref id="com.autonomi.cli"
+                       version="${{ steps.version.outputs.version }}"
+                       onConclusion="none">autonomi-component.pkg</pkg-ref>
+          </installer-gui-script>
+          EOF
+
+      - name: Create installer resources
+        run: |
+          mkdir -p resources
+
+          cat > resources/welcome.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="utf-8">
+              <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; }
+                  h1 { color: #333; }
+                  ul { line-height: 1.8; }
+                  code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+              </style>
+          </head>
+          <body>
+              <h1>Autonomi CLI Suite</h1>
+              <p>This package will install the Autonomi command-line tools:</p>
+              <ul>
+                  <li><code>ant</code> - Autonomi client CLI for file operations</li>
+                  <li><code>antnode</code> - Autonomi node software</li>
+                  <li><code>antctl</code> - Node management and control tool</li>
+              </ul>
+              <p>The binaries will be installed to <code>/usr/local/bin</code>.</p>
+          </body>
+          </html>
+          EOF
+
+          cat > resources/conclusion.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="utf-8">
+              <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; }
+                  h1 { color: #333; }
+                  code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+                  pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }
+              </style>
+          </head>
+          <body>
+              <h1>Installation Complete</h1>
+              <p>The Autonomi CLI tools have been installed successfully.</p>
+              <p>You can verify the installation by running:</p>
+              <pre>ant --version
+          antnode --version
+          antctl --version</pre>
+              <p>For documentation and guides, visit: <a href="https://docs.autonomi.com">docs.autonomi.com</a></p>
+          </body>
+          </html>
+          EOF
+
+      - name: Build product package
+        run: |
+          productbuild \
+            --distribution distribution.xml \
+            --resources resources \
+            --package-path . \
+            autonomi-unsigned.pkg
+
+          echo "Product package created"
+          ls -la autonomi-unsigned.pkg
+
+      - name: Sign package
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Find the signing identity
+          SIGNING_IDENTITY=$(security find-identity -v "$KEYCHAIN_PATH" | grep "Developer ID Installer" | head -1 | awk -F'"' '{print $2}')
+
+          if [ -z "$SIGNING_IDENTITY" ]; then
+            echo "Error: Could not find Developer ID Installer certificate"
+            security find-identity -v "$KEYCHAIN_PATH"
+            exit 1
+          fi
+
+          echo "Signing with identity: $SIGNING_IDENTITY"
+
+          productsign \
+            --sign "$SIGNING_IDENTITY" \
+            --keychain "$KEYCHAIN_PATH" \
+            autonomi-unsigned.pkg \
+            ${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg
+
+          echo "Package signed successfully"
+
+          # Verify signature
+          pkgutil --check-signature ${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg
+
+      - name: Submit for notarization
+        id: notarize
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          PKG_FILE="${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg"
+
+          echo "Submitting $PKG_FILE for notarization..."
+
+          # Submit and capture output to get submission ID
+          SUBMIT_OUTPUT=$(xcrun notarytool submit "$PKG_FILE" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_NOTARIZATION_PASSWORD" \
+            --team-id "$TEAM_ID" \
+            --wait \
+            --timeout 45m \
+            --output-format json 2>&1) || true
+
+          echo "Notarization output:"
+          echo "$SUBMIT_OUTPUT"
+
+          # Extract submission ID and status
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/"id"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+          STATUS=$(echo "$SUBMIT_OUTPUT" | grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/"status"[[:space:]]*:[[:space:]]*"\([^"]*\)"/\1/')
+
+          echo "Submission ID: $SUBMISSION_ID"
+          echo "Status: $STATUS"
+          echo "submission_id=$SUBMISSION_ID" >> $GITHUB_OUTPUT
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "Notarization failed with status: $STATUS"
+
+            # Fetch the log for more details
+            if [ -n "$SUBMISSION_ID" ]; then
+              echo "Fetching notarization log..."
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_NOTARIZATION_PASSWORD" \
+                --team-id "$TEAM_ID" || true
+            fi
+
+            exit 1
+          fi
+
+          echo "Notarization accepted successfully"
+
+      - name: Staple notarization ticket
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          PKG_FILE="${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg"
+          SUBMISSION_ID="${{ steps.notarize.outputs.submission_id }}"
+
+          echo "Stapling notarization ticket to $PKG_FILE..."
+          echo "Submission ID: $SUBMISSION_ID"
+
+          # Retry logic: notarization ticket may take time to propagate to CloudKit
+          # Uses exponential backoff starting at 30s, doubling each attempt, max 300s
+          max_attempts=10
+          attempt=1
+          wait_time=30
+          while [ $attempt -le $max_attempts ]; do
+            echo "Stapling attempt $attempt of $max_attempts..."
+            if xcrun stapler staple "$PKG_FILE"; then
+              echo "Stapling succeeded on attempt $attempt"
+              break
+            else
+              if [ $attempt -eq $max_attempts ]; then
+                echo "Stapling failed after $max_attempts attempts"
+
+                # Try to get more info about the notarization
+                echo "Checking notarization info..."
+                xcrun notarytool info "$SUBMISSION_ID" \
+                  --apple-id "$APPLE_ID" \
+                  --password "$APPLE_NOTARIZATION_PASSWORD" \
+                  --team-id "$TEAM_ID" || true
+
+                exit 1
+              fi
+              echo "Stapling failed, waiting $wait_time seconds before retry..."
+              sleep $wait_time
+              attempt=$((attempt + 1))
+              # Exponential backoff: double wait time, max 300 seconds
+              wait_time=$((wait_time * 2))
+              if [ $wait_time -gt 300 ]; then
+                wait_time=300
+              fi
+            fi
+          done
+
+          echo "Verifying stapled package..."
+          xcrun stapler validate "$PKG_FILE"
+
+          # Final verification with spctl
+          echo "Final verification with spctl..."
+          spctl -a -vv -t install "$PKG_FILE"
+
+      - name: Upload pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomi-pkg-${{ inputs.arch }}
+          path: ${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+          rm -f $RUNNER_TEMP/certificate.p12 || true
