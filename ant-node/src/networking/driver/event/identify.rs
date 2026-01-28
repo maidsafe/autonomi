@@ -140,20 +140,16 @@ impl SwarmDriver {
         let peer_type = PeerType::from_agent_string(&info.agent_version);
         let version_result = check_peer_version(&info.agent_version, None); // No minimum set in Phase 1
 
-        // Record metrics for version checks
+        // Record metrics for version checks - uses raw enum result as label
         #[cfg(feature = "open-metrics")]
         if let Some(metrics) = &self.metrics_recorder {
-            let (result_str, detected_version) = match &version_result {
-                VersionCheckResult::Accepted { version } => {
-                    ("accepted", Some((version.major, version.minor)))
-                }
-                VersionCheckResult::Rejected { detected, .. } => {
-                    ("rejected", Some((detected.major, detected.minor)))
-                }
-                VersionCheckResult::Legacy => ("legacy", None),
-                VersionCheckResult::ParseError { .. } => ("parse_error", None),
+            let result_str = match &version_result {
+                VersionCheckResult::Accepted { .. } => "accepted",
+                VersionCheckResult::Rejected { .. } => "rejected",
+                VersionCheckResult::Legacy => "legacy",
+                VersionCheckResult::ParseError { .. } => "parse_error",
             };
-            metrics.record_version_check(&peer_type.to_string(), result_str, detected_version);
+            metrics.record_version_check(&peer_type.to_string(), result_str);
         }
 
         // Emit event for observability

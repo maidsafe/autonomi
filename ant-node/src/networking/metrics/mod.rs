@@ -40,23 +40,13 @@ pub(crate) struct VersionLabels {
     version: String,
 }
 
-// Version gate metric labels
+// Version gate metric labels - uses enum result type as the label
 #[derive(Clone, Hash, PartialEq, Eq, Debug, EncodeLabelSet)]
-pub(crate) struct VersionCheckLabels {
+pub(crate) struct VersionCheckResultLabels {
+    /// The type of peer (node/client/reachability_check_client/unknown)
     peer_type: String,
+    /// The result of version check (accepted/rejected/legacy/parse_error)
     result: String,
-}
-
-#[derive(Clone, Hash, PartialEq, Eq, Debug, EncodeLabelSet)]
-pub(crate) struct VersionRejectedLabels {
-    peer_type: String,
-    detected_major: String,
-    detected_minor: String,
-}
-
-#[derive(Clone, Hash, PartialEq, Eq, Debug, EncodeLabelSet)]
-pub(crate) struct LegacyPeerLabels {
-    peer_type: String,
 }
 
 /// The shared recorders that are used to record metrics.
@@ -117,10 +107,8 @@ pub(crate) struct NetworkMetricsRecorder {
     // helpers
     bad_nodes_notifier: tokio::sync::mpsc::Sender<BadNodeMetricsMsg>,
 
-    // version gate metrics
-    version_check_total: Family<VersionCheckLabels, Counter>,
-    version_rejected_total: Family<VersionRejectedLabels, Counter>,
-    legacy_peers_total: Family<LegacyPeerLabels, Counter>,
+    // version gate metrics - single metric with enum result as label
+    version_check_result: Family<VersionCheckResultLabels, Counter>,
 }
 
 impl NetworkMetricsRecorder {
@@ -354,26 +342,12 @@ impl NetworkMetricsRecorder {
             shunned_by_old_close_group.clone(),
         );
 
-        // Version gate metrics
-        let version_check_total = Family::default();
+        // Version gate metrics - single metric with result enum as label
+        let version_check_result = Family::default();
         sub_registry.register(
-            "version_check_total",
-            "Total peer version checks performed",
-            version_check_total.clone(),
-        );
-
-        let version_rejected_total = Family::default();
-        sub_registry.register(
-            "version_rejected_total",
-            "Peers rejected due to version requirements",
-            version_rejected_total.clone(),
-        );
-
-        let legacy_peers_total = Family::default();
-        sub_registry.register(
-            "legacy_peers_total",
-            "Legacy peers encountered without version info",
-            legacy_peers_total.clone(),
+            "version_check_result",
+            "Peer version check results by type (accepted/rejected/legacy/parse_error)",
+            version_check_result.clone(),
         );
 
         let network_metrics = Self {
@@ -419,9 +393,7 @@ impl NetworkMetricsRecorder {
 
             bad_nodes_notifier,
 
-            version_check_total,
-            version_rejected_total,
-            legacy_peers_total,
+            version_check_result,
         };
 
         network_metrics.system_metrics_recorder_task();
@@ -610,41 +582,17 @@ impl NetworkMetricsRecorder {
         });
     }
 
-    /// Record a version check result for metrics
-    pub(crate) fn record_version_check(
-        &self,
-        peer_type: &str,
-        result: &str,
-        detected_version: Option<(u16, u16)>,
-    ) {
+    /// Record a version check result for metrics.
+    ///
+    /// Records the raw enum result type (accepted/rejected/legacy/parse_error) as the metric label.
+    pub(crate) fn record_version_check(&self, peer_type: &str, result: &str) {
         let _ = self
-            .version_check_total
-            .get_or_create(&VersionCheckLabels {
+            .version_check_result
+            .get_or_create(&VersionCheckResultLabels {
                 peer_type: peer_type.to_string(),
                 result: result.to_string(),
             })
             .inc();
-
-        // Also record specific metrics for rejections and legacy peers
-        if result == "rejected" {
-            if let Some((major, minor)) = detected_version {
-                let _ = self
-                    .version_rejected_total
-                    .get_or_create(&VersionRejectedLabels {
-                        peer_type: peer_type.to_string(),
-                        detected_major: major.to_string(),
-                        detected_minor: minor.to_string(),
-                    })
-                    .inc();
-            }
-        } else if result == "legacy" {
-            let _ = self
-                .legacy_peers_total
-                .get_or_create(&LegacyPeerLabels {
-                    peer_type: peer_type.to_string(),
-                })
-                .inc();
-        }
     }
 
     pub(crate) fn update_node_versions(&self, versions: &HashMap<PeerId, String>) {
