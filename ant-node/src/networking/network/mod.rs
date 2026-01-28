@@ -11,9 +11,9 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ant_evm::{PaymentQuote, QuotingMetrics};
+use ant_evm::{PaymentQuote, ProofOfPayment, QuotingMetrics};
 use ant_protocol::messages::{ConnectionInfo, Request, Response};
-use ant_protocol::storage::ValidationType;
+use ant_protocol::storage::{DataTypes, ValidationType};
 use ant_protocol::{NetworkAddress, PrettyPrintKBucketKey, PrettyPrintRecordKey};
 use exponential_backoff::Backoff;
 use futures::StreamExt;
@@ -24,6 +24,7 @@ use libp2p::swarm::ConnectionId;
 use libp2p::{Multiaddr, PeerId, identity::Keypair};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::sleep;
+use xor_name::XorName;
 
 use super::driver::event::MsgResponder;
 use super::error::{NetworkError, Result};
@@ -183,6 +184,21 @@ impl Network {
     /// Notify the node receicced a payment.
     pub(crate) fn notify_payment_received(&self) {
         self.send_local_swarm_cmd(LocalSwarmCmd::PaymentReceived);
+    }
+
+    /// Add an entry to the paid-for list after payment verification.
+    /// Includes ProofOfPayment so other nodes can verify claims against EVM chain.
+    pub(crate) fn notify_paid_for_entry_added(
+        &self,
+        xor_name: XorName,
+        data_type: DataTypes,
+        proof: ProofOfPayment,
+    ) {
+        self.send_local_swarm_cmd(LocalSwarmCmd::AddPaidForEntry {
+            xor_name,
+            data_type,
+            proof,
+        });
     }
 
     pub(crate) fn notify_record_not_at_target_location(&self) {

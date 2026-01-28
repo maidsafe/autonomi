@@ -11,7 +11,7 @@ use std::{
     fmt::Debug,
 };
 
-use ant_evm::{PaymentQuote, QuotingMetrics};
+use ant_evm::{PaymentQuote, ProofOfPayment, QuotingMetrics};
 use ant_protocol::{
     NetworkAddress, PrettyPrintRecordKey,
     storage::{DataTypes, ValidationType},
@@ -22,6 +22,7 @@ use libp2p::{
     kad::{KBucketDistance as Distance, Record, RecordKey},
 };
 use tokio::sync::oneshot;
+use xor_name::XorName;
 
 use crate::networking::Addresses;
 
@@ -96,6 +97,14 @@ pub(crate) enum LocalSwarmCmd {
     },
     /// Notify the node received a payment.
     PaymentReceived,
+    /// Add an entry to the paid-for list after payment verification.
+    /// This tracks which XorNames have been paid for.
+    /// Includes ProofOfPayment so other nodes can verify claims against EVM chain.
+    AddPaidForEntry {
+        xor_name: XorName,
+        data_type: DataTypes,
+        proof: ProofOfPayment,
+    },
     /// Put record to the local RecordStore
     PutLocalRecord {
         record: Record,
@@ -220,6 +229,16 @@ impl Debug for LocalSwarmCmd {
             }
             LocalSwarmCmd::PaymentReceived => {
                 write!(f, "LocalSwarmCmd::PaymentReceived")
+            }
+            LocalSwarmCmd::AddPaidForEntry {
+                xor_name,
+                data_type,
+                proof: _,
+            } => {
+                write!(
+                    f,
+                    "LocalSwarmCmd::AddPaidForEntry {{ xor_name: {xor_name:?}, data_type: {data_type:?}, proof: <proof> }}"
+                )
             }
             LocalSwarmCmd::GetLocalRecord { key, .. } => {
                 write!(
