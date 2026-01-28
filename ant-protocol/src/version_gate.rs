@@ -20,8 +20,34 @@
 //! - Reachability check peers: `ant/reachability-check-peer/{protocol_version}/{version}/{network_id}`
 //!
 //! Example: `ant/node/1.0/0.4.13/1`
+//!
+//! # Phase 2 Enforcement
+//!
+//! - **Nodes**: Version is enforced - peers below minimum or without version are rejected
+//! - **Clients**: Version is NOT enforced - always allowed (metrics only)
+//! - **Legacy peers**: Rejected (no grace period)
 
 use std::fmt;
+
+/// Minimum required node version for connecting to the network.
+///
+/// Nodes running versions below this will be disconnected (not blocklisted).
+/// This can be overridden via the `ANT_MIN_NODE_VERSION` environment variable.
+///
+/// Format: (major, minor, patch)
+pub const MIN_NODE_VERSION: (u16, u16, u16) = (0, 4, 10);
+
+/// Get the minimum node version, checking environment variable override first.
+///
+/// Environment variable format: `ANT_MIN_NODE_VERSION=0.4.10`
+pub fn get_min_node_version() -> PeerVersion {
+    if let Ok(env_version) = std::env::var("ANT_MIN_NODE_VERSION")
+        && let Some(version) = PeerVersion::parse_semver(&env_version)
+    {
+        return version;
+    }
+    PeerVersion::new(MIN_NODE_VERSION.0, MIN_NODE_VERSION.1, MIN_NODE_VERSION.2)
+}
 
 /// Represents a parsed semantic version from a peer's agent string.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -95,7 +121,8 @@ impl PeerVersion {
     ///
     /// Returns `true` if `self >= min_version`.
     pub fn meets_minimum(&self, min_version: &PeerVersion) -> bool {
-        (self.major, self.minor, self.patch) >= (min_version.major, min_version.minor, min_version.patch)
+        (self.major, self.minor, self.patch)
+            >= (min_version.major, min_version.minor, min_version.patch)
     }
 }
 
@@ -288,7 +315,9 @@ mod tests {
         let agent = "ant/node/1.0/0.4.13/1";
         let min = PeerVersion::new(0, 4, 10);
         let result = check_peer_version(agent, Some(&min));
-        assert!(matches!(result, VersionCheckResult::Accepted { version } if version == PeerVersion::new(0, 4, 13)));
+        assert!(
+            matches!(result, VersionCheckResult::Accepted { version } if version == PeerVersion::new(0, 4, 13))
+        );
     }
 
     #[test]
@@ -296,8 +325,10 @@ mod tests {
         let agent = "ant/node/1.0/0.4.9/1";
         let min = PeerVersion::new(0, 4, 10);
         let result = check_peer_version(agent, Some(&min));
-        assert!(matches!(result, VersionCheckResult::Rejected { detected, minimum }
-            if detected == PeerVersion::new(0, 4, 9) && minimum == PeerVersion::new(0, 4, 10)));
+        assert!(
+            matches!(result, VersionCheckResult::Rejected { detected, minimum }
+            if detected == PeerVersion::new(0, 4, 9) && minimum == PeerVersion::new(0, 4, 10))
+        );
     }
 
     #[test]
@@ -353,5 +384,24 @@ mod tests {
         };
         assert!(!rejected.is_allowed(true));
         assert!(!rejected.is_allowed(false));
+    }
+
+    #[test]
+    fn test_get_min_node_version() {
+        // Without env var, should return the constant
+        let min_version = get_min_node_version();
+        assert_eq!(
+            min_version,
+            PeerVersion::new(MIN_NODE_VERSION.0, MIN_NODE_VERSION.1, MIN_NODE_VERSION.2)
+        );
+    }
+
+    #[test]
+    fn test_min_version_constant() {
+        // Verify the constant is set correctly
+        let (major, minor, patch) = MIN_NODE_VERSION;
+        assert_eq!(major, 0);
+        assert_eq!(minor, 4);
+        assert_eq!(patch, 10);
     }
 }

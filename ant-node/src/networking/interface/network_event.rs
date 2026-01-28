@@ -81,6 +81,17 @@ pub(crate) enum NetworkEvent {
         /// The result of the version check
         result: VersionCheckResult,
     },
+    /// A peer was rejected due to version requirements (Phase 2 enforcement)
+    PeerVersionRejected {
+        /// The peer that was rejected
+        peer_id: PeerId,
+        /// The peer type
+        peer_type: PeerType,
+        /// The result that caused rejection
+        result: VersionCheckResult,
+        /// The minimum required version
+        min_version: String,
+    },
 }
 
 /// Terminate node for the following reason
@@ -176,6 +187,17 @@ impl std::fmt::Debug for NetworkEvent {
                 write!(
                     f,
                     "NetworkEvent::PeerVersionChecked({peer_id:?}, type={peer_type}, result={result:?})"
+                )
+            }
+            NetworkEvent::PeerVersionRejected {
+                peer_id,
+                peer_type,
+                result,
+                min_version,
+            } => {
+                write!(
+                    f,
+                    "NetworkEvent::PeerVersionRejected({peer_id:?}, type={peer_type}, result={result:?}, min={min_version})"
                 )
             }
         }
