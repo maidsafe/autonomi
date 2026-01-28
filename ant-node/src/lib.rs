@@ -27,6 +27,7 @@
 #[macro_use]
 extern crate tracing;
 
+mod critical_failure;
 mod error;
 mod event;
 mod log_markers;
@@ -47,6 +48,7 @@ pub mod utils;
 pub use self::networking::ReachabilityIssue;
 pub use self::networking::ReachabilityStatus;
 pub use self::{
+    critical_failure::{reset_critical_failure, set_critical_failure},
     error::{Error, PutValidationError},
     event::{NodeEvent, NodeEventsChannel, NodeEventsReceiver},
     log_markers::Marker,

@@ -9,6 +9,8 @@
 use super::{
     Marker, NodeEvent, error::Result, event::NodeEventsChannel, quote::quotes_verification,
 };
+use crate::critical_failure::set_critical_failure;
+use crate::error::Error;
 #[cfg(feature = "open-metrics")]
 use crate::metrics::NodeMetricsRecorder;
 #[cfg(feature = "open-metrics")]
