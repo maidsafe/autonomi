@@ -47,10 +47,10 @@ jobs:
     name: build pkg (${{ inputs.arch }})
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Download build artifacts
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           name: autonomi-${{ inputs.arch }}
           path: artifacts/${{ inputs.arch }}/release
@@ -297,7 +297,7 @@ jobs:
             --password "$APPLE_NOTARIZATION_PASSWORD" \
             --team-id "$TEAM_ID" \
             --wait \
-            --timeout 30m \
+            --timeout 45m \
             --output-format json 2>&1) || true
 
           echo "Notarization output:"
@@ -341,8 +341,10 @@ jobs:
           echo "Submission ID: $SUBMISSION_ID"
 
           # Retry logic: notarization ticket may take time to propagate to CloudKit
+          # Uses exponential backoff starting at 30s, doubling each attempt, max 300s
           max_attempts=10
           attempt=1
+          wait_time=30
           while [ $attempt -le $max_attempts ]; do
             echo "Stapling attempt $attempt of $max_attempts..."
             if xcrun stapler staple "$PKG_FILE"; then
@@ -361,9 +363,14 @@ jobs:
 
                 exit 1
               fi
-              echo "Stapling failed, waiting 60 seconds before retry..."
-              sleep 60
+              echo "Stapling failed, waiting $wait_time seconds before retry..."
+              sleep $wait_time
               attempt=$((attempt + 1))
+              # Exponential backoff: double wait time, max 300 seconds
+              wait_time=$((wait_time * 2))
+              if [ $wait_time -gt 300 ]; then
+                wait_time=300
+              fi
             fi
           done
 
@@ -375,7 +382,7 @@ jobs:
           spctl -a -vv -t install "$PKG_FILE"
 
       - name: Upload pkg artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: autonomi-pkg-${{ inputs.arch }}
           path: ${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg

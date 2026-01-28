@@ -3,6 +3,11 @@
 # This workflow downloads installers from a GitHub release and verifies
 # they install correctly and the binaries work as expected.
 #
+# Note: Currently only tests x86_64 architecture due to GitHub runner limitations.
+# Cross-architecture testing (aarch64, armv7, arm) would require emulation or
+# self-hosted runners, which is not implemented. The packages for other architectures
+# are built but not automatically verified.
+#
 # Usage:
 #   Run manually via Actions tab, providing the release tag to verify.
 

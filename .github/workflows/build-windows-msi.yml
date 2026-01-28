@@ -39,10 +39,10 @@ jobs:
       SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
       SM_KEYPAIR_ALIAS: ${{ secrets.SM_KEYPAIR_ALIAS }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Download signed Windows artifacts
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           name: autonomi-x86_64-pc-windows-msvc-signed
           path: artifacts/x86_64-pc-windows-msvc-signed/release
@@ -199,7 +199,7 @@ jobs:
           }
 
       - name: Upload MSI artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: autonomi-msi-x86_64-pc-windows-msvc
           path: ${{ steps.version.outputs.version }}.autonomi.x86_64-pc-windows-msvc.msi

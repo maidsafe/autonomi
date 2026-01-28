@@ -41,10 +41,10 @@ jobs:
     name: build app (${{ inputs.arch }})
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Download build artifacts
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           name: autonomi-${{ inputs.arch }}
           path: artifacts/${{ inputs.arch }}/release
@@ -101,6 +101,7 @@ jobs:
           APP_NAME="Node Launchpad"
           APP_DIR="${APP_NAME}.app"
           VERSION="${{ steps.version.outputs.version }}"
+          CURRENT_YEAR=$(date +%Y)
 
           mkdir -p "$APP_DIR/Contents/MacOS"
           mkdir -p "$APP_DIR/Contents/Resources"
@@ -163,7 +164,7 @@ jobs:
               <key>LSApplicationCategoryType</key>
               <string>public.app-category.utilities</string>
               <key>NSHumanReadableCopyright</key>
-              <string>Copyright 2024 MaidSafe. All rights reserved.</string>
+              <string>Copyright ${CURRENT_YEAR} MaidSafe. All rights reserved.</string>
           </dict>
           </plist>
           PLIST_EOF
@@ -245,7 +246,7 @@ jobs:
             --password "$APPLE_NOTARIZATION_PASSWORD" \
             --team-id "$TEAM_ID" \
             --wait \
-            --timeout 30m \
+            --timeout 45m \
             --output-format json 2>&1) || true
 
           echo "Notarization output:"
@@ -280,6 +281,7 @@ jobs:
 
           max_attempts=10
           attempt=1
+          wait_time=30
           while [ $attempt -le $max_attempts ]; do
             echo "Stapling attempt $attempt of $max_attempts..."
             if xcrun stapler staple "$APP_DIR"; then
@@ -290,9 +292,14 @@ jobs:
                 echo "Stapling failed after $max_attempts attempts"
                 exit 1
               fi
-              echo "Stapling failed, waiting 60 seconds before retry..."
-              sleep 60
+              echo "Stapling failed, waiting $wait_time seconds before retry..."
+              sleep $wait_time
               attempt=$((attempt + 1))
+              # Exponential backoff: double wait time, max 300 seconds
+              wait_time=$((wait_time * 2))
+              if [ $wait_time -gt 300 ]; then
+                wait_time=300
+              fi
             fi
           done
 
@@ -376,7 +383,7 @@ jobs:
             --password "$APPLE_NOTARIZATION_PASSWORD" \
             --team-id "$TEAM_ID" \
             --wait \
-            --timeout 30m \
+            --timeout 45m \
             --output-format json 2>&1) || true
 
           echo "Notarization output:"
@@ -417,6 +424,7 @@ jobs:
 
           max_attempts=10
           attempt=1
+          wait_time=30
           while [ $attempt -le $max_attempts ]; do
             echo "Stapling attempt $attempt of $max_attempts..."
             if xcrun stapler staple "$DMG_NAME"; then
@@ -434,9 +442,14 @@ jobs:
                 fi
                 exit 1
               fi
-              echo "Stapling failed, waiting 60 seconds before retry..."
-              sleep 60
+              echo "Stapling failed, waiting $wait_time seconds before retry..."
+              sleep $wait_time
               attempt=$((attempt + 1))
+              # Exponential backoff: double wait time, max 300 seconds
+              wait_time=$((wait_time * 2))
+              if [ $wait_time -gt 300 ]; then
+                wait_time=300
+              fi
             fi
           done
 
@@ -448,7 +461,7 @@ jobs:
           spctl -a -vv -t open --context context:primary-signature "$DMG_NAME"
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: node-launchpad-dmg-${{ inputs.arch }}
           path: ${{ steps.version.outputs.version }}.node-launchpad.${{ inputs.arch }}.dmg
