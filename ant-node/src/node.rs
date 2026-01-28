@@ -24,6 +24,7 @@ use ant_protocol::{
     error::Error as ProtocolError,
     messages::{ChunkProof, CmdResponse, Nonce, Query, QueryResponse, Request, Response},
     storage::{Chunk, ValidationType, try_deserialize_record},
+    version_gate::VersionCheckResult,
 };
 use bytes::Bytes;
 use futures::stream::{self, StreamExt};
@@ -639,29 +640,48 @@ impl Node {
             }
             NetworkEvent::PeerVersionChecked {
                 peer_id,
-                detected_version,
                 peer_type,
-                meets_minimum,
-                is_legacy,
+                result,
             } => {
                 event_header = "PeerVersionChecked";
                 // Phase 1: Log for observability, no enforcement
-                if is_legacy {
-                    debug!(
-                        target: "version_gate",
-                        peer_id = %peer_id,
-                        peer_type = %peer_type,
-                        "Legacy peer connected (no version in agent string)"
-                    );
-                } else if let Some(version) = detected_version {
-                    trace!(
-                        target: "version_gate",
-                        peer_id = %peer_id,
-                        version = %version,
-                        peer_type = %peer_type,
-                        meets_minimum = %meets_minimum,
-                        "Peer version checked"
-                    );
+                match &result {
+                    VersionCheckResult::Accepted { version } => {
+                        trace!(
+                            target: "version_gate",
+                            peer_id = %peer_id,
+                            version = %version,
+                            peer_type = %peer_type,
+                            "Peer version accepted"
+                        );
+                    }
+                    VersionCheckResult::Legacy => {
+                        debug!(
+                            target: "version_gate",
+                            peer_id = %peer_id,
+                            peer_type = %peer_type,
+                            "Legacy peer connected (no version in agent string)"
+                        );
+                    }
+                    VersionCheckResult::Rejected { detected, minimum } => {
+                        // Won't happen in Phase 1 since no minimum is set
+                        warn!(
+                            target: "version_gate",
+                            peer_id = %peer_id,
+                            detected = %detected,
+                            minimum = %minimum,
+                            peer_type = %peer_type,
+                            "Peer version rejected"
+                        );
+                    }
+                    VersionCheckResult::ParseError { agent_string } => {
+                        debug!(
+                            target: "version_gate",
+                            peer_id = %peer_id,
+                            agent_string = %agent_string,
+                            "Could not parse peer version"
+                        );
+                    }
                 }
             }
         }

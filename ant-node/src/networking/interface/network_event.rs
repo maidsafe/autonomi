@@ -13,6 +13,7 @@ use ant_protocol::{
     NetworkAddress, PrettyPrintRecordKey,
     messages::{Query, Response},
     storage::{DataTypes, ValidationType},
+    version_gate::{PeerType, VersionCheckResult},
 };
 use libp2p::kad::{Record, RecordKey};
 use libp2p::{Multiaddr, PeerId};
@@ -75,14 +76,10 @@ pub(crate) enum NetworkEvent {
     PeerVersionChecked {
         /// The peer that was checked
         peer_id: PeerId,
-        /// The detected version string (if parseable)
-        detected_version: Option<String>,
-        /// The peer type (node/client)
-        peer_type: String,
-        /// Whether the peer meets minimum requirements
-        meets_minimum: bool,
-        /// Whether this is a legacy peer (no version in agent string)
-        is_legacy: bool,
+        /// The peer type (node/client/reachability_check_client)
+        peer_type: PeerType,
+        /// The result of the version check
+        result: VersionCheckResult,
     },
 }
 
@@ -173,14 +170,12 @@ impl std::fmt::Debug for NetworkEvent {
             }
             NetworkEvent::PeerVersionChecked {
                 peer_id,
-                detected_version,
                 peer_type,
-                meets_minimum,
-                is_legacy,
+                result,
             } => {
                 write!(
                     f,
-                    "NetworkEvent::PeerVersionChecked({peer_id:?}, version={detected_version:?}, type={peer_type}, meets_min={meets_minimum}, legacy={is_legacy})"
+                    "NetworkEvent::PeerVersionChecked({peer_id:?}, type={peer_type}, result={result:?})"
                 )
             }
         }

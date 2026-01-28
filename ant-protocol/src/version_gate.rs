@@ -17,6 +17,7 @@
 //! The expected agent string format is:
 //! - Nodes: `ant/node/{protocol_version}/{node_version}/{network_id}`
 //! - Clients: `ant/client/{protocol_version}/{client_version}/{network_id}`
+//! - Reachability check peers: `ant/reachability-check-peer/{protocol_version}/{version}/{network_id}`
 //!
 //! Example: `ant/node/1.0/0.4.13/1`
 
@@ -48,6 +49,7 @@ impl PeerVersion {
     /// Expected formats:
     /// - `ant/node/{protocol_version}/{node_version}/{network_id}`
     /// - `ant/client/{protocol_version}/{client_version}/{network_id}`
+    /// - `ant/reachability-check-peer/{protocol_version}/{version}/{network_id}`
     ///
     /// Returns `None` if the agent string doesn't match the expected format
     /// or if the version cannot be parsed.
@@ -145,6 +147,8 @@ pub enum PeerType {
     Node,
     /// A client
     Client,
+    /// A reachability check client (used for NAT traversal checks)
+    ReachabilityCheckClient,
     /// Unknown peer type
     Unknown,
 }
@@ -154,6 +158,8 @@ impl PeerType {
     pub fn from_agent_string(agent: &str) -> Self {
         if agent.contains("/node/") {
             PeerType::Node
+        } else if agent.contains("reachability-check-peer") {
+            PeerType::ReachabilityCheckClient
         } else if agent.contains("/client/") || agent.contains("client") {
             PeerType::Client
         } else {
@@ -167,6 +173,7 @@ impl fmt::Display for PeerType {
         match self {
             PeerType::Node => write!(f, "node"),
             PeerType::Client => write!(f, "client"),
+            PeerType::ReachabilityCheckClient => write!(f, "reachability_check_client"),
             PeerType::Unknown => write!(f, "unknown"),
         }
     }
@@ -317,6 +324,10 @@ mod tests {
         assert_eq!(
             PeerType::from_agent_string("ant/client/1.0/0.9.0/1"),
             PeerType::Client
+        );
+        assert_eq!(
+            PeerType::from_agent_string("ant/reachability-check-peer/1.0/0.1.0/1"),
+            PeerType::ReachabilityCheckClient
         );
         assert_eq!(
             PeerType::from_agent_string("unknown-agent"),

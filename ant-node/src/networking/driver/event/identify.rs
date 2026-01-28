@@ -157,21 +157,10 @@ impl SwarmDriver {
         }
 
         // Emit event for observability
-        let (detected_version_str, meets_minimum, is_legacy) = match &version_result {
-            VersionCheckResult::Accepted { version } => (Some(version.to_string()), true, false),
-            VersionCheckResult::Rejected { detected, .. } => {
-                (Some(detected.to_string()), false, false)
-            }
-            VersionCheckResult::Legacy => (None, true, true), // Legacy allowed in Phase 1
-            VersionCheckResult::ParseError { .. } => (None, false, false),
-        };
-
         self.send_event(NetworkEvent::PeerVersionChecked {
             peer_id,
-            detected_version: detected_version_str,
-            peer_type: peer_type.to_string(),
-            meets_minimum,
-            is_legacy,
+            peer_type,
+            result: version_result.clone(),
         });
 
         // Log version info for observability
