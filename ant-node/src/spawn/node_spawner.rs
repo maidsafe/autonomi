@@ -8,7 +8,7 @@
 
 use crate::utils::get_root_dir_and_keypair;
 use crate::{NodeBuilder, RunningNode};
-use ant_bootstrap::{BootstrapConfig, bootstrap::Bootstrap};
+use ant_bootstrap::BootstrapConfig;
 pub use ant_evm::{EvmNetwork, RewardsAddress};
 pub use libp2p::Multiaddr;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -139,11 +139,10 @@ async fn spawn_node(
 
     let bootstrap_config = bootstrap_config.unwrap_or_default();
     let local = bootstrap_config.local;
-    let bootstrap = Bootstrap::new(bootstrap_config)?;
 
     let mut node_builder = NodeBuilder::new(
         keypair,
-        bootstrap,
+        bootstrap_config,
         rewards_address,
         evm_network,
         socket_addr,
@@ -152,7 +151,7 @@ async fn spawn_node(
     node_builder.local(local);
     node_builder.no_upnp(no_upnp);
 
-    let running_node = node_builder.build_and_run()?;
+    let running_node = node_builder.build_and_run().await?;
 
     // Verify that node is running
     let mut retries: u8 = 0;

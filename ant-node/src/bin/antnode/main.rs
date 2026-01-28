@@ -19,24 +19,23 @@ mod subcommands;
 #[cfg(unix)]
 mod upgrade;
 
-use crate::log::{reset_critical_failure, set_critical_failure};
+use crate::node_rpc::{NodeCtrl, StopResult};
 use crate::subcommands::EvmNetworkCommand;
 use ant_bootstrap::BootstrapConfig;
 use ant_bootstrap::InitialPeersConfig;
-use ant_bootstrap::bootstrap::Bootstrap;
 use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
 use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
-use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
-use ant_protocol::{
-    node_rpc::{NodeCtrl, StopResult},
-    version,
+use ant_node::{
+    Marker, NodeBuilder, NodeEvent, NodeEventsReceiver, reset_critical_failure,
+    set_critical_failure,
 };
+use ant_protocol::version;
 use clap::Parser;
-use color_eyre::{Result, eyre::eyre};
 use const_hex::traits::FromHex;
 use libp2p::PeerId;
+use libp2p::identity::Keypair;
 #[cfg(unix)]
 use rand::Rng;
 use std::{
@@ -70,7 +69,7 @@ impl std::fmt::Display for LogOutputDestArg {
     }
 }
 
-pub fn parse_log_output(val: &str) -> Result<LogOutputDestArg> {
+pub fn parse_log_output(val: &str) -> eyre::Result<LogOutputDestArg> {
     match val {
         "stdout" => Ok(LogOutputDestArg::Stdout),
         "data-dir" => Ok(LogOutputDestArg::DataDir),
@@ -78,6 +77,11 @@ pub fn parse_log_output(val: &str) -> Result<LogOutputDestArg> {
         // because the path doesn't need to exist. We can create it for the user.
         value => Ok(LogOutputDestArg::Path(PathBuf::from(value))),
     }
+}
+
+pub fn parse_rewards_address(val: &str) -> eyre::Result<RewardsAddress> {
+    let val = RewardsAddress::from_hex(val)?;
+    Ok(val)
 }
 
 // Please do not remove the blank lines in these doc comments.
@@ -198,8 +202,8 @@ struct Opt {
     /// Specify the rewards address.
     /// The rewards address is the address that will receive the rewards for the node.
     /// It should be a valid EVM address.
-    #[clap(long)]
-    rewards_address: Option<String>,
+    #[clap(long, value_parser = parse_rewards_address, verbatim_doc_comment)]
+    rewards_address: Option<RewardsAddress>,
 
     /// DEPRECATED: This does nothing from this version onwards.
     #[clap(long, default_value_t = false)]
@@ -234,10 +238,24 @@ struct Opt {
     /// Useful when running under a service manager that handles restarts.
     #[clap(long, default_value_t = false)]
     stop_on_upgrade: bool,
+
+    /// Disable running reachability checks before starting the node.
+    ///
+    /// By default, the node will verify that it is externally reachable before starting.
+    /// Use this flag to skip this check (useful for local testing or when you know the
+    /// node is properly configured).
+    #[clap(long, default_value_t = false)]
+    skip_reachability_check: bool,
 }
 
-fn main() -> Result<()> {
-    color_eyre::install()?;
+fn main() {
+    // Install panic hook to print panics before exit
+    // We only use eprintln! here to avoid potential issues with logging infrastructure during shutdown
+    std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!("Node panicked: {panic_info}",);
+    }));
+
+    color_eyre::install().expect("Failed to install color_eyre");
 
     // Cache the running binary's hash early, before any other node could replace the shared binary.
     // This ensures the hash reflects the actual binary we're running, not a newer version.
@@ -269,68 +287,122 @@ fn main() -> Result<()> {
                 Some(&identify_protocol_str)
             )
         );
-        return Ok(());
+        return;
     }
-
-    let rewards_address = RewardsAddress::from_hex(opt.rewards_address.as_ref().expect(
-        "the following required arguments were not provided: --rewards-address <REWARDS_ADDRESS>",
-    ))?;
 
     if opt.crate_version {
         println!("Crate version: {}", env!("CARGO_PKG_VERSION"));
-        return Ok(());
+        return;
     }
 
     if opt.protocol_version {
         println!("Network version: {identify_protocol_str}");
-        return Ok(());
+        return;
     }
 
     #[cfg(not(feature = "nightly"))]
     if opt.package_version {
         println!("Package version: {}", ant_build_info::package_version());
-        return Ok(());
+        return;
     }
 
+    let Some(rewards_address) = opt.rewards_address else {
+        eprintln!("Error: --rewards-address is required when running the node");
+        return;
+    };
+
     let evm_network: EvmNetwork = match opt.evm_network.as_ref() {
-        Some(evm_network) => Ok(evm_network.clone().into()),
+        Some(evm_network) => evm_network.clone().into(),
         None => match get_evm_network(opt.peers.local, Some(network_id)) {
-            Ok(net) => Ok(net),
-            Err(_) => Err(eyre!(
-                "EVM network not specified. Please specify a network using the subcommand or by setting the `EVM_NETWORK` environment variable."
-            )),
+            Ok(net) => net,
+            Err(_) => {
+                eprintln!(
+                    "EVM network not specified. Please specify a network using the subcommand or by setting the `EVM_NETWORK` environment variable."
+                );
+                return;
+            }
         },
-    }?;
+    };
 
     println!("EVM network: {evm_network:?}");
 
     let node_socket_addr = SocketAddr::new(opt.ip, opt.port);
-    let (root_dir, keypair) = get_root_dir_and_keypair(&opt.root_dir)?;
+    let (root_dir, keypair) = match get_root_dir_and_keypair(&opt.root_dir) {
+        Ok((root_dir, keypair)) => (root_dir, keypair),
+        Err(err) => {
+            eprintln!("Failed to obtain or create the node's root directory and keypair: {err}");
+            return;
+        }
+    };
 
     let (log_output_dest, log_reload_handle, _log_appender_guard) =
-        init_logging(&opt, keypair.public().to_peer_id())?;
+        match init_logging(&opt, keypair.public().to_peer_id()) {
+            Ok((log_output_dest, log_reload_handle, _log_appender_guard)) => {
+                (log_output_dest, log_reload_handle, _log_appender_guard)
+            }
+            Err(err) => {
+                eprintln!("Failed to initialize logging: {err}");
+                return;
+            }
+        };
 
-    // Create a tokio runtime per `run_node` attempt, this ensures
-    // any spawned tasks are closed before we would attempt to run
-    // another process with these args.
-    let rt = Runtime::new()?;
-
-    let bootstrap_config = BootstrapConfig::try_from(&opt.peers)?
-        .with_backwards_compatible_writes(opt.write_older_cache_files);
-    let bootstrap = rt.block_on(async { Bootstrap::new(bootstrap_config) })?;
-
-    let msg = format!(
+    let cargo_info = format!(
         "Running {} v{}",
         env!("CARGO_BIN_NAME"),
         env!("CARGO_PKG_VERSION")
     );
-    info!("\n{}\n{}", msg, "=".repeat(msg.len()));
+    info!("\n{}\n{}", cargo_info, "=".repeat(cargo_info.len()));
+    info!("Antnode started with opt: {opt:?}");
+    info!("EVM network: {evm_network:?}");
+    println!("EVM network: {evm_network:?}");
 
     ant_build_info::log_version_info(env!("CARGO_PKG_VERSION"), &identify_protocol_str);
-    debug!(
+    info!(
         "antnode built with git version: {}",
         ant_build_info::git_info()
     );
+
+    if let Err(err) = run(
+        &opt,
+        &log_output_dest,
+        log_reload_handle,
+        keypair,
+        rewards_address,
+        evm_network,
+        node_socket_addr,
+        root_dir.clone(),
+    ) {
+        error!("Node failed with error: {err}");
+        eprintln!("Node failed with error: {err}");
+
+        set_critical_failure(&root_dir, &err);
+
+        std::process::exit(1);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::result_large_err)]
+fn run(
+    opt: &Opt,
+    log_output_dest: &str,
+    log_reload_handle: ReloadHandle,
+    keypair: Keypair,
+    rewards_address: RewardsAddress,
+    evm_network: EvmNetwork,
+    node_socket_addr: SocketAddr,
+    root_dir: PathBuf,
+) -> Result<(), ant_node::Error> {
+    // Create a tokio runtime per `run_node` attempt, this ensures
+    // any spawned tasks are closed before we would attempt to run
+    // another process with these args.
+    let rt = Runtime::new().map_err(|err| {
+        error!("Failed to create Tokio runtime: {err}");
+        ant_node::Error::Tokio
+    })?;
+
+    let bootstrap_config = BootstrapConfig::try_from(&opt.peers)?
+        .with_backwards_compatible_writes(opt.write_older_cache_files);
 
     if opt.peers.local {
         rt.spawn(init_metrics(std::process::id()));
@@ -338,14 +410,15 @@ fn main() -> Result<()> {
     let restart_options = rt.block_on(async move {
         let mut node_builder = NodeBuilder::new(
             keypair,
-            bootstrap,
+            bootstrap_config,
             rewards_address,
             evm_network,
             node_socket_addr,
-            root_dir,
+            root_dir.clone(),
         );
         node_builder.local(opt.peers.local);
         node_builder.no_upnp(opt.no_upnp);
+        node_builder.with_reachability_check(!opt.skip_reachability_check);
         #[cfg(feature = "open-metrics")]
         let mut node_builder = node_builder;
         // if enable flag is provided or only if the port is specified then enable the server by setting Some()
@@ -357,16 +430,15 @@ fn main() -> Result<()> {
         };
         #[cfg(feature = "open-metrics")]
         node_builder.metrics_server_port(metrics_server_port);
-        let restart_options = run_node(
+        run_node(
             node_builder,
             opt.rpc,
-            &log_output_dest,
+            &root_dir,
+            log_output_dest,
             log_reload_handle,
             opt.stop_on_upgrade,
         )
-        .await?;
-
-        Ok::<_, eyre::Report>(restart_options)
+        .await
     })?;
 
     // actively shut down the runtime
@@ -391,33 +463,33 @@ fn main() -> Result<()> {
 async fn run_node(
     node_builder: NodeBuilder,
     rpc: Option<SocketAddr>,
+    root_dir: &Path,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
     #[cfg_attr(not(unix), allow(unused_variables))] stop_on_upgrade: bool,
-) -> Result<Option<(PathBuf, u16)>> {
+) -> Result<Option<(PathBuf, u16)>, ant_node::Error> {
     let started_instant = std::time::Instant::now();
 
-    reset_critical_failure(log_output_dest);
+    reset_critical_failure(root_dir);
 
     info!("Starting node ...");
-    let running_node = node_builder.build_and_run()?;
+    let running_node = node_builder.build_and_run().await?;
 
     println!(
         "
-Node started
-
-PeerId is {}
-You can check your reward balance by running:
-`safe wallet balance --peer-id={}`
-    ",
+Node started with PeerId: {}",
         running_node.peer_id(),
-        running_node.peer_id()
     );
 
     // write the PID to the root dir
     let pid = std::process::id();
     let pid_file = running_node.root_dir_path().join("antnode.pid");
-    std::fs::write(pid_file, pid.to_string().as_bytes())?;
+    std::fs::write(&pid_file, pid.to_string().as_bytes()).map_err(|e| {
+        ant_node::Error::PidFileWriteFailed {
+            path: pid_file,
+            source: e,
+        }
+    })?;
 
     // Channel to receive node ctrl cmds from RPC service (if enabled), and events monitoring task
     let (ctrl_tx, mut ctrl_rx) = mpsc::channel::<NodeCtrl>(5);
@@ -436,7 +508,7 @@ You can check your reward balance by running:
         if let Err(err) = ctrl_tx_clone
             .send(NodeCtrl::Stop {
                 delay: Duration::from_secs(1),
-                result: StopResult::Error(eyre!("Ctrl-C received!")),
+                result: StopResult::Error(Box::new(ant_node::Error::CtrlCReceived)),
             })
             .await
         {
@@ -541,10 +613,9 @@ You can check your reward balance by running:
                         info!("Node stopped successfully: {}", message);
                         return Ok(None);
                     }
-                    StopResult::Error(cause) => {
-                        error!("Node stopped with error: {}", cause);
-                        set_critical_failure(log_output_dest, &cause.to_string());
-                        return Err(cause);
+                    StopResult::Error(error) => {
+                        error!("Node stopped with error: {error:?}");
+                        return Err(*error);
                     }
                 }
             }
@@ -553,8 +624,9 @@ You can check your reward balance by running:
                 println!("No self-update supported yet.");
             }
             None => {
+                let error = ant_node::Error::ControlChannelClosed;
                 info!("Internal node ctrl cmds channel has been closed, restarting node");
-                break Err(eyre!("Internal node ctrl cmds channel has been closed"));
+                break Err(error);
             }
         }
     }
@@ -569,7 +641,9 @@ fn monitor_node_events(mut node_events_rx: NodeEventsReceiver, ctrl_tx: mpsc::Se
                     if let Err(err) = ctrl_tx
                         .send(NodeCtrl::Stop {
                             delay: Duration::from_secs(1),
-                            result: StopResult::Error(eyre!("Node events channel closed!")),
+                            result: StopResult::Error(Box::new(
+                                ant_node::Error::NodeEventChannelClosed,
+                            )),
                         })
                         .await
                     {
@@ -581,7 +655,9 @@ fn monitor_node_events(mut node_events_rx: NodeEventsReceiver, ctrl_tx: mpsc::Se
                     if let Err(err) = ctrl_tx
                         .send(NodeCtrl::Stop {
                             delay: Duration::from_secs(1),
-                            result: StopResult::Error(eyre!("Node terminated due to: {reason:?}")),
+                            result: StopResult::Error(Box::new(
+                                ant_node::Error::TerminateSignalReceived(reason),
+                            )),
                         })
                         .await
                     {
@@ -602,7 +678,10 @@ fn monitor_node_events(mut node_events_rx: NodeEventsReceiver, ctrl_tx: mpsc::Se
     });
 }
 
-fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Option<WorkerGuard>)> {
+fn init_logging(
+    opt: &Opt,
+    peer_id: PeerId,
+) -> eyre::Result<(String, ReloadHandle, Option<WorkerGuard>)> {
     let logging_targets = vec![
         ("ant_bootstrap".to_string(), Level::INFO),
         ("ant_build_info".to_string(), Level::DEBUG),

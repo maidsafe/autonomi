@@ -109,9 +109,6 @@ fn node_error_to_reason(error: &Error) -> String {
             ant_bootstrap::Error::NoBootstrapPeersFound => "NoBootstrapPeersFound".to_string(),
             ant_bootstrap::Error::FailedToParseCacheData => "FailedToParseCacheData".to_string(),
             ant_bootstrap::Error::CouldNotObtainDataDir => "CouldNotObtainDataDir".to_string(),
-            ant_bootstrap::Error::InvalidBootstrapCacheDir => {
-                "InvalidBootstrapCacheDir".to_string()
-            }
             ant_bootstrap::Error::FailedToObtainAddrsFromUrl(_, _) => {
                 "FailedToObtainAddrsFromUrl".to_string()
             }

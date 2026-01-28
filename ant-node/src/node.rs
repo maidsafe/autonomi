@@ -15,9 +15,12 @@ use crate::error::Error;
 use crate::metrics::NodeMetricsRecorder;
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
-use crate::networking::{Addresses, Network, NetworkConfig, NetworkEvent, NodeIssue};
+use crate::networking::{
+    Addresses, Network, NetworkConfig, NetworkEvent, NodeIssue, ReachabilityStatus,
+    init_reachability_check_swarm,
+};
 use crate::{PutValidationError, RunningNode};
-use ant_bootstrap::bootstrap::Bootstrap;
+use ant_bootstrap::BootstrapConfig;
 use ant_evm::EvmNetwork;
 use ant_evm::RewardsAddress;
 use ant_evm::merkle_payments::MERKLE_PAYMENT_EXPIRATION;
@@ -117,7 +120,7 @@ const CLOSE_GROUP_RESTART_SUPPRESSION: Duration = Duration::from_secs(90);
 /// Helper to build and run a Node
 pub struct NodeBuilder {
     addr: SocketAddr,
-    bootstrap: Bootstrap,
+    bootstrap_config: BootstrapConfig,
     evm_address: RewardsAddress,
     evm_network: EvmNetwork,
     identity_keypair: Keypair,
@@ -132,11 +135,13 @@ pub struct NodeBuilder {
 }
 
 impl NodeBuilder {
-    /// Instantiate the builder. The initial peers can either be supplied via the `initial_peers` method
-    /// or fetched from the bootstrap cache set using `bootstrap_cache` method.
+    /// Instantiate the builder with the given configuration.
+    ///
+    /// The bootstrap configuration is used to create Bootstrap instances when building
+    /// the node and running reachability checks.
     pub fn new(
         identity_keypair: Keypair,
-        bootstrap_flow: Bootstrap,
+        bootstrap_config: BootstrapConfig,
         evm_address: RewardsAddress,
         evm_network: EvmNetwork,
         addr: SocketAddr,
@@ -144,7 +149,7 @@ impl NodeBuilder {
     ) -> Self {
         Self {
             addr,
-            bootstrap: bootstrap_flow,
+            bootstrap_config,
             evm_address,
             evm_network,
             identity_keypair,
@@ -179,10 +184,60 @@ impl NodeBuilder {
         self.no_upnp = no_upnp;
     }
 
+    /// Runs the reachability check workflow to determine if the node is externally reachable.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing the `ReachabilityStatus` and an optional metrics shutdown sender.
+    pub async fn run_reachability_check(
+        &self,
+    ) -> Result<(ReachabilityStatus, Option<watch::Sender<bool>>)> {
+        #[cfg(feature = "open-metrics")]
+        let (_metrics_recorder, metrics_registries) = if self.metrics_server_port.is_some() {
+            // metadata registry
+            let mut metrics_registries = MetricsRegistries::default();
+            let metrics_recorder = NodeMetricsRecorder::new(&mut metrics_registries);
+
+            (Some(metrics_recorder), metrics_registries)
+        } else {
+            (None, MetricsRegistries::default())
+        };
+
+        // create a shutdown signal channel
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+
+        // init network
+        let network_config = NetworkConfig {
+            keypair: self.identity_keypair.clone(),
+            local: self.local,
+            listen_addr: self.addr,
+            root_dir: self.root_dir.clone(),
+            shutdown_rx: shutdown_rx.clone(),
+            bootstrap_config: self.bootstrap_config.clone(),
+            no_upnp: self.no_upnp,
+            custom_request_timeout: None,
+            reachability_status: None,
+            #[cfg(feature = "open-metrics")]
+            metrics_registries,
+            #[cfg(feature = "open-metrics")]
+            metrics_server_port: self.metrics_server_port,
+        };
+
+        let (swarm_driver, metrics_shutdown_tx) =
+            init_reachability_check_swarm(network_config).await?;
+        let status = swarm_driver.detect().await?;
+
+        Ok((status, metrics_shutdown_tx))
+    }
+
     /// Asynchronously runs a new node instance, setting up the swarm driver,
     /// creating a data storage, and handling network events. Returns the
     /// created `RunningNode` which contains a `NodeEventsChannel` for listening
     /// to node-related events.
+    ///
+    /// If reachability check is enabled, it will be run first to verify that
+    /// the node is externally reachable. If not reachable, the node will wait
+    /// for 2 minutes and then return an error.
     ///
     /// # Returns
     ///
@@ -190,8 +245,65 @@ impl NodeBuilder {
     ///
     /// # Errors
     ///
-    /// Returns an error if there is a problem initializing the Network.
-    pub fn build_and_run(self) -> Result<RunningNode> {
+    /// Returns an error if there is a problem initializing the Network or if
+    /// the reachability check fails.
+    pub async fn build_and_run(self) -> Result<RunningNode> {
+        let mut no_upnp = self.no_upnp;
+        let mut address = self.addr;
+        let mut reachability_status = None;
+
+        if self.reachability_check {
+            info!("Running reachability check ... This might take a few minutes to complete.");
+            let status = self.run_reachability_check().await;
+
+            if let Ok((s, _)) = &status {
+                reachability_status = Some(s.clone());
+            }
+            match status {
+                Ok((
+                    ReachabilityStatus::Reachable {
+                        local_addr,
+                        upnp,
+                        external_addr: _,
+                    },
+                    metrics_shutdown_tx,
+                )) => {
+                    info!(
+                        "We are reachable. Starting node with socket addr: {local_addr} and UPnP: {upnp:?}",
+                    );
+                    println!("Starting node with socket addr: {local_addr} and UPnP: {upnp:?}");
+                    address = local_addr;
+                    if self.no_upnp {
+                        info!("UPnP is disabled via config.");
+                    } else {
+                        no_upnp = !upnp;
+                    }
+                    if let Some(tx) = metrics_shutdown_tx {
+                        let _ = tx.send(true);
+                    }
+                }
+                Ok((ReachabilityStatus::NotReachable { reasons }, _metrics_shutdown_tx)) => {
+                    info!(
+                        "We are NOT reachable due to: {reasons:?}. Terminating the node in 120 seconds."
+                    );
+                    println!("Terminating the node in 120 seconds: {reasons:?}");
+                    let failure_error = Error::UnreachableNode;
+                    set_critical_failure(&self.root_dir, &failure_error);
+                    tokio::time::sleep(Duration::from_secs(120)).await;
+                    return Err(failure_error);
+                }
+                Err(err) => {
+                    info!(
+                        "Reachability check error: {err:?}. Terminating the node in 120 seconds."
+                    );
+                    println!("Terminating the node in 120 seconds: {err:?}");
+                    set_critical_failure(&self.root_dir, &err);
+                    tokio::time::sleep(Duration::from_secs(120)).await;
+                    return Err(err);
+                }
+            }
+        }
+
         // setup metrics
         #[cfg(feature = "open-metrics")]
         let (metrics_recorder, metrics_registries) = if self.metrics_server_port.is_some() {
@@ -211,19 +323,19 @@ impl NodeBuilder {
         let network_config = NetworkConfig {
             keypair: self.identity_keypair,
             local: self.local,
-            listen_addr: self.addr,
+            listen_addr: address,
             root_dir: self.root_dir.clone(),
             shutdown_rx: shutdown_rx.clone(),
-            bootstrap: self.bootstrap,
-            no_upnp: self.no_upnp,
+            bootstrap_config: self.bootstrap_config,
+            no_upnp,
             custom_request_timeout: None,
-            reachability_status: None,
+            reachability_status,
             #[cfg(feature = "open-metrics")]
             metrics_registries,
             #[cfg(feature = "open-metrics")]
             metrics_server_port: self.metrics_server_port,
         };
-        let (network, network_event_receiver) = Network::init(network_config)?;
+        let (network, network_event_receiver, metrics_shutdown_tx) = Network::init(network_config)?;
 
         // init node
         let node_events_channel = NodeEventsChannel::default();
@@ -245,6 +357,7 @@ impl NodeBuilder {
         let running_node = RunningNode {
             shutdown_sender: shutdown_tx,
             network,
+            metrics_server_shutdown_sender: metrics_shutdown_tx,
             node_events_channel,
             root_dir_path: self.root_dir,
             rewards_address: self.evm_address,
@@ -585,7 +698,7 @@ impl Node {
                 event_header = "TerminateNode";
                 error!("Received termination from swarm_driver due to {reason:?}");
                 self.events_channel()
-                    .broadcast(NodeEvent::TerminateNode(format!("{reason}")));
+                    .broadcast(NodeEvent::TerminateNode(reason));
             }
             NetworkEvent::FailedToFetchHolders(bad_nodes) => {
                 event_header = "FailedToFetchHolders";
