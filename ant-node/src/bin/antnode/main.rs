@@ -13,7 +13,7 @@
 #[macro_use]
 extern crate tracing;
 
-mod log;
+mod node_rpc;
 mod rpc_service;
 mod subcommands;
 #[cfg(unix)]

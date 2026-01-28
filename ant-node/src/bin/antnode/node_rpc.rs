@@ -6,7 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use color_eyre::eyre::Error;
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -21,6 +20,7 @@ pub enum NodeCtrl {
     /// Set `retain_peer_id` to `true` if you want to re-use the same root dir/secret keys/PeerId.
     Restart {
         delay: Duration,
+        #[allow(dead_code)]
         retain_peer_id: bool,
     },
     // Request to update the antnode app, and restart it, after the requested delay.
@@ -30,5 +30,5 @@ pub enum NodeCtrl {
 #[derive(Debug)]
 pub enum StopResult {
     Success(String),
-    Error(Error),
+    Error(Box<ant_node::Error>),
 }
