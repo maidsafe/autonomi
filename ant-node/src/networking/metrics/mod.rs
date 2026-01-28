@@ -6,13 +6,16 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-// Implementation to record `libp2p::upnp::Event` metrics
 mod bad_node;
+mod metadata;
 mod reachability_check;
 mod relay_client;
 mod replication;
 pub(super) mod service;
 mod upnp;
+
+pub(crate) use metadata::MetadataExtendedRecorder;
+pub(crate) use metadata::MetadataRecorder;
 
 use crate::networking::log_markers::Marker;
 use crate::networking::{MetricsRegistries, reachability_check::ReachabilityStatus};
