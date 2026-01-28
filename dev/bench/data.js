@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769614817069,
+  "lastUpdate": 1769614818780,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -17401,6 +17401,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/376eb3f32cc790d1e744f960b2f6eb178c52abec"
         },
         "date": 1769611053058,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "58801da799b5ec69ec69728ad57e239dbf7177bf",
+          "message": "Merge pull request #3427 from maidsafe/dependabot/npm_and_yarn/autonomi-nodejs/lodash-4.17.23\n\nchore(deps): bump lodash from 4.17.21 to 4.17.23 in /autonomi-nodejs",
+          "timestamp": "2026-01-28T14:08:50Z",
+          "tree_id": "6f769230495ef12480598d1b3d92fb747e00fe1e",
+          "url": "https://github.com/maidsafe/autonomi/commit/58801da799b5ec69ec69728ad57e239dbf7177bf"
+        },
+        "date": 1769614818244,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
