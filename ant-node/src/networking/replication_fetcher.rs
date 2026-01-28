@@ -43,11 +43,46 @@ const PENDING_TIMEOUT: Duration = Duration::from_secs(900);
 // The time the entry will be considered as `time out` and to be cleared.
 type ReplicationTimeout = Instant;
 
+/// Manages replication fetching with trust-based and majority-based validation.
+///
+/// # Trust Scoring System
+///
+/// The ReplicationFetcher uses a dual-approach strategy for validating replication sources:
+///
+/// ## 1. Trust-Based Validation (via `peers_scores`)
+///
+/// Peers are evaluated based on their StorageChallenge response history:
+/// - Each peer maintains a history of up to 2 recent challenge results (bool: healthy/unhealthy)
+/// - A peer is considered "trustworthy" if they have 2+ scores and at least 2 are healthy
+/// - A peer is considered "untrustworthy" if they have 2+ scores but fewer than 2 healthy
+/// - Peers without sufficient history are "unknown"
+///
+/// Trust scoring is populated by the StorageChallenge mechanism in node.rs:
+/// - Challenges are sent periodically to verify peers actually store claimed data
+/// - Response time and proof correctness determine if a peer passes (healthy) or fails
+/// - Results are fed to `add_peer_scores()` to update the trust history
+///
+/// ## 2. Majority-Based Validation (via `initial_replicates`)
+///
+/// Provides Byzantine fault tolerance for unknown peers:
+/// - Accumulates which peers report each (address, validation_type) pair
+/// - Once CLOSE_GROUP_SIZE/2 different peers report the same key, it's accepted
+/// - Prevents a single malicious peer from injecting arbitrary data
+///
+/// ## Parallel Operation
+///
+/// Both approaches run simultaneously for defense-in-depth:
+/// - Trustworthy peers: Immediate acceptance + contribute to majority
+/// - Untrustworthy peers: Rejected entirely (don't contribute to majority)
+/// - Unknown peers: Only accepted via majority consensus
+///
+/// This ensures fast replication from proven peers while maintaining security
+/// against new/malicious peers through distributed consensus.
 pub(crate) struct ReplicationFetcher {
     self_peer_id: PeerId,
-    // Pending entries that to be fetched from the target peer.
+    /// Pending entries that to be fetched from the target peer.
     to_be_fetched: HashMap<(RecordKey, ValidationType, PeerId), ReplicationTimeout>,
-    // Avoid fetching same chunk from different nodes AND carry out too many parallel tasks.
+    /// Avoid fetching same chunk from different nodes AND carry out too many parallel tasks.
     on_going_fetches: HashMap<(RecordKey, ValidationType), (PeerId, ReplicationTimeout)>,
     event_sender: mpsc::Sender<NetworkEvent>,
     /// Distance range that the incoming key shall be fetched
@@ -56,12 +91,22 @@ pub(crate) struct ReplicationFetcher {
     /// used when the node is full, but we still have "close" data coming in
     /// that is _not_ closer than our farthest max record
     farthest_acceptable_distance: Option<Distance>,
-    /// Scoring of peers collected from storage_challenge.
-    /// To be a trustworthy replication source, the peer must has two latest scoring both healthy.
+    /// Trust scores for peers based on StorageChallenge results.
+    ///
+    /// Maps PeerId → (recent_scores, last_seen_timestamp)
+    /// - `recent_scores`: VecDeque of up to 2 booleans (true = healthy, false = unhealthy)
+    /// - `last_seen_timestamp`: Used for pruning old entries (keeps most recent 20 peers)
+    ///
+    /// A peer is trustworthy if they have 2+ scores with at least 2 being healthy.
+    /// This requires consistent good behavior over multiple challenge rounds.
     peers_scores: HashMap<PeerId, (VecDeque<bool>, Instant)>,
-    /// During startup, when the knowledge of peers scoring hasn't been built up,
-    /// only records got `majority` of replicated in copies shall be trusted.
-    /// This is the temp container to accumulate those intitial replicated in records.
+    /// Accumulator for majority-based replication validation.
+    ///
+    /// Maps (NetworkAddress, ValidationType) → Set of PeerIds that reported this key.
+    /// When the set size reaches CLOSE_GROUP_SIZE/2, the key is accepted for replication.
+    ///
+    /// This provides Byzantine fault tolerance: a single malicious peer cannot
+    /// inject arbitrary data without collusion from multiple peers.
     initial_replicates: HashMap<(NetworkAddress, ValidationType), HashSet<PeerId>>,
 }
 
@@ -302,7 +347,29 @@ impl ReplicationFetcher {
             .collect()
     }
 
-    // Record peers' healthy status after the storage chanllenge.
+    /// Records peer health status from StorageChallenge results.
+    ///
+    /// # Parameters
+    /// - `scores`: Vector of (PeerId, is_healthy) tuples from the latest StorageChallenge round
+    ///   - `is_healthy = true`: Peer passed the challenge (correct proofs, acceptable response time)
+    ///   - `is_healthy = false`: Peer failed the challenge (false proof, timeout, or too slow)
+    ///
+    /// # Behavior
+    ///
+    /// For each peer in the scores:
+    /// 1. Adds the new score to their history (maintains last 2 scores only)
+    /// 2. Updates their last_seen timestamp
+    ///
+    /// This creates a sliding window of recent behavior that determines trustworthiness:
+    /// - 2 healthy scores → trustworthy (immediate replication acceptance)
+    /// - <2 healthy scores → untrustworthy (replication rejected)
+    /// - <2 total scores → unknown (use majority consensus)
+    ///
+    /// # Memory Management
+    ///
+    /// - Each peer's history is capped at 2 entries (most recent behavior matters)
+    /// - Total tracked peers is capped at 20 (oldest by last_seen is pruned)
+    /// - This ensures bounded memory usage even with many peers
     pub(crate) fn add_peer_scores(&mut self, scores: Vec<(PeerId, bool)>) {
         for (peer_id, is_healthy) in scores {
             let (peer_scores, last_seen) = self
@@ -310,18 +377,19 @@ impl ReplicationFetcher {
                 .entry(peer_id)
                 .or_insert((VecDeque::new(), Instant::now()));
             peer_scores.push_back(is_healthy);
+            // Keep only the last 2 scores - recent behavior is most relevant
             if peer_scores.len() > 2 {
                 let _ = peer_scores.pop_front();
             }
             *last_seen = Instant::now();
         }
 
-        // Once got enough scoring knowledge, the `majority` approach shall no longer be used.
-        if self.had_enough_scoring_knowledge() {
-            self.initial_replicates.clear();
-        }
+        // Note: The `majority` approach now works in parallel with trust-based scoring.
+        // We no longer clear initial_replicates when scoring knowledge is sufficient.
+        // This provides defense-in-depth: both approaches validate replication sources.
 
-        // Pruning to avoid infinite growing, only keep the recent 20.
+        // Pruning to avoid infinite growing, only keep the recent 20 peers.
+        // This bounds memory usage while keeping the most recently seen peers.
         if self.peers_scores.len() > 20 {
             let mut oldest_peer = PeerId::random();
             let mut oldest_timestamp = Instant::now();
@@ -340,6 +408,15 @@ impl ReplicationFetcher {
     //   * not on pending
     //   * within the range
     //   * from valid source peer
+    //
+    // This function uses a dual-approach strategy for replication validation:
+    //   1. Trust-based approach: If we have enough scoring history for a peer, trust/reject based on scores
+    //   2. Majority approach: Always accumulate replication requests and accept when majority reached
+    //
+    // Both approaches work in parallel:
+    //   - Trustworthy peers (Some(true)): Keys accepted immediately AND added to majority accumulator
+    //   - Untrustworthy peers (Some(false)): Keys rejected entirely (not added to majority either)
+    //   - Unknown peers (None): Keys added to majority accumulator only (wait for majority consensus)
     fn valid_candidates(
         &mut self,
         holder: &PeerId,
@@ -348,7 +425,6 @@ impl ReplicationFetcher {
         closest_peers: Vec<NetworkAddress>,
         #[cfg(feature = "open-metrics")] metrics_recorder: Option<&NetworkMetricsRecorder>,
     ) -> Vec<(PeerId, NetworkAddress, ValidationType)> {
-        // Always trust the holder
         let new_incoming_keys = self.in_range_new_keys(
             holder,
             incoming_keys,
@@ -358,54 +434,42 @@ impl ReplicationFetcher {
             metrics_recorder,
         );
 
-        // Requiring three replicas
-        self.initial_majority_replicates(holder, new_incoming_keys)
+        match self.is_peer_trustworthy(holder) {
+            Some(true) => {
+                debug!("Replication source {holder:?} is trustworthy based on scoring history.");
+                // Trustworthy peer: accept keys immediately AND add to majority accumulator
+                // This allows the majority approach to continue building consensus even for
+                // trustworthy peers, providing redundancy in the validation system.
+                let mut result: Vec<(PeerId, NetworkAddress, ValidationType)> = new_incoming_keys
+                    .iter()
+                    .map(|(addr, val_type)| (*holder, addr.clone(), val_type.clone()))
+                    .collect();
 
-        // match self.is_peer_trustworthy(holder) {
-        //     Some(true) => {
-        //         debug!("Replication source {holder:?} is trustworthy.");
-        //         let new_incoming_keys = self.in_range_new_keys(
-        //             holder,
-        //             incoming_keys,
-        //             locally_stored_keys,
-        //             closest_k_peers,
-        //         );
-        //         new_incoming_keys
-        //             .into_iter()
-        //             .map(|(addr, val_type)| (*holder, addr, val_type))
-        //             .collect()
-        //     }
-        //     Some(false) => {
-        //         warn!("Replication source {holder:?} is not trustworthy.");
-        //         vec![]
-        //     }
-        //     None => {
-        //         debug!("Not having enough network knowledge, using majority scheme instead.");
-        //         // Whenever we had enough scoring knowledge of peers,
-        //         // we shall no longer use the `majority copies` approach.
-        //         // This can prevent malicious neighbouring farming targeting existing nodes.
-        //         if self.had_enough_scoring_knowledge() {
-        //             // The replication source is probably a `new peer`.
-        //             // Just wait for the scoring knowledge to be built up.
-        //             return vec![];
-        //         }
-        //         let new_incoming_keys = self.in_range_new_keys(
-        //             holder,
-        //             incoming_keys,
-        //             locally_stored_keys,
-        //             closest_k_peers,
-        //         );
-        //         self.initial_majority_replicates(holder, new_incoming_keys)
-        //     }
-        // }
-    }
-
-    fn had_enough_scoring_knowledge(&self) -> bool {
-        self.peers_scores
-            .values()
-            .filter(|(scores, _last_seen)| scores.len() > 1)
-            .count()
-            >= CLOSE_GROUP_SIZE
+                // Also accumulate for majority - this maintains parallel operation of both approaches
+                let majority_results =
+                    self.initial_majority_replicates(holder, new_incoming_keys);
+                for item in majority_results {
+                    if !result.contains(&item) {
+                        result.push(item);
+                    }
+                }
+                result
+            }
+            Some(false) => {
+                warn!("Replication source {holder:?} is not trustworthy based on scoring history.");
+                // Untrustworthy peer: reject entirely - don't add to majority either
+                // This prevents malicious peers from poisoning the majority consensus
+                vec![]
+            }
+            None => {
+                debug!(
+                    "No scoring history for {holder:?}, using majority scheme for validation."
+                );
+                // Unknown peer: use majority approach only
+                // Keys will be accepted once enough different peers report the same keys
+                self.initial_majority_replicates(holder, new_incoming_keys)
+            }
+        }
     }
 
     // Accumulates initial replicates when doesn't have enough knowledge of peers scores.
@@ -609,25 +673,46 @@ impl ReplicationFetcher {
     //     new_incoming_keys
     // }
 
-    // Check whether the peer is a trustworthy replication source.
-    //   * Some(true)  : peer is trustworthy
-    //   * Some(false) : peer is not trustworthy
-    //   * None        : not having enough knowledge to tell
-    #[allow(dead_code)]
+    /// Determines if a peer is a trustworthy replication source based on scoring history.
+    ///
+    /// # Returns
+    /// - `Some(true)`: Peer has 2+ challenge scores with at least 2 healthy results → trustworthy
+    /// - `Some(false)`: Peer has 2+ challenge scores but fewer than 2 healthy → untrustworthy
+    /// - `None`: Peer has insufficient scoring history (0-1 scores) → cannot determine
+    ///
+    /// # Trust Criteria
+    ///
+    /// A peer must demonstrate consistent healthy behavior over multiple StorageChallenge
+    /// rounds to be considered trustworthy. The requirement of "at least 2 healthy scores
+    /// out of 2" ensures that:
+    /// - A single good response isn't enough (could be luck)
+    /// - Any recent failure drops the peer from trusted status
+    /// - New peers start as "unknown" until they prove themselves
+    ///
+    /// # Usage in Replication
+    ///
+    /// - Trustworthy peers: Their replication requests are accepted immediately
+    /// - Untrustworthy peers: Their replication requests are rejected entirely
+    /// - Unknown peers: Replication requests go through majority consensus instead
     fn is_peer_trustworthy(&self, holder: &PeerId) -> Option<bool> {
         if let Some((scores, _last_seen)) = self.peers_scores.get(holder) {
             if scores.len() > 1 {
-                let is_healthy = scores.iter().filter(|is_health| **is_health).count() > 1;
-                if !is_healthy {
+                // Require at least 2 healthy scores to be considered trustworthy
+                let healthy_count = scores.iter().filter(|is_healthy| **is_healthy).count();
+                let is_trustworthy = healthy_count > 1;
+                if !is_trustworthy {
                     info!(
-                        "Peer {holder:?} is not a trustworthy replication source, as bearing scores of {scores:?}"
+                        "Peer {holder:?} is not trustworthy: {healthy_count} healthy scores out of {} (scores: {scores:?})",
+                        scores.len()
                     );
                 }
-                Some(is_healthy)
+                Some(is_trustworthy)
             } else {
+                // Only 0-1 scores - insufficient history to determine trustworthiness
                 None
             }
         } else {
+            // No scoring history for this peer
             None
         }
     }
