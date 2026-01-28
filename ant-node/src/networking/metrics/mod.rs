@@ -40,6 +40,15 @@ pub(crate) struct VersionLabels {
     version: String,
 }
 
+// Version gate metric labels - uses enum result type as the label
+#[derive(Clone, Hash, PartialEq, Eq, Debug, EncodeLabelSet)]
+pub(crate) struct VersionCheckResultLabels {
+    /// The type of peer (node/client/reachability_check_client/unknown)
+    peer_type: String,
+    /// The result of version check (accepted/rejected/legacy/parse_error)
+    result: String,
+}
+
 /// The shared recorders that are used to record metrics.
 pub(crate) struct NetworkMetricsRecorder {
     // Records libp2p related metrics
@@ -97,6 +106,9 @@ pub(crate) struct NetworkMetricsRecorder {
 
     // helpers
     bad_nodes_notifier: tokio::sync::mpsc::Sender<BadNodeMetricsMsg>,
+
+    // version gate metrics - single metric with enum result as label
+    version_check_result: Family<VersionCheckResultLabels, Counter>,
 }
 
 impl NetworkMetricsRecorder {
@@ -329,6 +341,15 @@ impl NetworkMetricsRecorder {
             shunned_by_close_group.clone(),
             shunned_by_old_close_group.clone(),
         );
+
+        // Version gate metrics - single metric with result enum as label
+        let version_check_result = Family::default();
+        sub_registry.register(
+            "version_check_result",
+            "Peer version check results by type (accepted/rejected/legacy/parse_error)",
+            version_check_result.clone(),
+        );
+
         let network_metrics = Self {
             libp2p_metrics,
             upnp_events,
@@ -371,6 +392,8 @@ impl NetworkMetricsRecorder {
             process_cpu_usage_percentage,
 
             bad_nodes_notifier,
+
+            version_check_result,
         };
 
         network_metrics.system_metrics_recorder_task();
@@ -557,6 +580,19 @@ impl NetworkMetricsRecorder {
                 error!("Failed to send shunned report via notifier: {err:?}");
             }
         });
+    }
+
+    /// Record a version check result for metrics.
+    ///
+    /// Records the raw enum result type (accepted/rejected/legacy/parse_error) as the metric label.
+    pub(crate) fn record_version_check(&self, peer_type: &str, result: &str) {
+        let _ = self
+            .version_check_result
+            .get_or_create(&VersionCheckResultLabels {
+                peer_type: peer_type.to_string(),
+                result: result.to_string(),
+            })
+            .inc();
     }
 
     pub(crate) fn update_node_versions(&self, versions: &HashMap<PeerId, String>) {

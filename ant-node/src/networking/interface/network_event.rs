@@ -13,6 +13,7 @@ use ant_protocol::{
     NetworkAddress, PrettyPrintRecordKey,
     messages::{Query, Response},
     storage::{DataTypes, ValidationType},
+    version_gate::{PeerType, VersionCheckResult},
 };
 use libp2p::kad::{Record, RecordKey};
 use libp2p::{Multiaddr, PeerId};
@@ -70,6 +71,26 @@ pub(crate) enum NetworkEvent {
     /// Check if the nodes close to these keys hold the record, else replicate to them.
     NetworkWideReplication {
         keys: Vec<(NetworkAddress, ValidationType)>,
+    },
+    /// A peer was checked for version requirements (for metrics/observability)
+    PeerVersionChecked {
+        /// The peer that was checked
+        peer_id: PeerId,
+        /// The peer type (node/client/reachability_check_client)
+        peer_type: PeerType,
+        /// The result of the version check
+        result: VersionCheckResult,
+    },
+    /// A peer was rejected due to version requirements (Phase 2 enforcement)
+    PeerVersionRejected {
+        /// The peer that was rejected
+        peer_id: PeerId,
+        /// The peer type
+        peer_type: PeerType,
+        /// The result that caused rejection
+        result: VersionCheckResult,
+        /// The minimum required version
+        min_version: String,
     },
 }
 
@@ -157,6 +178,27 @@ impl std::fmt::Debug for NetworkEvent {
             }
             NetworkEvent::NetworkWideReplication { keys } => {
                 write!(f, "NetworkEvent::NetworkWideReplication({keys:?})")
+            }
+            NetworkEvent::PeerVersionChecked {
+                peer_id,
+                peer_type,
+                result,
+            } => {
+                write!(
+                    f,
+                    "NetworkEvent::PeerVersionChecked({peer_id:?}, type={peer_type}, result={result:?})"
+                )
+            }
+            NetworkEvent::PeerVersionRejected {
+                peer_id,
+                peer_type,
+                result,
+                min_version,
+            } => {
+                write!(
+                    f,
+                    "NetworkEvent::PeerVersionRejected({peer_id:?}, type={peer_type}, result={result:?}, min={min_version})"
+                )
             }
         }
     }
