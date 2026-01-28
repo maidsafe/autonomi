@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769611056866,
+  "lastUpdate": 1769614532147,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -6629,6 +6629,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.584043950015144,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "58801da799b5ec69ec69728ad57e239dbf7177bf",
+          "message": "Merge pull request #3427 from maidsafe/dependabot/npm_and_yarn/autonomi-nodejs/lodash-4.17.23\n\nchore(deps): bump lodash from 4.17.21 to 4.17.23 in /autonomi-nodejs",
+          "timestamp": "2026-01-28T14:08:50Z",
+          "tree_id": "6f769230495ef12480598d1b3d92fb747e00fe1e",
+          "url": "https://github.com/maidsafe/autonomi/commit/58801da799b5ec69ec69728ad57e239dbf7177bf"
+        },
+        "date": 1769614524598,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0356265268943847,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.647662795804389,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.036505426872379,
             "unit": "MiB/s"
           }
         ]
