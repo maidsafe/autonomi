@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769606948962,
+  "lastUpdate": 1769607232488,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -11328,6 +11328,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 196,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2215de70e745da448f03c9125b06ed3ce4c758d9",
+          "message": "Merge pull request #3426 from maidsafe/dependabot/npm_and_yarn/ant-node-nodejs/tar-7.5.6\n\nchore(deps-dev): bump tar from 7.5.3 to 7.5.6 in /ant-node-nodejs",
+          "timestamp": "2026-01-28T12:05:34Z",
+          "tree_id": "15304a501b18b407458d193ad099ac2865fc3106",
+          "url": "https://github.com/maidsafe/autonomi/commit/2215de70e745da448f03c9125b06ed3ce4c758d9"
+        },
+        "date": 1769607231664,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 267,
             "unit": "MB"
           }
         ]
