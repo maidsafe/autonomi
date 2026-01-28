@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769611051604,
+  "lastUpdate": 1769611054261,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -17299,6 +17299,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/cd646d16449826b9463706e8aa91f58e08fa1d79"
         },
         "date": 1769610704254,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "376eb3f32cc790d1e744f960b2f6eb178c52abec",
+          "message": "Merge pull request #3432 from jacderida/feat-provide_various_installation_options\n\nfeat: add multiple platform-native installation options",
+          "timestamp": "2026-01-28T14:13:29Z",
+          "tree_id": "2853f2059d1e9f55368570dec194f4281c1c6c82",
+          "url": "https://github.com/maidsafe/autonomi/commit/376eb3f32cc790d1e744f960b2f6eb178c52abec"
+        },
+        "date": 1769611053058,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
