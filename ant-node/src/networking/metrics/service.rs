@@ -211,6 +211,10 @@ impl MetricService {
         Ok(response)
     }
 
+    /// Returns extended operational metadata for debugging and monitoring.
+    ///
+    /// Unlike `/metadata` which only contains peer_id and protocol info, this endpoint
+    /// includes: peer_id, process ID, binary version, root directory, and log directory.
     fn respond_with_metadata_extended(&mut self) -> Result<Response<String>> {
         let mut response: Response<String> = Response::default();
 
@@ -342,7 +346,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_metrics_server_graceful_restart() {
-        let port = 8081; // Use a specific test port
+        // Use a random high port based on process ID to avoid conflicts with other tests/services
+        let port = 49152 + (std::process::id() % 1000) as u16;
         let registries = MetricsRegistries::default();
 
         let shutdown_tx_1 = run_metrics_server(registries, port);

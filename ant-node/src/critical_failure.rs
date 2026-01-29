@@ -53,7 +53,6 @@ pub fn reset_critical_failure(root_dir: &Path) {
 fn node_error_to_reason(error: &Error) -> String {
     match error {
         Error::Network(network_error) => {
-            println!("Network error: {network_error}");
             let network_err_str = match network_error {
                 NetworkError::DialError(_) => "DialError".to_string(),
                 NetworkError::BootstrapError(_) => "BootstrapError".to_string(),
@@ -61,7 +60,7 @@ fn node_error_to_reason(error: &Error) -> String {
                 NetworkError::KademliaStoreError(_) => "KademliaStoreError".to_string(),
                 NetworkError::TransportError(_) => "TransportError".to_string(),
                 NetworkError::ProtocolError(_) => "ProtocolError".to_string(),
-                NetworkError::EvmPaymemt(_) => "EvmPayment".to_string(),
+                NetworkError::EvmPayment(_) => "EvmPayment".to_string(),
                 NetworkError::SigningFailed(_) => "SigningFailed".to_string(),
                 NetworkError::NoListenAddressesFound => "NoListenAddressesFound".to_string(),
                 NetworkError::ListenerCleanupFailed => "ListenerCleanupFailed".to_string(),
