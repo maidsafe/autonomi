@@ -6,13 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::time::Instant;
-
 use crate::AttoTokens;
 use crate::Client;
 use crate::client::payment::PaymentOption;
 use crate::client::{GetError, PutError};
-use crate::self_encryption::EncryptionStream;
 
 pub use crate::Bytes;
 pub use crate::client::data_types::chunk::DataMapChunk;
@@ -122,16 +119,7 @@ impl Client {
         data: Bytes,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataMapChunk), PutError> {
-        let now = Instant::now();
-
-        let (chunk_stream, data_map_chunk) = EncryptionStream::new_in_memory(data, false)?;
-        debug!("Encryption took: {:.2?}", now.elapsed());
-
-        // Note within the `pay_and_upload`, UploadSummary will be sent to client via event_channel.
-        let mut chunk_streams = vec![chunk_stream];
-        self.pay_and_upload(payment_option, &mut chunk_streams)
-            .await
-            .map(|total_cost| (total_cost, data_map_chunk))
+        self.data_put_internal(data, payment_option, false).await
     }
 }
 

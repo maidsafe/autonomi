@@ -79,6 +79,8 @@ pub enum MerklePaymentError {
     EvmWalletNetworkMismatch,
     #[error("Wallet error: {0:?}")]
     EvmWalletError(#[from] ant_evm::EvmWalletError),
+    #[error("Merkle payment vault error: {0}")]
+    MerklePaymentVault(#[from] ant_evm::merkle_payment_vault::error::Error),
     #[error("Failed to get timestamp: {0}")]
     TimestampError(#[from] std::time::SystemTimeError),
     #[error("Candidate pool verification failed: {0}")]
@@ -302,15 +304,11 @@ impl Client {
         let batches: Vec<Vec<XorName>> = addresses.chunks(MAX_LEAVES).map(|c| c.to_vec()).collect();
         let batches_len = batches.len();
         let addresses_len = addresses.len();
-        #[cfg(feature = "loud")]
-        println!("Paying for {addresses_len} addresses in {batches_len} batch(es)");
-        info!("Paying for {addresses_len} addresses in {batches_len} batch(es)");
+        crate::loud_info!("Paying for {addresses_len} addresses in {batches_len} batch(es)");
 
         let mut merged_receipt = MerklePaymentReceipt::default();
         for (i, batch) in batches.into_iter().enumerate() {
-            #[cfg(feature = "loud")]
-            println!("Processing batch {}/{batches_len}", i + 1);
-            info!("Processing batch {}/{batches_len}", i + 1);
+            crate::loud_info!("Processing batch {}/{batches_len}", i + 1);
             let receipt = self
                 .pay_for_single_merkle_batch(data_type, batch, data_size, wallet)
                 .await?;
@@ -401,12 +399,15 @@ impl Client {
         debug!("Waiting for wallet lock");
         let lock_guard = wallet.lock().await;
         debug!("Locked wallet");
-        let (winner_pool_hash, amount) = wallet
+        let (winner_pool_hash, amount, gas_info) = wallet
             .pay_for_merkle_tree(depth, pool_commitments, merkle_payment_timestamp)
             .await?;
         let amount = AttoTokens::from_atto(amount);
         drop(lock_guard);
         debug!("Unlocked wallet");
+
+        // Display gas cost to user
+        crate::loud_info!("Gas cost: {gas_info}");
 
         info!("Payment submitted, winner pool: {winner_pool_hash:?}, amount: {amount}");
 

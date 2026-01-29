@@ -196,8 +196,7 @@ impl Client {
             .to_bytes()
             .map_err(|e| PutError::Serialization(format!("Failed to serialize archive: {e:?}")))?;
 
-        #[cfg(feature = "loud")]
-        println!(
+        crate::loud_info!(
             "Uploading public archive referencing {} files",
             archive.map().len()
         );

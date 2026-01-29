@@ -11,7 +11,7 @@ use crate::contract::merkle_payment_vault::error::Error;
 use crate::contract::merkle_payment_vault::interface::IMerklePaymentVault;
 use crate::contract::merkle_payment_vault::interface::IMerklePaymentVault::IMerklePaymentVaultInstance;
 use crate::merkle_batch_payment::PoolHash;
-use crate::retry::TransactionError;
+use crate::retry::{GasInfo, TransactionError};
 use crate::transaction_config::TransactionConfig;
 use alloy::network::{Network, TransactionResponse};
 use alloy::providers::Provider;
@@ -140,14 +140,14 @@ where
     /// * `transaction_config` - Transaction configuration
     ///
     /// # Returns
-    /// * Tuple of (winner pool hash, total amount paid)
+    /// * Tuple of (winner pool hash, total amount paid, gas info)
     pub async fn pay_for_merkle_tree<I, T>(
         &self,
         depth: u8,
         pool_commitments: I,
         merkle_payment_timestamp: u64,
         transaction_config: &TransactionConfig,
-    ) -> Result<(PoolHash, Amount), Error>
+    ) -> Result<(PoolHash, Amount, GasInfo), Error>
     where
         I: IntoIterator<Item = T>,
         T: Into<IMerklePaymentVault::PoolCommitment>,
@@ -157,7 +157,7 @@ where
         let (calldata, to) =
             self.pay_for_merkle_tree_calldata(depth, pool_commitments, merkle_payment_timestamp)?;
 
-        let tx_hash = self
+        let (tx_hash, gas_info) = self
             .send_transaction_and_handle_errors(calldata, to, transaction_config)
             .await?;
 
@@ -174,7 +174,7 @@ where
             event.merklePaymentTimestamp
         );
 
-        Ok((winner_pool_hash, total_amount))
+        Ok((winner_pool_hash, total_amount, gas_info))
     }
 
     /// Send transaction with retries and handle revert errors
@@ -183,7 +183,7 @@ where
         calldata: Calldata,
         to: Address,
         transaction_config: &TransactionConfig,
-    ) -> Result<crate::common::TxHash, Error> {
+    ) -> Result<(crate::common::TxHash, GasInfo), Error> {
         let tx_result = crate::retry::send_transaction_with_retries(
             self.contract.provider(),
             calldata,
@@ -194,7 +194,7 @@ where
         .await;
 
         match tx_result {
-            Ok(hash) => Ok(hash),
+            Ok((hash, gas_info)) => Ok((hash, gas_info)),
             Err(TransactionError::TransactionReverted {
                 message,
                 revert_data,

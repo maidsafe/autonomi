@@ -25,8 +25,8 @@ use itertools::Itertools;
 use libp2p::{
     identity::PeerId,
     kad::{
-        KBucketDistance as Distance, ProviderRecord, Record, RecordKey as Key,
-        store::{Error, RecordStore, Result}, U256
+        KBucketDistance as Distance, ProviderRecord, Record, RecordKey as Key, U256,
+        store::{Error, RecordStore, Result},
     },
 };
 #[cfg(feature = "open-metrics")]
@@ -587,7 +587,7 @@ impl NodeRecordStore {
             return;
         };
 
-        // Increase distance by 10 times to match the allowance margin in other range check places. 
+        // Increase distance by 10 times to match the allowance margin in other range check places.
         let increased_distance = Distance(responsible_distance.0.saturating_mul(U256::from(10)));
 
         // Calculate 10% of total records as candidates for removal

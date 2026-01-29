@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::resolve_split_records;
+use super::resolve_records_from_peers;
 
 use crate::{
     Amount, AttoTokens, Client,
@@ -124,30 +124,64 @@ impl Client {
         self.scratchpad_get(&address).await
     }
 
-    /// Get Scratchpad from the Network
+    /// Fetches a Scratchpad from the network.
+    ///
+    /// This function uses the standard DHT fetch with retries and automatic fallback
+    /// to direct peer queries (handled by get_record_with_retries). If a SplitRecord
+    /// error is returned, it resolves the split using counter-based resolution.
+    ///
+    /// For Scratchpad (CRDT type with counter), the record with the highest counter is selected,
+    /// and conflicts are resolved through the standard split resolution process.
+    ///
+    /// # Arguments
+    /// * `address` - The scratchpad address to fetch
+    ///
+    /// # Returns
+    /// * `Ok(Scratchpad)` - The successfully retrieved and validated scratchpad
+    /// * `Err(ScratchpadError)` - If the scratchpad cannot be found, is invalid, or forked
     pub async fn scratchpad_get(
         &self,
         address: &ScratchpadAddress,
     ) -> Result<Scratchpad, ScratchpadError> {
         let network_address = NetworkAddress::from(*address);
         info!("Fetching scratchpad from network at {network_address:?}",);
-        let scratch_key = network_address.to_record_key();
 
         let pad = match self
             .network
             .get_record_with_retries(network_address.clone(), &self.config.scratchpad)
             .await
         {
-            Ok(maybe_record) => {
-                let record = maybe_record.ok_or(ScratchpadError::NotFound(*address))?;
-                debug!("Got scratchpad for {scratch_key:?}");
-                return try_deserialize_record::<Scratchpad>(&record)
-                    .map_err(|_| ScratchpadError::Corrupt(*address));
+            Ok(Some(records)) => {
+                debug!(
+                    "Got {} record(s) for scratchpad at {network_address:?}",
+                    records.len()
+                );
+                // Resolve multiple records using counter-based resolution
+                resolve_records_from_peers(
+                    records,
+                    network_address.clone(),
+                    |r| {
+                        try_deserialize_record::<Scratchpad>(&r)
+                            .map_err(|_| ScratchpadError::Corrupt(*address))
+                    },
+                    |s: &Scratchpad| s.counter(),
+                    |a: &Scratchpad, b: &Scratchpad| {
+                        a.data_encoding() == b.data_encoding()
+                            && a.encrypted_data() == b.encrypted_data()
+                    },
+                    |latest: HashSet<Scratchpad>| {
+                        ScratchpadError::Fork(latest.into_iter().collect())
+                    },
+                    || ScratchpadError::Corrupt(*address),
+                )?
+            }
+            Ok(None) => {
+                return Err(ScratchpadError::NotFound(*address));
             }
             Err(NetworkError::SplitRecord(result_map)) => {
-                debug!("Got multiple scratchpads for {scratch_key:?}");
-                resolve_split_records(
-                    result_map,
+                debug!("Got split record for scratchpad at {network_address:?}");
+                resolve_records_from_peers(
+                    result_map.into_values().collect(),
                     network_address.clone(),
                     |r| {
                         try_deserialize_record::<Scratchpad>(&r)

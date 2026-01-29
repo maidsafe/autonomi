@@ -44,7 +44,10 @@ use ant_protocol::constants::{
 };
 
 /// Libp2p defaults to 10s which is quite fast, we are more patient
-pub const REQ_TIMEOUT: Duration = Duration::from_secs(30);
+/// To allow node have enough time to verify the merkle uploads,
+/// which involves a KAD network get_closest query could last for long time,
+/// this timeout need to be further extended.
+pub const REQ_TIMEOUT: Duration = Duration::from_secs(120);
 /// Libp2p defaults to 60s for kad queries, we are more patient
 pub const KAD_QUERY_TIMEOUT: Duration = Duration::from_secs(120);
 /// Libp2p defaults to 3, we are more aggressive
@@ -55,8 +58,9 @@ const RESEND_IDENTIFY_INVERVAL: Duration = Duration::from_secs(3600); // todo: t
 /// Size of the LRU cache for peers and their addresses.
 /// Libp2p defaults to 100, we use 2k.
 const PEER_CACHE_SIZE: usize = 2_000;
-/// Client with poor connection requires a longer time to transmit large sized recrod to production network, via put_record_to
-const CLIENT_SUBSTREAMS_TIMEOUT_S: Duration = Duration::from_secs(30);
+/// Client with poor connection requires a longer time to transmit large sized record to production network, via put_record_to.
+/// This should match other request timeouts (REQ_TIMEOUT, KAD_QUERY_TIMEOUT) to avoid premature substream termination.
+const CLIENT_SUBSTREAMS_TIMEOUT_S: Duration = Duration::from_secs(120);
 /// Periodically trigger the bootstrap process to try connect to more peers in the network.
 const BOOTSTRAP_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
@@ -526,6 +530,32 @@ impl NetworkDriver {
                         data_type,
                         data_size,
                         merkle_payment_timestamp,
+                        resp,
+                    },
+                );
+            }
+            #[cfg(feature = "developer")]
+            NetworkTask::DevGetClosestPeersFromNetwork {
+                addr,
+                peer,
+                num_of_peers,
+                resp,
+            } => {
+                let req = Request::Query(Query::DevGetClosestPeersFromNetwork {
+                    key: addr.clone(),
+                    num_of_peers,
+                });
+
+                let req_id =
+                    self.req()
+                        .send_request_with_addresses(&peer.peer_id, req, peer.addrs.clone());
+
+                self.pending_tasks.insert_query(
+                    req_id,
+                    NetworkTask::DevGetClosestPeersFromNetwork {
+                        addr,
+                        peer,
+                        num_of_peers,
                         resp,
                     },
                 );

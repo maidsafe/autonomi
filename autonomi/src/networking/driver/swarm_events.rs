@@ -180,8 +180,11 @@ impl NetworkDriver {
                     .update_get_quote(request_id, quote.clone(), peer_address)
                     .is_err()
                 {
-                    self.pending_tasks
-                        .update_get_storage_proofs_from_peer(request_id, quote.ok(), storage_proofs)?;
+                    self.pending_tasks.update_get_storage_proofs_from_peer(
+                        request_id,
+                        quote.ok(),
+                        storage_proofs,
+                    )?;
                 }
             }
             Response::Query(QueryResponse::GetMerkleCandidateQuote(result)) => {
@@ -210,6 +213,23 @@ impl NetworkDriver {
             }) => {
                 self.pending_tasks
                     .update_get_closest_peers_from_peer(request_id, peers)?;
+            }
+            #[cfg(feature = "developer")]
+            Response::Query(QueryResponse::DevGetClosestPeersFromNetwork {
+                target,
+                queried_node,
+                peers,
+            }) => {
+                use crate::networking::interface::DevGetClosestPeersFromNetworkResponse;
+                self.pending_tasks
+                    .update_dev_get_closest_peers_from_network(
+                        request_id,
+                        DevGetClosestPeersFromNetworkResponse {
+                            target,
+                            queried_node,
+                            peers,
+                        },
+                    )?;
             }
             _ => {
                 info!("Other request response event({request_id:?}): {response:?}");

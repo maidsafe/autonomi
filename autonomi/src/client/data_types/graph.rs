@@ -57,13 +57,23 @@ pub enum GraphError {
 
 impl Client {
     /// Fetches a GraphEntry from the network.
+    ///
+    /// This function uses the standard DHT fetch with retries and automatic fallback
+    /// to direct peer queries (handled by get_record_with_retries).
+    ///
+    /// # Arguments
+    /// * `address` - The graph entry address to fetch
+    ///
+    /// # Returns
+    /// * `Ok(GraphEntry)` - The successfully retrieved and validated graph entry
+    /// * `Err(GraphError)` - If the entry cannot be found, is invalid, or forked
     pub async fn graph_entry_get(
         &self,
         address: &GraphEntryAddress,
     ) -> Result<GraphEntry, GraphError> {
         let key = NetworkAddress::from(*address);
 
-        let record = self
+        let records = self
             .network
             .get_record_with_retries(key.clone(), &self.config.graph_entry)
             .await
@@ -71,14 +81,57 @@ impl Client {
             .ok_or(GetError::RecordNotFound)?;
 
         debug!(
-            "Got record from the network, {:?}",
-            PrettyPrintRecordKey::from(&record.key)
+            "Got {} record(s) from the network for graph entry at {key:?}",
+            records.len()
         );
 
-        let graph_entries = get_graph_entry_from_record(&record)?;
-        match &graph_entries[..] {
-            [entry] => Ok(entry.clone()),
-            multiple => Err(GraphError::Fork(multiple.to_vec())),
+        // GraphEntry uses a Vec<GraphEntry> inside the record, extract all entries
+        let mut all_entries: Vec<GraphEntry> = Vec::new();
+        for record in records {
+            if let Ok(entries) = get_graph_entry_from_record(&record) {
+                all_entries.extend(entries);
+            }
+        }
+
+        if all_entries.is_empty() {
+            return Err(GraphError::GetError(GetError::RecordNotFound));
+        }
+
+        // Count occurrences of each unique entry
+        let mut entry_counts: Vec<(GraphEntry, usize)> = Vec::new();
+        for entry in all_entries.iter() {
+            if let Some((_, count)) = entry_counts.iter_mut().find(|(e, _)| e == entry) {
+                *count += 1;
+            } else {
+                entry_counts.push((entry.clone(), 1));
+            }
+        }
+
+        // Find the maximum copy count
+        let max_copies = entry_counts
+            .iter()
+            .map(|(_, count)| *count)
+            .max()
+            .ok_or(GraphError::GetError(GetError::RecordNotFound))?;
+
+        // Get entries with max copies
+        let entries_with_max: Vec<GraphEntry> = entry_counts
+            .into_iter()
+            .filter(|(_, count)| *count == max_copies)
+            .map(|(entry, _)| entry)
+            .collect();
+
+        match &entries_with_max[..] {
+            [best_entry] => {
+                debug!(
+                    "Successfully resolved graph entry at {key:?} with {max_copies} consistent copies"
+                );
+                Ok(best_entry.clone())
+            }
+            _ => {
+                warn!("Fork detected for graph entry at {key:?}");
+                Err(GraphError::Fork(entries_with_max))
+            }
         }
     }
 

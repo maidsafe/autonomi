@@ -102,6 +102,16 @@ pub enum Query {
         /// Node verifies this is not expired/future, then signs its state with it
         merkle_payment_timestamp: u64,
     },
+    /// Developer/analytics query: Ask a node to query the network for closest peers.
+    /// Unlike GetClosestPeers which returns local routing table, this triggers a full network lookup.
+    /// Only available when the `developer` feature is enabled.
+    #[cfg(feature = "developer")]
+    DevGetClosestPeersFromNetwork {
+        /// Target address to find closest peers for
+        key: NetworkAddress,
+        /// Number of peers to return (optional, defaults to K_VALUE)
+        num_of_peers: Option<usize>,
+    },
 }
 
 impl Query {
@@ -116,6 +126,8 @@ impl Query {
             | Query::GetChunkExistenceProof { key, .. }
             | Query::GetClosestPeers { key, .. }
             | Query::GetMerkleCandidateQuote { key, .. } => key.clone(),
+            #[cfg(feature = "developer")]
+            Query::DevGetClosestPeersFromNetwork { key, .. } => key.clone(),
             Query::PutRecord { holder, .. } => holder.clone(),
         }
     }
@@ -188,6 +200,13 @@ impl std::fmt::Display for Query {
                 write!(
                     f,
                     "Query::GetMerkleCandidateQuote({key:?} {data_type} {data_size} timestamp={merkle_payment_timestamp})"
+                )
+            }
+            #[cfg(feature = "developer")]
+            Query::DevGetClosestPeersFromNetwork { key, num_of_peers } => {
+                write!(
+                    f,
+                    "Query::DevGetClosestPeersFromNetwork({key:?} {num_of_peers:?})"
                 )
             }
         }

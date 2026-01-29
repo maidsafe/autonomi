@@ -22,6 +22,22 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - uses: mozilla/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+        continue-on-error: true
+      - name: Enable sccache
+        shell: bash
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      - name: Install mold (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mold
+      - name: Use mold linker (Linux)
+        if: runner.os == 'Linux'
+        run: echo "RUSTFLAGS=-C link-arg=-fuse-ld=mold" >> $GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
 
       - name: cargo cache registry, index and build
@@ -33,7 +49,7 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-cache-${{ hashFiles('**/Cargo.lock') }}
       - shell: bash
-        run: cargo test --lib --package ant-node-manager
+        run: cargo test --profile=ci --lib --package ant-node-manager
 
   # node-manager-user-mode-e2e-tests:
   #   name: user-mode e2e

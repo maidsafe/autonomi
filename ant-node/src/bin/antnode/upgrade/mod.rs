@@ -16,9 +16,9 @@ use ant_releases::{
     AntReleaseRepoActions, ArchiveType, AutonomiReleaseInfo, Platform, ReleaseType,
 };
 use fs2::FileExt;
+use once_cell::sync::OnceCell;
 use semver::Version;
 use sha2::{Digest, Sha256};
-use once_cell::sync::OnceCell;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};

@@ -1,0 +1,17 @@
+Package: autonomi
+Version: VERSION_PLACEHOLDER
+Architecture: ARCH_PLACEHOLDER
+Maintainer: MaidSafe.net Limited <support@autonomi.com>
+Installed-Size: SIZE_PLACEHOLDER
+Section: net
+Priority: optional
+Homepage: https://autonomi.com
+Description: Autonomi Network CLI Suite
+ Command-line tools for interacting with the Autonomi Network.
+ .
+ This package includes:
+  - ant: Client CLI for uploading/downloading data
+  - antnode: Node binary for running a network node
+  - antctl: Node management and control utility
+ .
+ For more information, visit https://docs.autonomi.com/

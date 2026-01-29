@@ -11,18 +11,35 @@ pub mod graph;
 pub mod pointer;
 pub mod scratchpad;
 
-use crate::networking::{PeerId, Record};
+use crate::networking::Record;
 use ant_protocol::NetworkAddress;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use tracing::{debug, error, warn};
 
-/// Resolve split records by selecting the highest counter.
+/// Resolve records from a list of records for CRDT types,
+/// which could be typically from fallback peer queries, or from a SplitRecord error.
+///
+/// It resolves conflicts by selecting the highest counter.
 /// If multiple records share the highest counter but have different content,
 /// return a fork error constructed by the provided closure.
 /// If deserialization fails for any record, return the deserialization error.
 /// If no valid records remain, return a corrupt error constructed by the provided closure.
-pub(crate) fn resolve_split_records<T, E, FDeser, FCounter, FEqual, FFork, FCorrupt>(
-    result_map: HashMap<PeerId, Record>,
+///
+/// # Arguments
+/// * `records` - List of records fetched from peers
+/// * `key` - The network address (for logging)
+/// * `deserialize` - Function to deserialize a record into type T
+/// * `counter_of` - Function to extract the counter value from type T
+/// * `same_content` - Function to compare if two items have the same content
+/// * `fork_error` - Function to construct a fork error
+/// * `corrupt_error` - Function to construct a corrupt error
+///
+/// # Returns
+/// * `Ok(T)` - The resolved item with the highest counter and sufficient consistent copies
+/// * `Err(E)` - If deserialization fails, data is corrupt, forked, or insufficient copies exist
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn resolve_records_from_peers<T, E, FDeser, FCounter, FEqual, FFork, FCorrupt>(
+    records: Vec<Record>,
     key: NetworkAddress,
     deserialize: FDeser,
     counter_of: FCounter,
@@ -38,16 +55,22 @@ where
     FFork: Fn(HashSet<T>) -> E,
     FCorrupt: Fn() -> E,
 {
-    debug!("Resolving split records at {key:?}");
+    debug!("Resolving {} records from peers for {key:?}", records.len());
 
-    // Deserialize all records; if any fails, propagate the error upstream
-    let mut items: Vec<T> = result_map
-        .into_values()
-        .map(deserialize)
-        .collect::<Result<Vec<_>, _>>()?;
+    // Deserialize all records
+    let mut items: Vec<T> = Vec::new();
+    for record in records {
+        match deserialize(record) {
+            Ok(item) => items.push(item),
+            Err(_) => {
+                // Skip invalid records in fallback mode, we need to be resilient
+                warn!("Skipping invalid record during fallback resolution at {key:?}");
+            }
+        }
+    }
 
     if items.is_empty() {
-        error!("Got empty records map for {key:?}");
+        error!("No valid records found for {key:?}");
         return Err(corrupt_error());
     }
 
@@ -61,31 +84,48 @@ where
         }
     };
 
-    // Collect unique entries with max counter
-    let mut latest: HashSet<T> = HashSet::new();
-    for item in items.into_iter() {
-        if counter_of(&item) == max_counter
-            && !latest.iter().any(|existing| same_content(existing, &item))
+    // Group items by content at the max counter
+    let items_at_max: Vec<T> = items
+        .into_iter()
+        .filter(|item| counter_of(item) == max_counter)
+        .collect();
+
+    // Count consistent copies for each unique content
+    let mut content_groups: Vec<(T, usize)> = Vec::new();
+    for item in items_at_max.iter() {
+        if let Some((_, count)) = content_groups
+            .iter_mut()
+            .find(|(existing, _)| same_content(existing, item))
         {
-            latest.insert(item);
+            *count += 1;
+        } else {
+            content_groups.push((item.clone(), 1));
         }
     }
 
-    match latest.len() {
-        1 => {
-            let item = latest
-                .into_iter()
-                .next()
-                .expect("HashSet with len() == 1 must contain exactly one item");
-            Ok(item)
+    // Find the group(s) with the most copies
+    let max_copies = content_groups.iter().map(|(_, c)| *c).max().unwrap_or(0);
+
+    // Get all items with the max number of copies
+    let best_items: HashSet<T> = content_groups
+        .into_iter()
+        .filter(|(_, count)| *count == max_copies)
+        .map(|(item, _)| item)
+        .collect();
+
+    let best_vec: Vec<T> = best_items.iter().cloned().collect();
+    match &best_vec[..] {
+        [one] => {
+            debug!("Successfully resolved {key:?} with {max_copies} consistent copies");
+            Ok(one.clone())
         }
-        0 => {
-            error!("No latest records found for {key:?}");
+        [] => {
+            error!("No valid content found for {key:?}");
             Err(corrupt_error())
         }
-        _ => {
-            warn!("Multiple conflicting records found at latest version for {key:?}");
-            Err(fork_error(latest))
+        [..] => {
+            warn!("Multiple conflicting records with equal copy counts for {key:?}");
+            Err(fork_error(best_items))
         }
     }
 }

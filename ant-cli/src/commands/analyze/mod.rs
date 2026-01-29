@@ -12,14 +12,13 @@ mod json;
 pub use error::{AnalysisErrorDisplay, NetworkErrorDisplay};
 
 use crate::actions::NetworkContext;
+use crate::utils::parse_network_address;
 use crate::wallet::load_wallet;
-use autonomi::PublicKey;
+use ant_protocol::storage::DataTypes;
 use autonomi::chunk::ChunkAddress;
 use autonomi::client::analyze::{Analysis, AnalysisError};
 use autonomi::client::config::CHUNK_DOWNLOAD_BATCH_SIZE;
 use autonomi::client::payment::PaymentOption;
-use autonomi::graph::GraphEntryAddress;
-use ant_protocol::storage::DataTypes;
 use autonomi::{
     Multiaddr, RewardsAddress, SecretKey, Wallet,
     networking::{NetworkAddress, NetworkError, PeerId, PeerQuoteWithStorageProof, Record},
@@ -138,38 +137,6 @@ macro_rules! println_if {
 // ============================================================================
 // Helper Functions for Network Health Scanning
 // ============================================================================
-
-/// Parse a string address into a NetworkAddress
-fn parse_network_address(addr: &str) -> Result<NetworkAddress> {
-    let hex_addr = addr.trim_start_matches("0x");
-
-    // Try parsing as ChunkAddress first
-    if let Ok(chunk_addr) = ChunkAddress::from_hex(addr) {
-        return Ok(NetworkAddress::from(chunk_addr));
-    }
-
-    // Try parsing as PublicKey (could be GraphEntry, Pointer, or Scratchpad)
-    if let Ok(public_key) = PublicKey::from_hex(hex_addr) {
-        return Ok(NetworkAddress::from(GraphEntryAddress::new(public_key)));
-    }
-
-    // Try parsing from NetworkAddress debug format:
-    // NetworkAddress::RecordKey("e9d7b3208bcb7ef566102027ca9a7f3ced7c0f8abf87c9bb0ef9130b625572f2") - (...)
-    if let Some(start) = addr.find('"')
-        && let Some(end) = addr[start + 1..].find('"')
-    {
-        let hex_str = &addr[start + 1..start + 1 + end];
-
-        // Try parsing the extracted hex string as ChunkAddress
-        if let Ok(chunk_addr) = ChunkAddress::from_hex(hex_str) {
-            return Ok(NetworkAddress::from(chunk_addr));
-        }
-    }
-
-    Err(color_eyre::eyre::eyre!(
-        "Could not parse address. Expected a hex-encoded ChunkAddress, PublicKey, or NetworkAddress debug format"
-    ))
-}
 
 /// Perform health check for a single address by querying closest 7 peers
 async fn perform_health_check_for_address(
@@ -1616,7 +1583,14 @@ async fn perform_network_scan_round(
 
         async move {
             let result = client
-                .get_storage_proofs_from_peer(peer_target_addr, peer_clone, nonce, difficulty, DataTypes::Chunk, 0)
+                .get_storage_proofs_from_peer(
+                    peer_target_addr,
+                    peer_clone,
+                    nonce,
+                    difficulty,
+                    DataTypes::Chunk,
+                    0,
+                )
                 .await;
             (peer_id, result)
         }
@@ -2335,7 +2309,14 @@ async fn print_nodes_health(
 
         // Query the peer directly for storage proofs
         match client
-            .get_storage_proofs_from_peer(target_addr.clone(), peer.clone(), nonce, difficulty, DataTypes::Chunk, 0)
+            .get_storage_proofs_from_peer(
+                target_addr.clone(),
+                peer.clone(),
+                nonce,
+                difficulty,
+                DataTypes::Chunk,
+                0,
+            )
             .await
         {
             Ok((_quote, storage_proofs)) => {

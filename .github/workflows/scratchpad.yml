@@ -21,30 +21,17 @@ jobs:
             ant_path: /Users/runner/Library/Application\ Support/autonomi
     steps:
       - uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant --bin antctl
+      - uses: ./.github/actions/build-binaries
         timeout-minutes: 30
 
-      - name: Install antctl on Windows
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
-          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
-          Write-Host "antctl installed to $destination"
-
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: true
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
 
       - name: Check if ANT_PEERS and EVM_NETWORK are set
         shell: bash
@@ -245,8 +232,7 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_scratchpad
-          build: true

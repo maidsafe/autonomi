@@ -7,6 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 mod analyze;
+#[cfg(feature = "developer")]
+mod developer;
 mod file;
 mod pointer;
 mod register;
@@ -24,6 +26,26 @@ use pointer::TargetDataType;
 use pointer::parse_target_data_type;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+
+/// Shared payment-related flags for file cost and upload commands
+#[derive(Args, Debug, Clone)]
+pub struct PaymentFlags {
+    /// Use standard payment mode instead of single-node payment (default).
+    /// Standard mode pays 3 nodes individually, which costs more in gas fees.
+    /// Single-node payment (default) pays only one node with 3x that amount, saving gas fees.
+    /// Note: This only applies to regular payments, not merkle payments.
+    #[arg(long, conflicts_with = "merkle")]
+    pub disable_single_node_payment: bool,
+    /// Force merkle tree payments regardless of chunk count.
+    /// By default, merkle payments are used for >= 64 chunks.
+    /// Mutually exclusive with --regular and --disable-single-node-payment.
+    #[arg(long, conflicts_with_all = ["regular", "disable_single_node_payment"])]
+    pub merkle: bool,
+    /// Force regular per-batch payments regardless of chunk count.
+    /// By default, regular payments are used for < 64 chunks. Mutually exclusive with --merkle.
+    #[arg(long, conflicts_with = "merkle")]
+    pub regular: bool,
+}
 
 #[derive(Subcommand, Debug)]
 pub enum SubCmd {
@@ -98,6 +120,14 @@ pub enum SubCmd {
         #[arg(long)]
         json: Option<PathBuf>,
     },
+
+    /// Developer and analytics tools for network diagnostics.
+    /// Requires the `developer` feature to be enabled on both client and node.
+    #[cfg(feature = "developer")]
+    Developer {
+        #[command(subcommand)]
+        command: DeveloperCmd,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -106,16 +136,16 @@ pub enum FileCmd {
     Cost {
         /// The file to estimate cost for.
         file: String,
-        /// Use Merkle batch payment mode instead of standard payment.
-        /// Merkle mode pays for all chunks in a single transaction, saving gas fees.
+        /// Estimate cost for public upload. Everyone can see public data on the Network.
+        /// Default is private (data encrypted, datamaps kept local).
+        #[arg(short, long)]
+        public: bool,
+        /// Exclude archive metadata from cost estimate.
+        /// By default, archive cost is included for directory uploads.
         #[arg(long)]
-        merkle: bool,
-        /// Use standard payment mode instead of single-node payment (default).
-        /// Standard mode pays 3 nodes individually, which costs more in gas fees.
-        /// Single-node payment (default) pays only one node with 3x that amount, saving gas fees.
-        /// This flag only applies to standard payment mode (not Merkle).
-        #[arg(long, conflicts_with = "merkle")]
-        disable_single_node_payment: bool,
+        no_archive: bool,
+        #[command(flatten)]
+        payment_flags: PaymentFlags,
     },
 
     /// Upload a file and pay for it. Data on the Network is private by default.
@@ -136,17 +166,8 @@ pub enum FileCmd {
         #[arg(long)]
         #[clap(default_value = "0")]
         retry_failed: u64,
-        /// Use Merkle batch payment mode instead of standard payment.
-        /// Merkle mode pays for all chunks in a single transaction, saving gas fees.
-        #[arg(long)]
-        merkle: bool,
-        /// Use standard payment mode instead of single-node payment (default).
-        /// Standard mode pays 3 nodes individually, which costs more in gas fees.
-        /// Single-node payment (default) pays only one node with 3x that amount, saving gas fees.
-        /// Data is stored on 5 nodes regardless of payment mode.
-        /// This flag only applies to standard payment mode (not Merkle).
-        #[arg(long, conflicts_with = "merkle")]
-        disable_single_node_payment: bool,
+        #[command(flatten)]
+        payment_flags: PaymentFlags,
         #[command(flatten)]
         transaction_opt: TransactionOpt,
     },
@@ -465,6 +486,77 @@ pub enum WalletCmd {
     Balance,
 }
 
+/// Developer and analytics tools for network diagnostics.
+/// Only available when the `developer` feature is enabled.
+#[cfg(feature = "developer")]
+#[derive(Subcommand, Debug)]
+pub enum DeveloperCmd {
+    /// Query a node to get its network view of closest peers to a target address.
+    ///
+    /// This asks the specified node to perform an actual Kademlia network lookup
+    /// (not just return its local routing table) and returns the results from
+    /// that node's network perspective.
+    ClosestPeers {
+        /// Node to query: either a PeerId or full multiaddr.
+        ///
+        /// Examples:
+        ///   - PeerId: 12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE
+        ///   - Multiaddr: /ip4/127.0.0.1/udp/12000/quic-v1/p2p/12D3KooW...
+        ///
+        /// When only a PeerId is provided, the peer's address is discovered via the network.
+        #[arg(name = "node")]
+        node_addr: String,
+        /// Target address to find closest peers for (hex string or PeerId).
+        #[arg(name = "target")]
+        target: String,
+        /// Number of peers to return (default: uses K_VALUE, typically 20).
+        #[arg(short = 'n', long)]
+        num_peers: Option<usize>,
+        /// Compare the node's perspective with the client's perspective.
+        #[arg(long)]
+        compare: bool,
+    },
+    /// Get the version of a node.
+    ///
+    /// Queries a specific node to retrieve its software version.
+    NodeVersion {
+        /// Node to query: either a PeerId or full multiaddr.
+        ///
+        /// Examples:
+        ///   - PeerId: 12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE
+        ///   - Multiaddr: /ip4/127.0.0.1/udp/12000/quic-v1/p2p/12D3KooW...
+        ///
+        /// When only a PeerId is provided, the peer's address is discovered via the network.
+        #[arg(name = "node")]
+        node_addr: String,
+    },
+    /// Get a storage quote from a specific peer.
+    ///
+    /// This queries a specific node to get a quote for storing data at a given address.
+    /// The quote contains pricing metrics and node information.
+    GetQuote {
+        /// Peer to query: either a PeerId or full multiaddr.
+        ///
+        /// Examples:
+        ///   - PeerId: 12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE
+        ///   - Multiaddr: /ip4/127.0.0.1/udp/12000/quic-v1/p2p/12D3KooW...
+        ///
+        /// When only a PeerId is provided, the peer's address is discovered via the network.
+        #[arg(name = "peer")]
+        peer_addr: String,
+        /// Target address for the quote (hex string, ChunkAddress, or XorName).
+        /// If not provided, a random address will be generated.
+        #[arg(name = "address")]
+        address: Option<String>,
+        /// Data type index (default: 0 for Chunk).
+        #[arg(short = 't', long, default_value = "0")]
+        data_type: u32,
+        /// Data size in bytes (default: 1048576 = 1MB).
+        #[arg(short = 's', long, default_value = "1048576")]
+        data_size: usize,
+    },
+}
+
 #[derive(Args, Debug)]
 pub(crate) struct TransactionOpt {
     /// Max fee per gas / gas price bid.
@@ -492,16 +584,16 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
         Some(SubCmd::File { command }) => match command {
             FileCmd::Cost {
                 file,
-                merkle,
-                disable_single_node_payment,
-            } => file::cost(&file, network_context, merkle, disable_single_node_payment).await,
+                public,
+                no_archive,
+                payment_flags,
+            } => file::cost(&file, public, !no_archive, network_context, payment_flags).await,
             FileCmd::Upload {
                 file,
                 public,
                 no_archive,
                 retry_failed,
-                merkle,
-                disable_single_node_payment,
+                payment_flags,
                 transaction_opt,
             } => {
                 if let Err((err, exit_code)) = file::upload(
@@ -511,8 +603,7 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                     network_context,
                     transaction_opt.max_fee_per_gas,
                     retry_failed,
-                    merkle,
-                    disable_single_node_payment,
+                    payment_flags,
                 )
                 .await
                 {
@@ -707,6 +798,36 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             )
             .await
         }
+        #[cfg(feature = "developer")]
+        Some(SubCmd::Developer { command }) => match command {
+            DeveloperCmd::ClosestPeers {
+                node_addr,
+                target,
+                num_peers,
+                compare,
+            } => {
+                developer::closest_peers(&node_addr, &target, num_peers, compare, network_context)
+                    .await
+            }
+            DeveloperCmd::NodeVersion { node_addr } => {
+                developer::node_version(&node_addr, network_context).await
+            }
+            DeveloperCmd::GetQuote {
+                peer_addr,
+                address,
+                data_type,
+                data_size,
+            } => {
+                developer::get_quote(
+                    &peer_addr,
+                    address.as_deref(),
+                    data_type,
+                    data_size,
+                    network_context,
+                )
+                .await
+            }
+        },
         None => {
             // If no subcommand is given, default to clap's error behaviour.
             Opt::command()

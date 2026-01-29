@@ -13,7 +13,7 @@ use super::{
 use crate::metrics::NodeMetricsRecorder;
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
-use crate::networking::{Addresses, Network, NetworkConfig, NetworkError, NetworkEvent, NodeIssue};
+use crate::networking::{Addresses, Network, NetworkConfig, NetworkEvent, NodeIssue};
 use crate::{PutValidationError, RunningNode};
 use ant_bootstrap::bootstrap::Bootstrap;
 use ant_evm::EvmNetwork;
@@ -32,7 +32,6 @@ use libp2p::{
     Multiaddr, PeerId,
     identity::Keypair,
     kad::{KBucketDistance as Distance, Record, U256},
-    request_response::OutboundFailure,
 };
 use num_traits::cast::ToPrimitive;
 use rand::{
@@ -867,6 +866,13 @@ impl Node {
                 )
                 .await
             }
+            #[cfg(feature = "developer")]
+            Query::DevGetClosestPeersFromNetwork { key, num_of_peers } => {
+                debug!(
+                    "Got DevGetClosestPeersFromNetwork targeting {key:?} with {num_of_peers:?} peers"
+                );
+                Self::respond_dev_get_closest_peers_from_network(network, key, num_of_peers).await
+            }
         };
         Response::Query(resp)
     }
@@ -897,6 +903,60 @@ impl Node {
             target,
             peers,
             signature,
+        }
+    }
+
+    /// Handle DevGetClosestPeersFromNetwork query
+    /// Unlike respond_get_closest_peers which returns local routing table peers,
+    /// this method actively queries the Kademlia network for closest peers.
+    /// Only available when the `developer` feature is enabled.
+    #[cfg(feature = "developer")]
+    async fn respond_dev_get_closest_peers_from_network(
+        network: &Network,
+        target: NetworkAddress,
+        num_of_peers: Option<usize>,
+    ) -> QueryResponse {
+        use ant_protocol::messages::QueryResponse;
+
+        let queried_node = NetworkAddress::from(network.peer_id());
+        debug!(
+            "DevGetClosestPeersFromNetwork: node {queried_node:?} querying network for closest peers to {target:?}"
+        );
+
+        // Query the network for closest peers (this performs an actual Kademlia lookup)
+        let result = network.get_closest_peers(&target).await;
+
+        let peers = match result {
+            Ok(peers) => {
+                let mut converted: Vec<(NetworkAddress, Vec<Multiaddr>)> = peers
+                    .into_iter()
+                    .map(|(peer_id, addrs)| (NetworkAddress::from(peer_id), addrs.0))
+                    .collect();
+
+                // If num_of_peers is specified, limit the results
+                if let Some(n) = num_of_peers {
+                    converted.sort_by_key(|(addr, _)| target.distance(addr));
+                    converted.truncate(n);
+                }
+
+                debug!(
+                    "DevGetClosestPeersFromNetwork: found {} peers closest to {target:?}",
+                    converted.len()
+                );
+                converted
+            }
+            Err(err) => {
+                warn!(
+                    "DevGetClosestPeersFromNetwork: failed to query network for {target:?}: {err:?}"
+                );
+                vec![]
+            }
+        };
+
+        QueryResponse::DevGetClosestPeersFromNetwork {
+            target,
+            queried_node,
+            peers,
         }
     }
 
@@ -1539,13 +1599,10 @@ impl Node {
             Err(err) => {
                 info!("Failed to fetch peer version {peer:?} with error {err:?}");
                 // Failed version fetch (which contains dial then re-attempt by itself)
-                // with error of `DialFailure` indicates the peer could be dead with high chance.
+                // indicates the peer could be dead with high chance.
                 // In that case, the peer shall be removed from the routing table.
-                if let NetworkError::OutboundError(OutboundFailure::DialFailure) = err {
-                    network.remove_peer(peer);
-                    return;
-                }
-                "old".to_string()
+                network.remove_peer(peer);
+                return;
             }
         };
         network.notify_node_version(peer, version);

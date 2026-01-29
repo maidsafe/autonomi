@@ -13,7 +13,7 @@ use crate::networking::PeerInfo;
 use crate::networking::common::Addresses;
 use crate::utils::process_tasks_with_max_concurrency;
 use ant_evm::payment_vault::get_market_price;
-use ant_evm::{Amount, PaymentQuote, QuotePayment, QuotingMetrics};
+use ant_evm::{Amount, AttoTokens, PaymentQuote, QuotePayment, QuotingMetrics};
 pub use ant_protocol::storage::DataTypes;
 use ant_protocol::{CLOSE_GROUP_SIZE, NetworkAddress, storage::ChunkAddress};
 use libp2p::PeerId;
@@ -104,6 +104,15 @@ pub enum CostError {
     InvalidCost,
     #[error("Network error: {0:?}")]
     Network(#[from] crate::networking::NetworkError),
+    #[error("Total cost overflow when adding {0} and {1}")]
+    TotalCostOverflow(AttoTokens, AttoTokens),
+    #[error("No content addresses generated for file")]
+    NoAddressesForContent,
+}
+
+/// Add two costs together, returning an error on overflow.
+pub fn add_costs(a: AttoTokens, b: AttoTokens) -> Result<AttoTokens, CostError> {
+    a.checked_add(b).ok_or(CostError::TotalCostOverflow(a, b))
 }
 
 impl Client {
@@ -118,9 +127,7 @@ impl Client {
         let futures: Vec<_> = content_addrs
             .into_iter()
             .map(|(content_addr, data_size)| {
-                info!("Quoting for {content_addr:?} ..");
-                #[cfg(feature = "loud")]
-                println!("Quoting for {content_addr:?} ..");
+                crate::loud_info!("Quoting for {content_addr:?} ..");
                 fetch_store_quote(
                     &self.network,
                     content_addr,

@@ -24,6 +24,8 @@ pub(crate) use utils::multiaddr_is_global;
 pub use ant_evm::PaymentQuote;
 pub use ant_protocol::NetworkAddress;
 pub use config::{RetryStrategy, Strategy};
+#[cfg(feature = "developer")]
+pub use interface::DevGetClosestPeersFromNetworkResponse;
 pub use libp2p::kad::PeerInfo;
 pub use libp2p::{
     Multiaddr, PeerId,
@@ -56,7 +58,13 @@ pub const CLOSE_GROUP_SIZE_MAJORITY: usize = CLOSE_GROUP_SIZE / 2 + 1;
 pub(crate) const QUOTING_CANDIDATES: usize = 10;
 
 /// Peer quoting result with storage proofs attached.
-pub type PeerQuoteWithStorageProof = (Option<PaymentQuote>, Vec<(NetworkAddress, Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>)>);
+pub type PeerQuoteWithStorageProof = (
+    Option<PaymentQuote>,
+    Vec<(
+        NetworkAddress,
+        Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>,
+    )>,
+);
 
 /// The number of closest peers to request from the network
 const N_CLOSEST_PEERS: NonZeroUsize =
@@ -232,6 +240,10 @@ pub enum NetworkError {
     },
     #[error("Failed to get record: {0}")]
     GetRecordError(String),
+
+    /// Error getting version
+    #[error("Failed to get version: {0}")]
+    GetVersionError(String),
 
     /// Invalid retry strategy
     #[error("Invalid retry strategy, check your config or use the default")]
@@ -433,6 +445,52 @@ impl Network {
             N_CLOSEST_PEERS
         };
         self.get_closest_n_peers(addr, count).await
+    }
+
+    /// Get the closest peers to an address using direct Kademlia query only.
+    /// This method skips the peer verification step and returns candidates directly from the DHT.
+    /// Useful as a fallback when the verified approach fails.
+    pub async fn get_closest_peers_kad_only(
+        &self,
+        addr: NetworkAddress,
+        count: Option<usize>,
+    ) -> Result<Vec<PeerInfo>, NetworkError> {
+        let n = if let Some(c) = count {
+            NonZeroUsize::new(c).ok_or(NetworkError::InvalidNonZeroUsize(c.to_string()))?
+        } else {
+            N_CLOSEST_PEERS
+        };
+
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::GetClosestPeers {
+            addr: addr.clone(),
+            resp: tx,
+            n,
+        };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NetworkError::NetworkDriverOffline)?;
+
+        match rx.await? {
+            Ok(peers) => {
+                if peers.len() < n.get() {
+                    info!(
+                        "Kad-only get_closest query giving less candidates ({}/{})",
+                        peers.len(),
+                        n.get()
+                    );
+                    return Err(NetworkError::InsufficientPeers {
+                        got_peers: peers.len(),
+                        expected_peers: n.get(),
+                        peers,
+                    });
+                }
+                debug!("Kad-only query returned {} peers for {addr:?}", peers.len());
+                Ok(peers)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Get the N closest peers to an address on the Network
@@ -886,6 +944,46 @@ impl Network {
         }
 
         Ok(candidate)
+    }
+
+    /// Developer analytics: Get closest peers by asking a specific node to query its network.
+    ///
+    /// Unlike `get_closest_peers_from_peer` which returns the peer's local routing table,
+    /// this method asks the target node to perform an actual Kademlia network lookup
+    /// and return the results from its network perspective.
+    ///
+    /// # Arguments
+    /// * `node` - The node to ask (will perform the network query)
+    /// * `target` - The target address to find closest peers for
+    /// * `num_of_peers` - Optional limit on number of peers to return
+    ///
+    /// # Returns
+    /// * `DevGetClosestPeersFromNetworkResponse` containing:
+    ///   - The target address
+    ///   - The queried node's address
+    ///   - The closest peers found by that node's network query
+    ///
+    /// # Feature
+    /// Only available when the `developer` feature is enabled.
+    #[cfg(feature = "developer")]
+    pub async fn dev_get_closest_peers_from_node(
+        &self,
+        node: PeerInfo,
+        target: NetworkAddress,
+        num_of_peers: Option<usize>,
+    ) -> Result<interface::DevGetClosestPeersFromNetworkResponse, NetworkError> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::DevGetClosestPeersFromNetwork {
+            addr: target,
+            peer: node,
+            num_of_peers,
+            resp: tx,
+        };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NetworkError::NetworkDriverOffline)?;
+        rx.await?
     }
 
     /// Get the quotes for a Record from the closest Peers to that address on the Network

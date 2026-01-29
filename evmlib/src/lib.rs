@@ -11,8 +11,11 @@
 // Allow enum variant names that end with Error as they come from external derives
 #![allow(clippy::enum_variant_names)]
 
-use crate::common::Address;
-use crate::utils::get_evm_network;
+use crate::common::{Address, Amount};
+use crate::contract::merkle_payment_vault::error::Error as MerklePaymentError;
+use crate::contract::merkle_payment_vault::handler::MerklePaymentVaultHandler;
+use crate::merkle_batch_payment::PoolCommitment;
+use crate::utils::{get_evm_network, http_provider};
 use alloy::primitives::address;
 use alloy::transports::http::reqwest;
 use serde::{Deserialize, Serialize};
@@ -35,6 +38,9 @@ pub mod testnet;
 pub mod transaction_config;
 pub mod utils;
 pub mod wallet;
+
+// Re-export GasInfo for use by other crates
+pub use retry::GasInfo;
 
 /// Timeout for transactions
 const TX_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(24); // Should differ per chain
@@ -187,5 +193,45 @@ impl Network {
             Network::ArbitrumSepoliaTest => Some(&ARBITRUM_SEPOLIA_TEST_MERKLE_PAYMENTS_ADDRESS),
             Network::Custom(custom) => custom.merkle_payments_address.as_ref(),
         }
+    }
+
+    /// Estimate the cost of a Merkle tree batch using smart contract view function (0 gas).
+    ///
+    /// This calls the smart contract's view function which runs the exact same
+    /// pricing logic as the actual payment, ensuring accurate cost estimation.
+    /// No wallet is needed since view functions don't require signing.
+    ///
+    /// # Arguments
+    /// * `depth` - The Merkle tree depth
+    /// * `pool_commitments` - Vector of pool commitments with metrics (one per reward pool)
+    /// * `merkle_payment_timestamp` - Unix timestamp for the payment
+    ///
+    /// # Returns
+    /// * Estimated total cost in AttoTokens
+    pub async fn estimate_merkle_payment_cost(
+        &self,
+        depth: u8,
+        pool_commitments: &[PoolCommitment],
+        merkle_payment_timestamp: u64,
+    ) -> Result<Amount, MerklePaymentError> {
+        if pool_commitments.is_empty() {
+            return Ok(Amount::ZERO);
+        }
+
+        // Create provider (no wallet needed for view calls)
+        let provider = http_provider(self.rpc_url().clone());
+
+        // Get Merkle payment vault address
+        let merkle_vault_address = *self
+            .merkle_payments_address()
+            .ok_or(MerklePaymentError::MerklePaymentsAddressNotConfigured)?;
+
+        // Create handler and call the contract's view function
+        let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
+        let total_amount = handler
+            .estimate_merkle_tree_cost(depth, pool_commitments.to_vec(), merkle_payment_timestamp)
+            .await?;
+
+        Ok(total_amount)
     }
 }

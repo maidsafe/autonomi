@@ -79,6 +79,10 @@ impl SwarmDriver {
                             ant_protocol::messages::Query::GetMerkleCandidateQuote { .. } => {
                                 "Request::Query::GetMerkleCandidateQuote"
                             }
+                            #[cfg(feature = "developer")]
+                            ant_protocol::messages::Query::DevGetClosestPeersFromNetwork {
+                                ..
+                            } => "Request::Query::DevGetClosestPeersFromNetwork",
                         },
                     };
                     connection_action_logging(
@@ -217,6 +221,10 @@ impl SwarmDriver {
                                     result_to_str(result)
                                 )
                             }
+                            #[cfg(feature = "developer")]
+                            ant_protocol::messages::QueryResponse::DevGetClosestPeersFromNetwork {
+                                ..
+                            } => "Response::Query::DevGetClosestPeersFromNetwork".to_string(),
                         },
                     };
                     connection_action_logging(

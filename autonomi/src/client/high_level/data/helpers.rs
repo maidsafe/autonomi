@@ -7,7 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::Client;
-use crate::client::config::UPLOAD_FLOW_BATCH_SIZE;
+use crate::chunk::DataMapChunk;
+use crate::client::config::{UPLOAD_FLOW_BATCH_SIZE, upload_retry_pause};
 use crate::client::payment::PayError::EvmWalletError;
 use crate::client::payment::PaymentOption;
 use crate::client::payment::Receipt;
@@ -16,13 +17,32 @@ use crate::self_encryption::EncryptionStream;
 use crate::utils::format_upload_error;
 use ant_evm::{Amount, AttoTokens};
 use ant_protocol::storage::{Chunk, DataTypes};
+use bytes::Bytes;
 use evmlib::wallet::Error::InsufficientTokensForQuotes;
-use std::time::Duration;
-use tokio::time::sleep;
 
 type AggregatedChunks = Vec<((String, usize, usize), Chunk)>;
 
 impl Client {
+    /// Send an upload completion event to the client event channel.
+    pub(crate) async fn send_upload_complete(
+        &self,
+        records_paid: usize,
+        records_already_paid: usize,
+        tokens_spent: Amount,
+    ) {
+        if let Some(sender) = &self.client_event_sender {
+            let summary = UploadSummary {
+                records_paid,
+                records_already_paid,
+                tokens_spent,
+            };
+
+            if let Err(err) = sender.send(ClientEvent::UploadComplete(summary)).await {
+                error!("Failed to send upload completion event: {err:?}");
+            }
+        }
+    }
+
     /// Returns total tokens spent or the first encountered upload error
     pub(crate) async fn calculate_total_cost(
         &self,
@@ -36,18 +56,12 @@ impl Client {
             .flat_map(|receipt| receipt.into_values().map(|(_, cost)| cost.as_atto()))
             .sum();
 
-        // Send completion event if channel exists
-        if let Some(sender) = &self.client_event_sender {
-            let summary = UploadSummary {
-                records_paid: total_chunks.saturating_sub(total_free_chunks),
-                records_already_paid: total_free_chunks,
-                tokens_spent: total_tokens,
-            };
-
-            if let Err(err) = sender.send(ClientEvent::UploadComplete(summary)).await {
-                error!("Failed to send upload completion event: {err:?}");
-            }
-        }
+        self.send_upload_complete(
+            total_chunks.saturating_sub(total_free_chunks),
+            total_free_chunks,
+            total_tokens,
+        )
+        .await;
 
         AttoTokens::from_atto(total_tokens)
     }
@@ -76,16 +90,12 @@ impl Client {
             .iter()
             .map(|stream| stream.total_chunks())
             .sum();
-        info!("Processing estimated total {est_total_chunks} chunks{maybe_file}");
-        #[cfg(feature = "loud")]
-        println!("Processing estimated total {est_total_chunks} chunks{maybe_file}");
+        crate::loud_info!("Processing estimated total {est_total_chunks} chunks{maybe_file}");
 
         // Process to upload file by file
         for stream in encryption_streams.iter_mut() {
             if !stream.file_path.is_empty() {
-                info!("Uploading file: {}", stream.file_path);
-                #[cfg(feature = "loud")]
-                println!("Uploading file: {}", stream.file_path);
+                crate::loud_info!("Uploading file: {}", stream.file_path);
             }
             let (processed_chunks, free_chunks, receipt) = self
                 .pay_and_upload_file(payment_option.clone(), stream)
@@ -105,16 +115,12 @@ impl Client {
             } else {
                 ""
             };
-            info!("Upload completed{filename_if_any}{addr_if_pub}");
-            #[cfg(feature = "loud")]
-            println!("Upload completed{filename_if_any}{addr_if_pub}");
+            crate::loud_info!("Upload completed{filename_if_any}{addr_if_pub}");
         }
 
         // Report
         let total_elapsed = start.elapsed();
-        info!("Upload{maybe_file} completed in {total_elapsed:?}");
-        #[cfg(feature = "loud")]
-        println!("Upload{maybe_file} completed in {total_elapsed:?}");
+        crate::loud_info!("Upload{maybe_file} completed in {total_elapsed:?}");
 
         Ok(self
             .calculate_total_cost(total_chunks, receipts, total_free_chunks)
@@ -183,17 +189,8 @@ impl Client {
                     retry_on_failure = false;
                 }
 
-                // there was upload failure happens, in that case, carry out a short sleep
-                // to allow the glitch calm down.
-                #[cfg(feature = "loud")]
-                println!("⚠️ Encountered upload failure, take 1 minute pause before continue...");
-                info!("Encountered upload failure, take 1 minute pause before continue...");
-
-                // Wait 1 minute before retry
-                sleep(Duration::from_secs(60)).await;
-                #[cfg(feature = "loud")]
-                println!("🔄 continue with upload...");
-                info!("🔄 continue with upload...");
+                upload_retry_pause().await;
+                crate::loud_info!("🔄 Retrying {} chunks...", retry_chunks.len());
             }
 
             current_batch = retry_chunks;
@@ -217,9 +214,7 @@ impl Client {
             .map(|(_, chunk)| (*chunk.name(), chunk.size()))
             .collect();
 
-        info!("Processing batch of {} chunks", batch.len());
-        #[cfg(feature = "loud")]
-        println!("Processing batch of {} chunks", batch.len());
+        crate::loud_info!("Processing batch of {} chunks", batch.len());
 
         let mut file_infos = vec![];
         let mut batch_chunks = vec![];
@@ -236,9 +231,7 @@ impl Client {
             } else {
                 ""
             };
-            info!("Processing chunk ({}/{est_total}){maybe_file}", i + 1);
-            #[cfg(feature = "loud")]
-            println!("Processing chunk ({}/{est_total}){maybe_file}", i + 1);
+            crate::loud_info!("Processing chunk ({}/{est_total}){maybe_file}", i + 1);
         }
 
         // Process payment for this batch
@@ -248,29 +241,26 @@ impl Client {
         {
             Ok((receipt, free_chunks)) => (receipt, free_chunks),
             Err(err) if matches!(err, EvmWalletError(InsufficientTokensForQuotes(_, _))) => {
-                error!("Insufficient tokens: {err:?}. Returning immediately.");
+                crate::loud_error!("Insufficient tokens: {err:?}. Returning immediately.");
                 return (vec![], vec![], 0, Some(PutError::from(err)));
             }
             Err(err) => {
                 return if retry_on_failure {
-                    error!("Quoting or payment error encountered, retry scheduled {err}");
-                    #[cfg(feature = "loud")]
-                    println!("Quoting or payment error encountered, retry scheduled: {err}.");
+                    crate::loud_error!(
+                        "Quoting or payment error encountered, retry scheduled: {err}"
+                    );
                     (batch, vec![], 0, None)
                 } else {
-                    error!("Quoting or payment error encountered, no retry scheduled {err}");
+                    crate::loud_error!(
+                        "Quoting or payment error encountered, no retry scheduled: {err}"
+                    );
                     (vec![], vec![], 0, Some(PutError::from(err)))
                 };
             }
         };
 
         if free_chunks > 0 {
-            info!(
-                "{free_chunks} chunks were free in this batch {}",
-                batch_chunks.len()
-            );
-            #[cfg(feature = "loud")]
-            println!(
+            crate::loud_info!(
                 "{free_chunks} chunks were free in this batch {}",
                 batch_chunks.len()
             );
@@ -287,7 +277,7 @@ impl Client {
             Err(err) if retry_on_failure => {
                 // Format error message for user
                 let error_msg = format_upload_error(&err);
-                println!("⚠️  {error_msg}. Retrying scheduled");
+                crate::loud_info!("⚠️  {error_msg}. Retrying scheduled");
                 info!("Upload error: {err}. Retrying scheduled");
 
                 if let PutError::Batch(ref upload_state) = err {
@@ -307,5 +297,21 @@ impl Client {
         }
 
         (retry_chunks, vec![receipt], free_chunks, put_error)
+    }
+
+    /// Internal helper for uploading in-memory data.
+    /// Used by both `data_put` (private) and `data_put_public`.
+    pub(crate) async fn data_put_internal(
+        &self,
+        data: Bytes,
+        payment_option: PaymentOption,
+        is_public: bool,
+    ) -> Result<(AttoTokens, DataMapChunk), PutError> {
+        let (chunk_stream, data_map_chunk) = EncryptionStream::new_in_memory(data, is_public)?;
+        let mut chunk_streams = vec![chunk_stream];
+        let total_cost = self
+            .pay_and_upload(payment_option, &mut chunk_streams)
+            .await?;
+        Ok((total_cost, data_map_chunk))
     }
 }

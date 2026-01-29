@@ -652,7 +652,7 @@ impl Client {
 
         let (cost, archive) = self
             .0
-            .dir_content_upload(dir_path, payment_option.0.clone())
+            .dir_content_upload(dir_path, payment_option.0.clone().into())
             .await
             .map_err(map_error)?;
 
@@ -666,13 +666,13 @@ impl Client {
     pub async fn dir_upload(
         &self,
         dir_path: /* PathBuf */ String,
-        payment_option: &PaymentOption,
+        wallet: &Wallet,
     ) -> Result</* (AttoTokens, PrivateArchiveDataMap) */ tuple_result::DirUpload> {
         let dir_path = PathBuf::from(dir_path);
 
         let (cost, data_map) = self
             .0
-            .dir_upload(dir_path, payment_option.0.clone())
+            .dir_upload(dir_path, &wallet.0)
             .await
             .map_err(map_error)?;
 
@@ -691,7 +691,7 @@ impl Client {
 
         let (cost, data_map) = self
             .0
-            .file_content_upload(path, payment_option.0.clone())
+            .file_content_upload(path, payment_option.0.clone().into())
             .await
             .map_err(map_error)?;
 
@@ -743,7 +743,7 @@ impl Client {
 
         let (cost, archive) = self
             .0
-            .dir_content_upload_public(dir_path, payment_option.0.clone())
+            .dir_content_upload_public(dir_path, payment_option.0.clone().into())
             .await
             .map_err(map_error)?;
 
@@ -757,13 +757,13 @@ impl Client {
     pub async fn dir_upload_public(
         &self,
         dir_path: /* PathBuf */ String,
-        payment_option: &PaymentOption,
+        wallet: &Wallet,
     ) -> Result</* (AttoTokens, ArchiveAddress) */ tuple_result::DirUploadPublic> {
         let dir_path = PathBuf::from(dir_path);
 
         let (cost, addr) = self
             .0
-            .dir_upload_public(dir_path, payment_option.0.clone())
+            .dir_upload_public(dir_path, &wallet.0)
             .await
             .map_err(map_error)?;
 
@@ -781,12 +781,22 @@ impl Client {
         todo!()
     }
 
-    /// Get the cost to upload a file/dir to the network. quick and dirty implementation, please refactor once files are cleanly implemented
+    /// Get the cost to upload a file/dir to the network.
+    ///
+    /// # Parameters
+    /// - `path`: Path to the file or directory to estimate cost for
+    /// - `is_public`: Whether the upload will be public (datamaps uploaded) or private (datamaps kept local)
+    /// - `include_archive`: Whether to include archive metadata cost in the estimate
     #[napi]
-    pub async fn file_cost(&self, path: /* &PathBuf */ String) -> Result</* AttoTokens */ String> {
+    pub async fn file_cost(
+        &self,
+        path: /* &PathBuf */ String,
+        is_public: bool,
+        include_archive: bool,
+    ) -> Result</* AttoTokens */ String> {
         let cost = self
             .0
-            .file_cost(&PathBuf::from(path))
+            .file_cost(&PathBuf::from(path), is_public, include_archive)
             .await
             .map_err(map_error)?;
 

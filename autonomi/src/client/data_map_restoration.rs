@@ -69,9 +69,7 @@ impl Client {
     /// Chunks are only fetched from the network when actually needed by get_root_data_map.
     fn fetch_new_data_map(&self, data_map: &DataMap) -> Result<DataMap, GetError> {
         let total_chunks = data_map.infos().len();
-        #[cfg(feature = "loud")]
-        println!("Using lazy chunk fetching for {total_chunks} of datamap {data_map:?}");
-        debug!("Using lazy chunk fetching for {total_chunks} of datamap {data_map:?}");
+        crate::loud_debug!("Using lazy chunk fetching for {total_chunks} of datamap {data_map:?}");
 
         // Create a closure that fetches chunks on-demand
         let client = self.clone();
@@ -86,9 +84,7 @@ impl Client {
 
             match fetch_result {
                 Ok(chunk) => {
-                    #[cfg(feature = "loud")]
-                    println!("Successfully fetched chunk at: {chunk_addr:?}");
-                    debug!("Successfully fetched chunk at: {chunk_addr:?}");
+                    crate::loud_debug!("Successfully fetched chunk at: {chunk_addr:?}");
 
                     // Such datamap chunks shall be cleanup from chunk_cache immediately
                     client.cleanup_cached_chunks(&[chunk_addr]);
@@ -96,9 +92,7 @@ impl Client {
                     Ok(chunk.value)
                 }
                 Err(err) => {
-                    #[cfg(feature = "loud")]
-                    println!("Error fetching chunk at {chunk_addr:?}: {err:?}");
-                    error!("Error fetching chunk at {chunk_addr:?}: {err:?}");
+                    crate::loud_error!("Error fetching chunk at {chunk_addr:?}: {err:?}");
                     Err(self_encryption::Error::Generic(format!(
                         "Failed to fetch chunk at {chunk_addr:?}: {err:?}"
                     )))
@@ -112,9 +106,7 @@ impl Client {
                 GetError::Decryption(crate::self_encryption::Error::SelfEncryption(e))
             })?;
 
-        #[cfg(feature = "loud")]
-        println!("Successfully processed datamap with lazy chunk fetching");
-        debug!("Successfully processed datamap with lazy chunk fetching");
+        crate::loud_debug!("Successfully processed datamap with lazy chunk fetching");
 
         Ok(result_data_map)
     }

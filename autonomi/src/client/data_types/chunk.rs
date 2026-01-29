@@ -138,85 +138,31 @@ impl Client {
         }
     }
 
-    /// Helper function to fetch a record from the closest peers directly.
-    /// This is useful as a fallback when normal DHT queries fail.
+    /// Fetches a chunk from the network.
     ///
-    /// Returns the first successfully retrieved record, or None if all peers fail.
-    async fn fetch_record_from_closest_peers(
-        &self,
-        key: NetworkAddress,
-        num_peers: usize,
-    ) -> Option<Record> {
-        debug!("Querying closest {num_peers} nodes directly for {key:?}");
-
-        let closest_peers = match self
-            .network
-            .get_closest_peers(key.clone(), Some(num_peers))
-            .await
-        {
-            Ok(peers) => peers,
-            Err(e) => {
-                error!("Failed to get closest peers for {key:?}: {e}");
-                return None;
-            }
-        };
-
-        debug!(
-            "Querying {} closest peers in parallel for {key:?}",
-            closest_peers.len()
-        );
-
-        // Create query tasks for all closest peers
-        let mut query_tasks = vec![];
-        for peer in closest_peers.iter() {
-            let network = self.network.clone();
-            let key = key.clone();
-            let peer = peer.clone();
-            query_tasks.push(async move { network.get_record_from_peer(key, peer).await });
-        }
-
-        // Process tasks with max concurrency of num_peers
-        let results = process_tasks_with_max_concurrency(query_tasks, num_peers).await;
-
-        // Find the first successful record
-        for result in results.into_iter() {
-            match result {
-                Ok(Some(record)) => {
-                    debug!("✅ Retrieved record {key:?} from one of the closest {num_peers} peers");
-                    return Some(record);
-                }
-                _ => continue,
-            }
-        }
-
-        error!(
-            "❌ All {} closest peers failed to return the record {key:?}",
-            closest_peers.len()
-        );
-        None
-    }
-
+    /// This function uses the standard DHT fetch with retries and automatic fallback
+    /// to direct peer queries (handled by get_record_with_retries). For Chunk type
+    /// (non-CRDT), the first valid record is sufficient.
+    ///
+    /// # Arguments
+    /// * `addr` - The chunk address to fetch
+    ///
+    /// # Returns
+    /// * `Ok(Chunk)` - The successfully retrieved and validated chunk
+    /// * `Err(GetError)` - If the chunk cannot be found or is invalid
     async fn fetch_chunk_from_network(&self, addr: &ChunkAddress) -> Result<Chunk, GetError> {
         let key = NetworkAddress::from(*addr);
         debug!("Fetching chunk from network at: {key:?}");
 
-        // Try normal fetch first
-        let record_result = self
+        let records = self
             .network
             .get_record_with_retries(key.clone(), &self.config.chunks)
             .await
-            .inspect_err(|err| error!("Error fetching chunk: {err:?}"));
+            .inspect_err(|err| error!("Error fetching chunk: {err:?}"))?
+            .ok_or(GetError::RecordNotFound)?;
 
-        let record = match record_result {
-            Ok(Some(record)) => record,
-            Ok(None) | Err(_) => {
-                // Fallback: Try fetching from closest 20 nodes directly
-                debug!("Normal fetch failed, trying fallback for {key:?}");
-                self.fetch_record_from_closest_peers(key, 20)
-                    .await
-                    .ok_or(GetError::RecordNotFound)?
-            }
-        };
+        // For Chunk (non-CRDT type), first valid record is sufficient
+        let record = records.into_iter().next().ok_or(GetError::RecordNotFound)?;
 
         let header = RecordHeader::from_record(&record)?;
 
@@ -392,23 +338,16 @@ impl Client {
         receipt: &Receipt,
     ) -> Result<(), PutError> {
         let mut upload_tasks = vec![];
-        #[cfg(feature = "loud")]
         let total_chunks = chunks.len();
         for (i, &chunk) in chunks.iter().enumerate() {
             let self_clone = self.clone();
             let address = *chunk.address();
 
             let Some((proof, price)) = receipt.get(chunk.name()) else {
-                debug!(
-                    "({}/{}) Chunk at {address:?} was already paid for so skipping",
-                    i + 1,
-                    chunks.len()
-                );
-                #[cfg(feature = "loud")]
-                println!(
+                crate::loud_debug!(
                     "({}/{}) Chunk stored at: {} (skipping, already exists)",
                     i + 1,
-                    chunks.len(),
+                    total_chunks,
                     chunk.address().to_hex()
                 );
                 continue;
@@ -420,21 +359,18 @@ impl Client {
                     .await
                     .inspect_err(|err| error!("Error uploading chunk {address:?} :{err:?}"))
                     .map_err(|e| (chunk, e));
-                #[cfg(feature = "loud")]
                 match &res {
                     Ok(_addr) => {
-                        println!(
-                            "({}/{}) Chunk stored at: {}",
+                        crate::loud_debug!(
+                            "({}/{total_chunks}) Chunk stored at: {}",
                             i + 1,
-                            total_chunks,
                             chunk.address().to_hex()
                         );
                     }
                     Err((_, err)) => {
-                        println!(
-                            "({}/{}) Chunk failed to be stored at: {} ({err})",
+                        crate::loud_error!(
+                            "({}/{total_chunks}) Chunk failed to be stored at: {} ({err})",
                             i + 1,
-                            total_chunks,
                             chunk.address().to_hex()
                         );
                     }
@@ -516,9 +452,7 @@ impl Client {
     /// Fetch and decrypt all chunks in the datamap.
     pub(crate) async fn fetch_from_data_map(&self, data_map: &DataMap) -> Result<Bytes, GetError> {
         let total_chunks = data_map.infos().len();
-        #[cfg(feature = "loud")]
-        println!("Fetching {total_chunks} encrypted data chunks from network.");
-        debug!("Fetching {total_chunks} encrypted data chunks from datamap {data_map:?}");
+        crate::loud_debug!("Fetching {total_chunks} encrypted data chunks from network.");
 
         let mut download_tasks = vec![];
         let chunk_addrs: Vec<ChunkAddress> = data_map
@@ -532,23 +466,19 @@ impl Client {
                 let idx = i + 1;
                 let chunk_addr = ChunkAddress::new(info.dst_hash);
 
-                #[cfg(feature = "loud")]
-                println!("Fetching chunk {idx}/{total_chunks} ...");
-                info!("Fetching chunk {idx}/{total_chunks}({chunk_addr:?})");
+                crate::loud_debug!("Fetching chunk {idx}/{total_chunks}({chunk_addr:?})");
 
                 match self.chunk_get(&chunk_addr).await {
                     Ok(chunk) => {
-                        #[cfg(feature = "loud")]
-                        println!("Fetching chunk {idx}/{total_chunks} [DONE]");
-                        info!("Successfully fetched chunk {idx}/{total_chunks}({chunk_addr:?})");
+                        crate::loud_debug!(
+                            "Fetching chunk {idx}/{total_chunks}({chunk_addr:?}) [DONE]"
+                        );
                         Ok(EncryptedChunk {
                             content: chunk.value,
                         })
                     }
                     Err(err) => {
-                        #[cfg(feature = "loud")]
-                        println!("Error fetching chunk {idx}/{total_chunks}: {err:?}");
-                        error!(
+                        crate::loud_error!(
                             "Error fetching chunk {idx}/{total_chunks}({chunk_addr:?}): {err:?}"
                         );
                         Err(err)
@@ -561,17 +491,13 @@ impl Client {
                 .await
                 .into_iter()
                 .collect::<Result<Vec<EncryptedChunk>, GetError>>()?;
-        #[cfg(feature = "loud")]
-        println!("Successfully fetched all {total_chunks} encrypted chunks");
-        debug!("Successfully fetched all {total_chunks} encrypted chunks");
+        crate::loud_debug!("Successfully fetched all {total_chunks} encrypted chunks");
 
         let data = decrypt(data_map, &encrypted_chunks).map_err(|e| {
             error!("Error decrypting encrypted_chunks: {e:?}");
             GetError::Decryption(crate::self_encryption::Error::SelfEncryption(e))
         })?;
-        #[cfg(feature = "loud")]
-        println!("Successfully decrypted all {total_chunks} chunks");
-        debug!("Successfully decrypted all {total_chunks} chunks");
+        crate::loud_debug!("Successfully decrypted all {total_chunks} chunks");
 
         self.cleanup_cached_chunks(&chunk_addrs);
 

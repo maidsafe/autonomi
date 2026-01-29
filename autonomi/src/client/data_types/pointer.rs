@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::resolve_split_records;
+use super::resolve_records_from_peers;
 
 use crate::{
     client::{
@@ -23,7 +23,7 @@ use ant_protocol::{
     storage::{DataTypes, RecordHeader, RecordKind, try_deserialize_record, try_serialize_record},
 };
 use std::collections::HashSet;
-use tracing::{debug, error, trace};
+use tracing::{debug, error, info, trace, warn};
 
 pub use ant_protocol::storage::{Pointer, PointerAddress, PointerTarget};
 pub use bls::{PublicKey, SecretKey};
@@ -60,7 +60,21 @@ pub enum PointerError {
 }
 
 impl Client {
-    /// Get a pointer from the network
+    /// Fetches a Pointer from the network.
+    ///
+    /// This function uses the standard DHT fetch with retries and automatic fallback
+    /// to direct peer queries (handled by get_record_with_retries). If a SplitRecord
+    /// error is returned, it resolves the split using counter-based resolution.
+    ///
+    /// For Pointer (CRDT type with counter), the record with the highest counter is selected,
+    /// and conflicts are resolved through the standard split resolution process.
+    ///
+    /// # Arguments
+    /// * `address` - The pointer address to fetch
+    ///
+    /// # Returns
+    /// * `Ok(Pointer)` - The successfully retrieved and validated pointer
+    /// * `Err(PointerError)` - If the pointer cannot be found, is invalid, or forked
     pub async fn pointer_get(&self, address: &PointerAddress) -> Result<Pointer, PointerError> {
         let key = NetworkAddress::from(*address);
         debug!("Fetching pointer from network at: {key:?}");
@@ -70,12 +84,32 @@ impl Client {
             .get_record_with_retries(key.clone(), &self.config.pointer)
             .await
         {
-            Ok(Some(r)) => pointer_from_record(r)?,
-            Ok(None) => Err(GetError::RecordNotFound)?,
+            Ok(Some(records)) => {
+                debug!("Got {} record(s) for pointer at {key:?}", records.len());
+                // Resolve multiple records using counter-based resolution
+                resolve_records_from_peers(
+                    records,
+                    key.clone(),
+                    pointer_from_record,
+                    |p: &Pointer| p.counter(),
+                    |a: &Pointer, b: &Pointer| a == b,
+                    |multiples: HashSet<Pointer>| {
+                        PointerError::Fork(multiples.into_iter().collect())
+                    },
+                    || {
+                        PointerError::Corrupt(format!(
+                            "Found multiple conflicting invalid pointers at {key:?}"
+                        ))
+                    },
+                )?
+            }
+            Ok(None) => {
+                return Err(PointerError::GetError(GetError::RecordNotFound));
+            }
             Err(NetworkError::SplitRecord(result_map)) => {
                 warn!("Pointer at {key:?} is split, trying resolution");
-                resolve_split_records(
-                    result_map,
+                resolve_records_from_peers(
+                    result_map.into_values().collect(),
                     key.clone(),
                     pointer_from_record,
                     |p: &Pointer| p.counter(),

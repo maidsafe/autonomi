@@ -15,25 +15,188 @@ use std::{
 use thiserror::Error;
 use tracing::info;
 
+use crate::client::config::MERKLE_PAYMENT_THRESHOLD;
 use crate::client::data_types::chunk::ChunkAddress;
+use crate::client::merkle_payments::{
+    MerklePaymentError, MerklePaymentOption, MerkleUploadErrorWithReceipt,
+};
 use crate::client::{GetError, PutError, quote::CostError};
+use crate::self_encryption::{EncryptionStream, MAX_CHUNK_SIZE};
 use crate::utils::process_tasks_with_max_concurrency;
 use crate::{
     Client,
     chunk::DataMapChunk,
-    client::payment::{PaymentOption, Receipt},
+    client::payment::{BulkPaymentOption, PaymentOption},
 };
+use ant_evm::AttoTokens;
 use bytes::Bytes;
 use self_encryption::streaming_decrypt_from_storage;
 use xor_name::XorName;
 
 pub mod archive_private;
 pub mod archive_public;
+mod cost;
 pub mod fs_private;
 pub mod fs_public;
 
 pub use archive_private::PrivateArchive;
 pub use archive_public::PublicArchive;
+
+/// Estimate chunk count for a directory or file.
+/// Returns at least 3 chunks per file (self-encryption minimum).
+///
+/// This is useful for predicting which payment method will be used
+/// (merkle vs regular) based on the [`crate::client::config::MERKLE_PAYMENT_THRESHOLD`].
+pub fn estimate_directory_chunks(dir_path: &PathBuf) -> Result<usize, std::io::Error> {
+    let mut total_chunks = 0;
+
+    // Handle single file case
+    if dir_path.is_file() {
+        let size = std::fs::metadata(dir_path)?.len() as usize;
+        return Ok(std::cmp::max(3, size.div_ceil(MAX_CHUNK_SIZE)));
+    }
+
+    // Walk directory
+    for entry in walkdir::WalkDir::new(dir_path)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if entry.file_type().is_file() {
+            let size = entry.metadata().map(|m| m.len() as usize).unwrap_or(0);
+            // Each file produces at least 3 chunks (self-encryption minimum)
+            total_chunks += std::cmp::max(3, size.div_ceil(MAX_CHUNK_SIZE));
+        }
+    }
+
+    Ok(total_chunks)
+}
+
+/// Convert encryption streams to file results (path, datamap, metadata).
+pub(crate) fn streams_to_file_results(
+    streams: Vec<EncryptionStream>,
+) -> Result<Vec<(PathBuf, DataMapChunk, Metadata)>, UploadError> {
+    let mut results = Vec::with_capacity(streams.len());
+    for stream in streams {
+        let datamap = stream.data_map_chunk().ok_or_else(|| {
+            UploadError::Encryption(format!(
+                "Datamap chunk not found for file: {:?}",
+                stream.file_path
+            ))
+        })?;
+        results.push((stream.relative_path, datamap, stream.metadata));
+    }
+    Ok(results)
+}
+
+/// Internal bulk upload handler - routes to regular or merkle flow based on payment option.
+/// Returns (cost, archive) from either regular or merkle flow.
+///
+/// The `build_archive` function converts file results into the appropriate archive type.
+pub(crate) async fn bulk_upload_internal<A, F>(
+    client: &Client,
+    dir_path: PathBuf,
+    payment_option: BulkPaymentOption,
+    is_public: bool,
+    build_archive: F,
+) -> Result<(AttoTokens, A), UploadError>
+where
+    F: FnOnce(Vec<(PathBuf, DataMapChunk, Metadata)>) -> A,
+{
+    match payment_option {
+        BulkPaymentOption::Wallet(wallet) => {
+            // Auto-detect payment method based on estimated chunks
+            // Note: The CLI prints user-facing messages; library uses debug logging
+            let estimated_chunks = estimate_directory_chunks(&dir_path)?;
+            if estimated_chunks >= MERKLE_PAYMENT_THRESHOLD {
+                info!(
+                    "Auto-selected merkle payments for ~{estimated_chunks} chunks (>= {MERKLE_PAYMENT_THRESHOLD} threshold)"
+                );
+                let (cost, results) = client
+                    .files_put_with_merkle_payment(
+                        dir_path,
+                        is_public,
+                        MerklePaymentOption::Wallet(&wallet),
+                    )
+                    .await?;
+                Ok((cost, build_archive(results)))
+            } else {
+                info!(
+                    "Auto-selected regular payments for ~{estimated_chunks} chunks (< {MERKLE_PAYMENT_THRESHOLD} threshold)"
+                );
+                let (cost, streams) = client
+                    .dir_content_upload_internal(dir_path, PaymentOption::Wallet(wallet), is_public)
+                    .await?;
+                let results = streams_to_file_results(streams)?;
+                Ok((cost, build_archive(results)))
+            }
+        }
+        BulkPaymentOption::ForceMerkle(wallet) => {
+            let (cost, results) = client
+                .files_put_with_merkle_payment(
+                    dir_path,
+                    is_public,
+                    MerklePaymentOption::Wallet(&wallet),
+                )
+                .await?;
+            Ok((cost, build_archive(results)))
+        }
+        BulkPaymentOption::ForceRegular(wallet) => {
+            let (cost, streams) = client
+                .dir_content_upload_internal(dir_path, PaymentOption::Wallet(wallet), is_public)
+                .await?;
+            let results = streams_to_file_results(streams)?;
+            Ok((cost, build_archive(results)))
+        }
+        BulkPaymentOption::Receipt(receipt) => {
+            let (cost, streams) = client
+                .dir_content_upload_internal(dir_path, PaymentOption::Receipt(receipt), is_public)
+                .await?;
+            let results = streams_to_file_results(streams)?;
+            Ok((cost, build_archive(results)))
+        }
+        BulkPaymentOption::MerkleReceipt(receipt) => {
+            let (cost, results) = client
+                .files_put_with_merkle_payment(
+                    dir_path,
+                    is_public,
+                    MerklePaymentOption::Receipt(receipt),
+                )
+                .await?;
+            Ok((cost, build_archive(results)))
+        }
+        BulkPaymentOption::ContinueMerkle(wallet, receipt) => {
+            let (cost, results) = client
+                .files_put_with_merkle_payment(
+                    dir_path,
+                    is_public,
+                    MerklePaymentOption::ContinueWithReceipt(&wallet, receipt),
+                )
+                .await?;
+            Ok((cost, build_archive(results)))
+        }
+    }
+}
+
+/// Internal single file upload handler - routes to regular or merkle flow based on payment option.
+/// Returns (cost, datamap) from either regular or merkle flow.
+pub(crate) async fn file_upload_internal(
+    client: &Client,
+    path: PathBuf,
+    payment_option: BulkPaymentOption,
+    is_public: bool,
+) -> Result<(AttoTokens, DataMapChunk), UploadError> {
+    let (cost, results) =
+        bulk_upload_internal(client, path, payment_option, is_public, |r| r).await?;
+
+    let datamap = results
+        .into_iter()
+        .next()
+        .map(|(_, dm, _)| dm)
+        .ok_or_else(|| UploadError::Encryption("No file results from upload".to_string()))?;
+
+    Ok((cost, datamap))
+}
 
 /// Metadata for a file in an archive. Time values are UNIX timestamps (UTC).
 ///
@@ -95,6 +258,25 @@ pub enum RenameError {
 }
 
 /// Errors that can occur during the file upload operation.
+///
+/// # Receipt Preservation
+///
+/// When merkle uploads fail, the `MerkleUpload` variant preserves any payment receipts
+/// that were created before the error occurred. This allows you to resume uploads without
+/// losing funds:
+///
+/// ```ignore
+/// match client.dir_content_upload(path, payment).await {
+///     Ok((cost, archive)) => { /* success */ }
+///     Err(UploadError::MerkleUpload(err)) => {
+///         if let Some(receipt) = err.receipt {
+///             // Save the receipt - it contains valid merkle proofs
+///             // Resume with: BulkPaymentOption::ContinueMerkle(wallet, receipt)
+///         }
+///     }
+///     Err(e) => { /* other error */ }
+/// }
+/// ```
 #[derive(Debug, thiserror::Error)]
 pub enum UploadError {
     #[error("Failed to recursively traverse directory")]
@@ -105,6 +287,8 @@ pub enum UploadError {
     PutError(#[from] PutError),
     #[error("Encryption error")]
     Encryption(String),
+    #[error("Merkle upload error: {0}")]
+    MerkleUpload(#[from] MerkleUploadErrorWithReceipt),
 }
 
 /// Errors that can occur during the download operation.
@@ -125,10 +309,12 @@ pub enum FileCostError {
     IoError(#[from] std::io::Error),
     #[error("Serialization error")]
     Serialization(#[from] rmp_serde::encode::Error),
-    #[error("Self encryption error")]
-    SelfEncryption(#[from] crate::self_encryption::Error),
     #[error("Walkdir error")]
     WalkDir(#[from] walkdir::Error),
+    #[error("Merkle payment error: {0}")]
+    MerklePayment(#[from] MerklePaymentError),
+    #[error("Encryption error: {0}")]
+    Encryption(String),
 }
 
 /// Normalize a path to use forward slashes, regardless of the operating system.
@@ -136,11 +322,14 @@ pub enum FileCostError {
 /// which is important for cross-platform compatibility.
 pub(crate) fn normalize_path(path: PathBuf) -> PathBuf {
     // Convert backslashes to forward slashes (Windows..)
+    // Also collapse any double slashes that result from joining components
     let normalized = path
         .components()
         .map(|c| c.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
-        .join("/");
+        .join("/")
+        .replace('\\', "/")
+        .replace("//", "/");
 
     PathBuf::from(normalized)
 }
@@ -153,27 +342,18 @@ impl Client {
     ) -> Result<(), DownloadError> {
         // Verify that the destination path can be used to create a file.
         if let Err(e) = std::fs::File::create(to_dest) {
-            #[cfg(feature = "loud")]
-            println!(
+            crate::loud_info!(
                 "Input destination path {to_dest:?} cannot be used for streaming disk flushing: {e}"
             );
-            #[cfg(feature = "loud")]
-            println!(
+            crate::loud_info!(
                 "This file may have been uploaded without a metadata archive. A file name must be provided to download and save it."
-            );
-            info!(
-                "Input destination path {to_dest:?} cannot be used for streaming disk flushing: {e}"
             );
             return Err(DownloadError::IoError(e));
         }
 
         // Clean up the temporary verification file
         if let Err(cleanup_err) = std::fs::remove_file(to_dest) {
-            #[cfg(feature = "loud")]
-            println!(
-                "Warning: Failed to clean up temporary verification file {to_dest:?}: {cleanup_err}"
-            );
-            info!(
+            crate::loud_info!(
                 "Warning: Failed to clean up temporary verification file {to_dest:?}: {cleanup_err}"
             );
             return Err(DownloadError::IoError(cleanup_err));
@@ -181,9 +361,7 @@ impl Client {
 
         let total_chunks = data_map.infos().len();
 
-        #[cfg(feature = "loud")]
-        println!("Streaming fetching {total_chunks} chunks to {to_dest:?} ...");
-        info!("Streaming fetching {total_chunks} chunks to {to_dest:?} ...");
+        crate::loud_info!("Streaming fetching {total_chunks} chunks to {to_dest:?} ...");
 
         // Create parallel chunk fetcher for streaming decryption
         let client_clone = self.clone();
@@ -239,9 +417,7 @@ impl Client {
             let addr_clone = *chunk_addr;
 
             download_tasks.push(async move {
-                #[cfg(feature = "loud")]
-                println!("Fetching chunk {i}/{total_chunks} ...");
-                info!("Fetching chunk {i}/{total_chunks}({addr_clone:?})");
+                crate::loud_debug!("Fetching chunk {i}/{total_chunks}({addr_clone:?})");
                 let result = client_clone
                     .chunk_get(&addr_clone)
                     .await
@@ -251,9 +427,7 @@ impl Client {
                             "Failed to fetch chunk {addr_clone:?}: {e:?}"
                         ))
                     });
-                #[cfg(feature = "loud")]
-                println!("Fetching chunk {i}/{total_chunks} [DONE]");
-                info!("Fetching chunk {i}/{total_chunks}({addr_clone:?}) [DONE]");
+                crate::loud_debug!("Fetching chunk {i}/{total_chunks}({addr_clone:?}) [DONE]");
                 result
             });
         }
@@ -269,90 +443,73 @@ impl Client {
         Ok(chunks)
     }
 
-    async fn stream_upload_file(
+    /// Internal helper for uploading directory contents.
+    /// Used by both `dir_content_upload` (private) and `dir_content_upload_public`.
+    pub(crate) async fn dir_content_upload_internal(
         &self,
-        path: PathBuf,
+        dir_path: PathBuf,
         payment_option: PaymentOption,
         is_public: bool,
-    ) -> Result<(DataMapChunk, usize, usize, Vec<Receipt>), UploadError> {
-        info!("Uploading file: {path:?}");
-        #[cfg(feature = "loud")]
-        println!("Uploading file: {path:?}");
+    ) -> Result<(AttoTokens, Vec<EncryptionStream>), UploadError> {
+        info!("Uploading directory: {dir_path:?}, public: {is_public}");
 
-        // encrypt
-        let file_size = std::fs::metadata(&path)?.len() as usize;
-        let meta = Metadata::new_with_size(file_size as u64);
-        let encryption_result = crate::self_encryption::encrypt_file(
-            path.clone(),
-            path.clone(),
-            file_size,
-            meta,
-            is_public,
-        )
-        .await;
-        let mut encryption_stream = match encryption_result {
-            Ok(s) => s,
-            Err(err) => {
-                error!("Error during file encryption: {err}");
-                #[cfg(feature = "loud")]
-                println!("Error during file encryption: {err}");
-                return Err(UploadError::Encryption(err.to_string()));
+        let encryption_results =
+            crate::self_encryption::encrypt_directory_files(dir_path, is_public).await?;
+        let mut chunk_iterators = vec![];
+
+        for encryption_result in encryption_results {
+            match encryption_result {
+                Ok(stream) => {
+                    crate::loud_info!("Successfully encrypted file: {:?}", stream.file_path);
+                    chunk_iterators.push(stream);
+                }
+                Err(err_msg) => {
+                    crate::loud_error!("Error during file encryption: {err_msg}");
+                    return Err(UploadError::Encryption(err_msg));
+                }
             }
-        };
+        }
 
-        // pay and upload
-        let (processed_chunks, free_chunks, receipts) = self
-            .pay_and_upload_file(payment_option, &mut encryption_stream)
+        let total_cost = self
+            .pay_and_upload(payment_option, &mut chunk_iterators)
             .await?;
 
-        // gather results
-        let data_map_chunk = match encryption_stream.data_map_chunk() {
-            Some(chunk) => chunk,
-            None => {
-                error!("Data map chunk not found for file: {path:?}, this is a BUG");
-                return Err(UploadError::Encryption(
-                    "Data map chunk not found after encryption, this is a BUG".to_string(),
-                ));
-            }
-        };
-
-        Ok((data_map_chunk, processed_chunks, free_chunks, receipts))
+        Ok((total_cost, chunk_iterators))
     }
 }
 
 pub(crate) fn get_relative_file_path_from_abs_file_and_folder_path(
-    abs_file_pah: &Path,
+    abs_file_path: &Path,
     abs_folder_path: &Path,
-) -> PathBuf {
+) -> Result<PathBuf, String> {
     // check if the dir is a file
     let is_file = abs_folder_path.is_file();
 
     // could also be the file name
-    let dir_name = PathBuf::from(
-        abs_folder_path
-            .file_name()
-            .expect("Failed to get file/dir name"),
-    );
+    let dir_name = abs_folder_path
+        .file_name()
+        .ok_or_else(|| format!("Failed to get file/dir name from path: {abs_folder_path:?}"))
+        .map(PathBuf::from)?;
 
     if is_file {
-        dir_name
+        Ok(dir_name)
     } else {
         let folder_prefix = abs_folder_path
             .parent()
             .unwrap_or(Path::new(""))
             .to_path_buf();
-        abs_file_pah
-            .strip_prefix(folder_prefix)
-            .expect("Could not strip prefix path")
-            .to_path_buf()
+        abs_file_path
+            .strip_prefix(&folder_prefix)
+            .map_err(|e| {
+                format!("Could not strip prefix {folder_prefix:?} from path {abs_file_path:?}: {e}")
+            })
+            .map(|p| p.to_path_buf())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #[cfg(windows)]
     use super::normalize_path;
-    #[cfg(windows)]
     use std::path::PathBuf;
 
     #[cfg(windows)]
@@ -361,5 +518,18 @@ mod tests {
         let windows_path = PathBuf::from(r"folder\test\file.txt");
         let normalized = normalize_path(windows_path);
         assert_eq!(normalized, PathBuf::from("folder/test/file.txt"));
+    }
+
+    #[test]
+    fn test_normalize_path_preserves_leading_slash() {
+        // Test that paths with leading slashes don't get double slashes (issue #3260)
+        // Use string comparison because PathBuf::eq normalizes paths (so "//x" == "/x")
+        let path = PathBuf::from("/folder/test/file.txt");
+        let normalized = normalize_path(path);
+        assert_eq!(
+            normalized.to_string_lossy(),
+            "/folder/test/file.txt",
+            "Leading slash should not produce double slash"
+        );
     }
 }

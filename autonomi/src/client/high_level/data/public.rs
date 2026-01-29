@@ -6,21 +6,18 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_protocol::storage::DataTypes;
-use bytes::Bytes;
 use std::time::Instant;
 
+use crate::Client;
+use crate::chunk::{ChunkAddress, DataMapChunk};
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::{GetError, PutError};
 use crate::data::DataStream;
-use crate::self_encryption::EncryptionStream;
-use crate::{
-    Client,
-    chunk::{ChunkAddress, DataMapChunk},
-    self_encryption::encrypt,
-};
+use crate::self_encryption::encrypt;
 use ant_evm::{Amount, AttoTokens};
+use ant_protocol::storage::DataTypes;
+use bytes::Bytes;
 use xor_name::XorName;
 
 use super::DataAddress;
@@ -70,17 +67,10 @@ impl Client {
         data: Bytes,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataAddress), PutError> {
-        let (chunk_stream, data_map_chunk) = EncryptionStream::new_in_memory(data, true)?;
-
-        let data_map_addr = *data_map_chunk.0.address();
-        info!("Uploading datamap chunk to the network at: {data_map_addr:?}");
-        let data_address = DataAddress::new(*data_map_addr.xorname());
-
-        // Note within the `pay_and_upload`, UploadSummary will be sent to client via event_channel.
-        let mut chunk_streams = vec![chunk_stream];
-        self.pay_and_upload(payment_option, &mut chunk_streams)
-            .await
-            .map(|total_cost| (total_cost, data_address))
+        let (total_cost, data_map_chunk) =
+            self.data_put_internal(data, payment_option, true).await?;
+        let data_address = DataAddress::new(*data_map_chunk.0.address().xorname());
+        Ok((total_cost, data_address))
     }
 
     /// Get the estimated cost of storing a piece of data.
@@ -95,12 +85,12 @@ impl Client {
         data: Bytes,
     ) -> Result<Vec<(XorName, usize)>, CostError> {
         let now = Instant::now();
-        let (data_map_chunks, chunks) = encrypt(data)?;
+        let (data_map_chunk, chunks) = encrypt(data)?;
 
         debug!("Encryption took: {:.2?}", now.elapsed());
 
-        let map_xor_name = *data_map_chunks.address().xorname();
-        let mut content_addrs = vec![(map_xor_name, data_map_chunks.size())];
+        let map_xor_name = *data_map_chunk.address().xorname();
+        let mut content_addrs = vec![(map_xor_name, data_map_chunk.size())];
 
         for chunk in &chunks {
             content_addrs.push((*chunk.name(), chunk.size()));

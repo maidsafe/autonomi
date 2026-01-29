@@ -7,13 +7,13 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::archive_public::{ArchiveAddress, PublicArchive};
-use super::{DownloadError, FileCostError, Metadata, UploadError};
+use super::{DownloadError, Metadata, UploadError, bulk_upload_internal, file_upload_internal};
 use crate::AttoTokens;
-use crate::client::Client;
 use crate::client::data_types::chunk::{ChunkAddress, DataMapChunk};
 use crate::client::high_level::data::DataAddress;
-use crate::client::payment::PaymentOption;
-use bytes::Bytes;
+use crate::client::payment::{BulkPaymentOption, PaymentOption};
+use crate::client::quote::add_costs;
+use crate::client::{Client, PutError};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
@@ -60,140 +60,82 @@ impl Client {
     /// The datamaps of these files are uploaded on the network, making the individual files publicly available.
     ///
     /// This returns, but does not upload (!),the [`PublicArchive`] containing the datamaps of the uploaded files.
+    ///
+    /// When using `BulkPaymentOption::Wallet`, the payment method is automatically selected:
+    /// - For directories with >= 64 estimated chunks: uses merkle payments (more efficient)
+    /// - For smaller directories: uses regular per-batch payments
     pub async fn dir_content_upload_public(
         &self,
         dir_path: PathBuf,
-        payment_option: PaymentOption,
+        payment_option: BulkPaymentOption,
     ) -> Result<(AttoTokens, PublicArchive), UploadError> {
-        info!("Uploading directory: {dir_path:?}");
-
-        // encrypt
-        let encryption_results =
-            crate::self_encryption::encrypt_directory_files(dir_path, true).await?;
-        let mut chunk_iterators = vec![];
-        for encryption_result in encryption_results {
-            match encryption_result {
-                Ok(file_chunk_iterator) => {
-                    let file_path = file_chunk_iterator.file_path.clone();
-                    info!("Successfully encrypted file: {file_path:?}");
-                    #[cfg(feature = "loud")]
-                    println!("Successfully encrypted file: {file_path:?}");
-
-                    chunk_iterators.push(file_chunk_iterator);
+        let (cost, archive) =
+            bulk_upload_internal(self, dir_path, payment_option, true, |results| {
+                let mut archive = PublicArchive::new();
+                for (path, datamap, metadata) in results {
+                    let data_address = DataAddress::new(*datamap.0.name());
+                    archive.add_file(path, data_address, metadata);
                 }
-                Err(err_msg) => {
-                    error!("Error during file encryption: {err_msg}");
-                    #[cfg(feature = "loud")]
-                    println!("Error during file encryption: {err_msg}");
-                }
-            }
-        }
-
-        // pay and upload
-        let total_cost = self
-            .pay_and_upload(payment_option, &mut chunk_iterators)
+                archive
+            })
             .await?;
 
-        // create an archive
-        let mut public_archive = PublicArchive::new();
-        for file_chunk_iterator in chunk_iterators {
-            let file_path = file_chunk_iterator.file_path.clone();
-            let relative_path = file_chunk_iterator.relative_path.clone();
-            let file_metadata = file_chunk_iterator.metadata.clone();
-            let data_address = match file_chunk_iterator.data_map_chunk() {
-                Some(datamap) => DataAddress::new(*datamap.0.name()),
-                None => {
-                    error!("Datamap chunk not found for file: {file_path:?}, this is a BUG");
-                    continue;
-                }
-            };
-            public_archive.add_file(relative_path, data_address, file_metadata);
+        // Log uploaded files
+        for (file_path, data_addr, _meta) in archive.iter() {
+            crate::loud_info!("Uploaded file: {file_path:?} to: {data_addr}");
         }
 
-        for (file_path, data_addr, _meta) in public_archive.iter() {
-            info!("Uploaded file: {file_path:?} to: {data_addr}");
-            #[cfg(feature = "loud")]
-            println!("Uploaded file: {file_path:?} to: {data_addr}");
-        }
-
-        Ok((total_cost, public_archive))
+        Ok((cost, archive))
     }
 
     /// Same as [`Client::dir_content_upload_public`] but also uploads the archive to the network.
     ///
     /// Returns the [`ArchiveAddress`] of the uploaded archive.
+    ///
+    /// # Atomic Operation
+    ///
+    /// This is an atomic operation that requires a fresh wallet payment for both content and archive.
+    ///
+    /// # Resume Support
+    ///
+    /// To resume failed uploads with payment receipts, use the two-step approach:
+    /// 1. Upload content with receipt: `dir_content_upload_public(path, BulkPaymentOption::ContinueMerkle(wallet, receipt))`
+    /// 2. Upload archive separately: `archive_put_public(&archive, PaymentOption::Wallet(wallet))`
+    ///
+    /// This allows you to preserve merkle payment receipts while still completing the full upload.
     pub async fn dir_upload_public(
         &self,
         dir_path: PathBuf,
-        payment_option: PaymentOption,
+        wallet: &ant_evm::EvmWallet,
     ) -> Result<(AttoTokens, ArchiveAddress), UploadError> {
         let (cost1, archive) = self
-            .dir_content_upload_public(dir_path, payment_option.clone())
+            .dir_content_upload_public(dir_path, BulkPaymentOption::Wallet(wallet.clone()))
             .await?;
-        let (cost2, archive_addr) = self.archive_put_public(&archive, payment_option).await?;
-        let total_cost = cost1.checked_add(cost2).unwrap_or_else(|| {
-            error!("Total cost overflowed: {cost1:?} + {cost2:?}");
-            cost1
-        });
+        let (cost2, archive_addr) = self
+            .archive_put_public(&archive, PaymentOption::Wallet(wallet.clone()))
+            .await?;
+        let total_cost = add_costs(cost1, cost2).map_err(PutError::from)?;
         Ok((total_cost, archive_addr))
     }
 
     /// Upload the content of a file to the network.
     /// Reads file, splits into chunks, uploads chunks, uploads datamap, returns DataAddr (pointing to the datamap)
+    ///
+    /// All `BulkPaymentOption` variants are supported:
+    /// - `Wallet`: Fresh upload with auto-selection (merkle for >= 64 chunks, regular otherwise)
+    /// - `Receipt`: Resume with regular receipt
+    /// - `ContinueMerkle`: Uses merkle flow with wallet for unpaid chunks
+    /// - `MerkleReceipt`: Uses merkle flow with existing proofs (fails if unpaid chunks exist)
     pub async fn file_content_upload_public(
         &self,
         path: PathBuf,
-        payment_option: PaymentOption,
+        payment_option: BulkPaymentOption,
     ) -> Result<(AttoTokens, DataAddress), UploadError> {
-        let (data_map_chunk, processed_chunks, free_chunks, receipts) = self
-            .stream_upload_file(path.clone(), payment_option, true)
-            .await?;
+        let (total_cost, data_map_chunk) =
+            file_upload_internal(self, path.clone(), payment_option, true).await?;
         let addr = DataAddress::new(*data_map_chunk.0.name());
-        let total_cost = self
-            .calculate_total_cost(processed_chunks, receipts, free_chunks)
-            .await;
-
         debug!("File {path:?} uploaded to the network at {addr:?}");
         Ok((total_cost, addr))
-    }
-
-    /// Get the cost to upload a file/dir to the network.
-    /// quick and dirty implementation, please refactor once files are cleanly implemented
-    pub async fn file_cost(&self, path: &PathBuf) -> Result<AttoTokens, FileCostError> {
-        let mut archive = PublicArchive::new();
-        let mut content_addrs = vec![];
-
-        for entry in walkdir::WalkDir::new(path) {
-            let entry = entry?;
-
-            if !entry.file_type().is_file() {
-                continue;
-            }
-
-            let path = entry.path().to_path_buf();
-            tracing::info!("Cost for file: {path:?}");
-
-            let data = tokio::fs::read(&path).await?;
-            let file_bytes = Bytes::from(data);
-
-            let addrs = self.get_content_addrs(file_bytes.clone())?;
-
-            // The first addr is always the chunk_map_name
-            let map_xor_name = addrs[0].0;
-
-            content_addrs.extend(addrs);
-
-            let metadata = metadata_from_entry(&entry);
-
-            archive.add_file(path, DataAddress::new(map_xor_name), metadata);
-        }
-
-        let serialized = archive.to_bytes()?;
-        content_addrs.extend(self.get_content_addrs(serialized)?);
-
-        let total_cost = self.get_cost_estimation(content_addrs).await?;
-        debug!("Total cost for the directory: {total_cost:?}");
-        Ok(total_cost)
     }
 }
 

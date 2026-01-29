@@ -45,17 +45,17 @@ jobs:
         shell: bash
         run: wget https://sn-node.s3.eu-west-2.amazonaws.com/the-test-data.zip
 
-      - name: Build node and cli binaries
-        run: cargo build --release --bin antnode --bin ant
+      - uses: ./.github/actions/build-binaries
         timeout-minutes: 30
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: start
           enable-evm-testnet: true
           node-path: target/release/antnode
-          build: true
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
           sn-log: "all"
 
       ########################
@@ -109,11 +109,10 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: ./.github/actions/local-testnet
         with:
           action: stop
           log_file_prefix: ant_test_logs_generate_bench_charts
-          build: true
 
       #########################
       ### Mem Analysis      ###

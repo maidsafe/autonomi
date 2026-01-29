@@ -50,10 +50,10 @@ RUSTDOCFLAGS="--deny=warnings" cargo doc --no-deps --workspace
 cargo run --bin evm-testnet
 
 # Create local test network with 25 nodes
-cargo run --bin antctl -- local run --build --clean --rewards-address <YOUR_ETHEREUM_ADDRESS>
+cargo run --release --bin antctl -- local run --build --clean --rewards-address <YOUR_ETHEREUM_ADDRESS>
 
 # Check node status
-cargo run --bin antctl -- status
+cargo run --release --bin antctl -- status
 
 # Upload files (requires SECRET_KEY environment variable)
 SECRET_KEY=<YOUR_EVM_SECRET_KEY> cargo run --bin ant -- --local file upload <path>
@@ -62,7 +62,7 @@ SECRET_KEY=<YOUR_EVM_SECRET_KEY> cargo run --bin ant -- --local file upload <pat
 cargo run --bin ant -- --local file download <addr> <dest_path>
 
 # Tear down network
-cargo run --bin antctl -- local kill
+cargo run --release --bin antctl -- local kill
 ```
 
 ### Binary Builds
