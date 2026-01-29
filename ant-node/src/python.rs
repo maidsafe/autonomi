@@ -16,7 +16,7 @@ use crate::{
     },
     utils::get_antnode_root_dir,
 };
-use ant_bootstrap::{BootstrapConfig, bootstrap::Bootstrap};
+use ant_bootstrap::BootstrapConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_protocol::{NetworkAddress, storage::ChunkAddress};
 use const_hex::FromHex;
@@ -83,16 +83,15 @@ impl PyAntNode {
         let keypair = Keypair::generate_ed25519();
 
         future_into_py(py, async move {
-            let bootstrap = Bootstrap::new(BootstrapConfig {
+            let bootstrap_config = BootstrapConfig {
                 initial_peers,
                 local,
                 ..Default::default()
-            })
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to initialise bootstrap: {e}")))?;
+            };
 
             let mut node_builder = NodeBuilder::new(
                 keypair,
-                bootstrap,
+                bootstrap_config,
                 rewards_address,
                 evm_network.0,
                 node_socket_addr,
@@ -103,6 +102,7 @@ impl PyAntNode {
 
             let running_node = node_builder
                 .build_and_run()
+                .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to start node: {e}")))?;
 
             Ok(PyAntNode {

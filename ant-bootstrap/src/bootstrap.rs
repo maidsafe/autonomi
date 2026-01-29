@@ -127,7 +127,7 @@ impl Bootstrap {
 
         let cache_store = BootstrapCacheStore::new(config.clone())?;
 
-        let mut bootstrap = Self {
+        let bootstrap = Self {
             cache_store: cache_store.clone(),
             addrs: addrs_queue,
             cache_pending,
@@ -140,10 +140,6 @@ impl Bootstrap {
             bootstrap_completed: config.first,
             cache_task: None,
         };
-
-        info!("Cache store is initialized and will sync and flush periodically");
-        let cache_task = bootstrap.cache_store.sync_and_flush_periodically();
-        bootstrap.cache_task = Some(cache_task);
 
         if config.first {
             // Clear the cache file synchronously for the first node
@@ -708,6 +704,32 @@ impl Bootstrap {
 
     pub fn cache_store(&self) -> &BootstrapCacheStore {
         &self.cache_store
+    }
+
+    /// Starts the background task that periodically syncs and flushes the cache to disk.
+    ///
+    /// This task will run in the background and periodically save any cached peer addresses
+    /// to the bootstrap cache file. The task is automatically aborted when the `Bootstrap`
+    /// instance is dropped.
+    ///
+    /// Call this method after creating the `Bootstrap` instance if you want the cache to be
+    /// persisted to disk. For use cases like reachability checks where you don't need cache
+    /// persistence, you can skip calling this method.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let mut bootstrap = Bootstrap::new(config)?;
+    /// bootstrap.start_cache_sync_task();
+    /// ```
+    pub fn start_cache_sync_task(&mut self) {
+        if self.cache_task.is_some() {
+            warn!("Cache sync task is already running");
+            return;
+        }
+        info!("Starting cache sync task - cache will sync and flush periodically");
+        let cache_task = self.cache_store.sync_and_flush_periodically();
+        self.cache_task = Some(cache_task);
     }
 }
 

@@ -22,7 +22,7 @@ use futures::stream::FuturesUnordered;
 use libp2p::kad::{KBucketDistance, Record, RecordKey};
 use libp2p::swarm::ConnectionId;
 use libp2p::{Multiaddr, PeerId, identity::Keypair};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::sleep;
 
 use super::driver::event::MsgResponder;
@@ -40,6 +40,7 @@ const CLOSEST_PEERS_RETRY_MIN_WAIT_SECS: u64 = 2;
 const CLOSEST_PEERS_RETRY_MAX_WAIT_SECS: u64 = 8;
 
 pub(crate) use init::NetworkConfig;
+pub(crate) use init::init_reachability_check_swarm;
 pub(crate) use init::listen_on_with_retry;
 
 #[derive(Clone, Debug)]
@@ -62,13 +63,20 @@ impl Network {
     /// Initialize the network
     /// This will start the network driver in a background thread, which is a long-running task that runs until the [`Network`] is dropped
     /// The [`Network`] is cheaply cloneable, prefer cloning over creating new instances to avoid creating multiple network drivers
-    pub(crate) fn init(config: NetworkConfig) -> Result<(Self, mpsc::Receiver<NetworkEvent>)> {
+    pub(crate) fn init(
+        config: NetworkConfig,
+    ) -> Result<(
+        Self,
+        mpsc::Receiver<NetworkEvent>,
+        Option<watch::Sender<bool>>,
+    )> {
         let peer_id = PeerId::from(config.keypair.public());
         let keypair = config.keypair.clone();
         let shutdown_rx = config.shutdown_rx.clone();
 
         // setup the swarm driver
-        let (swarm_driver, network_event_receiver) = init::init_driver(config)?;
+        let (swarm_driver, network_event_receiver, metrics_shutdown_tx) =
+            init::init_driver(config)?;
 
         // create a new network instance
         let network = Network {
@@ -83,7 +91,7 @@ impl Network {
         // Run the swarm driver as a background task
         let _swarm_driver_task = tokio::spawn(swarm_driver.run(shutdown_rx));
 
-        Ok((network, network_event_receiver))
+        Ok((network, network_event_receiver, metrics_shutdown_tx))
     }
 
     /// Returns the `PeerId` of the instance.
