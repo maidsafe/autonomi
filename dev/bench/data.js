@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769718344423,
+  "lastUpdate": 1769718347190,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -17911,6 +17911,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/05029a8b7e0966f498cd996ede031cc31cb4569f"
         },
         "date": 1769707277820,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "75d3b929f09d8b3a2a787d91be3f2c627b4c60d0",
+          "message": "Merge pull request #3441 from maidsafe/rc-2026.1.1\n\nchore(release): stable release 2026.1.1.1",
+          "timestamp": "2026-01-29T19:58:26Z",
+          "tree_id": "44fb76cb22c762642bcb09a94d9c8b4c3ccd7780",
+          "url": "https://github.com/maidsafe/autonomi/commit/75d3b929f09d8b3a2a787d91be3f2c627b4c60d0"
+        },
+        "date": 1769718345786,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
