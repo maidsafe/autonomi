@@ -41,12 +41,15 @@ pub(crate) struct VersionLabels {
 }
 
 // Version gate metric labels - uses enum result type as the label
+// Note: Tag values use UpperCamelCase (e.g., "Node", "Accepted", "ParseError")
 #[derive(Clone, Hash, PartialEq, Eq, Debug, EncodeLabelSet)]
 pub(crate) struct VersionCheckResultLabels {
-    /// The type of peer (node/client/reachability_check_client/unknown)
+    /// The type of peer (Node/Client/ReachabilityCheckClient/Unknown)
     peer_type: String,
-    /// The result of version check (accepted/rejected/legacy/parse_error)
+    /// The result of version check (Accepted/Rejected/Legacy/ParseError)
     result: String,
+    /// The minimum required node version (e.g., "0.4.10")
+    min_version: String,
 }
 
 /// The shared recorders that are used to record metrics.
@@ -584,13 +587,15 @@ impl NetworkMetricsRecorder {
 
     /// Record a version check result for metrics.
     ///
-    /// Records the raw enum result type (accepted/rejected/legacy/parse_error) as the metric label.
-    pub(crate) fn record_version_check(&self, peer_type: &str, result: &str) {
+    /// Records the raw enum result type as the metric label using UpperCamelCase
+    /// (e.g., "Accepted", "Rejected", "Legacy", "ParseError").
+    pub(crate) fn record_version_check(&self, peer_type: &str, result: &str, min_version: &str) {
         let _ = self
             .version_check_result
             .get_or_create(&VersionCheckResultLabels {
                 peer_type: peer_type.to_string(),
                 result: result.to_string(),
+                min_version: min_version.to_string(),
             })
             .inc();
     }

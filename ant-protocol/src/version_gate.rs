@@ -197,11 +197,12 @@ impl PeerType {
 
 impl fmt::Display for PeerType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Use UpperCamelCase for metric tag values
         match self {
-            PeerType::Node => write!(f, "node"),
-            PeerType::Client => write!(f, "client"),
-            PeerType::ReachabilityCheckClient => write!(f, "reachability_check_client"),
-            PeerType::Unknown => write!(f, "unknown"),
+            PeerType::Node => write!(f, "Node"),
+            PeerType::Client => write!(f, "Client"),
+            PeerType::ReachabilityCheckClient => write!(f, "ReachabilityCheckClient"),
+            PeerType::Unknown => write!(f, "Unknown"),
         }
     }
 }
