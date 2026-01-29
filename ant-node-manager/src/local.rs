@@ -78,6 +78,10 @@ impl Launcher for LocalSafeLauncher {
             args.push("--first".to_string())
         }
 
+        // Skip reachability check for local networks - nodes communicate via localhost
+        // and don't need external reachability verification
+        args.push("--skip-reachability-check".to_string());
+
         if let Some(log_format) = log_format {
             args.push("--log-format".to_string());
             args.push(log_format.as_str().to_string());

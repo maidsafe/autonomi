@@ -7,12 +7,14 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::SwarmDriver;
-use crate::networking::{
-    NetworkEvent, NodeIssue, Result,
-    driver::behaviour::upnp,
-    endpoint_str,
-    error::{dial_error_to_str, listen_error_to_str},
-    interface::TerminateNodeReason,
+use crate::{
+    event::TerminateNodeReason,
+    networking::{
+        NetworkEvent, NodeIssue, Result,
+        driver::behaviour::upnp,
+        endpoint_str,
+        error::{dial_error_to_str, listen_error_to_str},
+    },
 };
 use itertools::Itertools;
 #[cfg(feature = "open-metrics")]

@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::event::TerminateNodeReason;
 use ant_protocol::PrettyPrintRecordKey;
 use libp2p::PeerId;
 use thiserror::Error;
@@ -119,6 +120,9 @@ pub enum Error {
     #[error("Failed to parse NodeEvent")]
     NodeEventParsingFailed,
 
+    #[error("Bootstrap error: {0}")]
+    Bootstrap(#[from] ant_bootstrap::error::Error),
+
     #[error("Failed to obtain node's current port")]
     FailedToGetNodePort,
 
@@ -128,4 +132,32 @@ pub enum Error {
 
     #[error("The payment quote's signature is invalid")]
     InvalidQuoteSignature,
+    #[error("The node is not externally reachable by the network")]
+    UnreachableNode,
+
+    // ---------- Main process errors
+    #[error("Failed to write PID file at {path}: {source}")]
+    PidFileWriteFailed {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Node control channel closed unexpectedly")]
+    ControlChannelClosed,
+
+    #[error("Node event channel closed unexpectedly")]
+    NodeEventChannelClosed,
+
+    #[error("Control message send failed: {0}")]
+    ControlMessageSendFailed(String),
+
+    #[error("Node terminated due to Ctrl-C signal")]
+    CtrlCReceived,
+
+    #[error("Terminate signal received: {0}")]
+    TerminateSignalReceived(TerminateNodeReason),
+
+    #[error("Tokio Error")]
+    Tokio,
 }

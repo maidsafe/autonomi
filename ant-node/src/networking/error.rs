@@ -46,7 +46,7 @@ pub enum NetworkError {
     ProtocolError(#[from] ant_protocol::error::Error),
 
     #[error("Evm payment Error {0}")]
-    EvmPaymemt(#[from] ant_evm::EvmError),
+    EvmPayment(#[from] ant_evm::EvmError),
 
     #[error("Failed to sign the message with the PeerId keypair")]
     SigningFailed(#[from] libp2p::identity::SigningError),

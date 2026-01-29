@@ -63,7 +63,30 @@ pub enum NodeEvent {
     /// One of the sub event channel closed and unrecoverable.
     ChannelClosed,
     /// Terminates the node
-    TerminateNode(String),
+    TerminateNode(TerminateNodeReason),
+}
+
+/// Terminate node for the following reason
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TerminateNodeReason {
+    HardDiskWriteError,
+    UpnpGatewayNotFound,
+}
+
+impl std::fmt::Display for TerminateNodeReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TerminateNodeReason::HardDiskWriteError => {
+                write!(f, "HardDiskWriteError")
+            }
+            TerminateNodeReason::UpnpGatewayNotFound => {
+                write!(
+                    f,
+                    "UPnP gateway not found. Enable UPnP on your router to allow incoming connections or manually port forward."
+                )
+            }
+        }
+    }
 }
 
 impl NodeEvent {

@@ -27,6 +27,7 @@
 #[macro_use]
 extern crate tracing;
 
+mod critical_failure;
 mod error;
 mod event;
 mod log_markers;
@@ -44,13 +45,13 @@ pub mod spawn;
 #[allow(missing_docs)]
 pub mod utils;
 
-pub use self::networking::ReachabilityIssue;
-pub use self::networking::ReachabilityStatus;
 pub use self::{
+    critical_failure::{reset_critical_failure, set_critical_failure},
     error::{Error, PutValidationError},
     event::{NodeEvent, NodeEventsChannel, NodeEventsReceiver},
     log_markers::Marker,
     networking::sort_peers_by_key,
+    networking::{ReachabilityIssue, ReachabilityStatus},
     node::{NodeBuilder, PERIODIC_REPLICATION_INTERVAL_MAX_S},
 };
 pub use ant_bootstrap::{Bootstrap, BootstrapCacheStore, BootstrapConfig, InitialPeersConfig};
@@ -73,6 +74,9 @@ use tokio::sync::watch;
 #[derive(Clone)]
 pub struct RunningNode {
     shutdown_sender: watch::Sender<bool>,
+    #[allow(dead_code)]
+    /// This has to be kept for the lifetime of the node, so that the metrics server can be kept running.
+    metrics_server_shutdown_sender: Option<watch::Sender<bool>>,
     network: Network,
     node_events_channel: NodeEventsChannel,
     root_dir_path: PathBuf,

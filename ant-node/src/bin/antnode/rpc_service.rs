@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use super::node_rpc::{NodeCtrl, StopResult};
 use ant_logging::ReloadHandle;
 use ant_node::RunningNode;
 use ant_protocol::antnode_proto::{
@@ -16,7 +17,6 @@ use ant_protocol::antnode_proto::{
     ant_node_server::{AntNode, AntNodeServer},
     k_buckets_response,
 };
-use ant_protocol::node_rpc::{NodeCtrl, StopResult};
 use eyre::{ErrReport, Result};
 use std::{
     collections::HashMap,

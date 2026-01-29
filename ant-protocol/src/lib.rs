@@ -23,8 +23,6 @@ pub mod constants;
 pub mod error;
 /// Messages types
 pub mod messages;
-/// RPC commands to node
-pub mod node_rpc;
 /// `PeerId` serialization helpers
 pub(crate) mod peer_id_serde;
 /// Storage types for GraphEntry and Chunk

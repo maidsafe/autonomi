@@ -275,8 +275,10 @@ impl Client {
             ant_protocol::version::set_network_id(network_id);
         }
 
-        let bootstrap =
+        let mut bootstrap =
             Bootstrap::new_with_preloaded_addrs(config.bootstrap_config.clone()).await?;
+        bootstrap.start_cache_sync_task();
+
         let network = Network::new(bootstrap)?;
 
         // Wait for the network to be ready with enough peers
@@ -296,7 +298,8 @@ impl Client {
             };
 
             // Retry the bootstrap and connection with cache disabled
-            let bootstrap_retry = Bootstrap::new_with_preloaded_addrs(retry_config).await?;
+            let mut bootstrap_retry = Bootstrap::new_with_preloaded_addrs(retry_config).await?;
+            bootstrap_retry.start_cache_sync_task();
             let network_retry = Network::new(bootstrap_retry)?;
 
             // Wait for connectivity with the new bootstrap configuration

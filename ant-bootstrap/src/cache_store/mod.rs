@@ -228,7 +228,9 @@ impl BootstrapCacheStore {
 
     /// Runs the sync_and_flush_to_disk method periodically
     /// This is useful for keeping the cache up-to-date without blocking the main thread.
-    pub(crate) fn sync_and_flush_periodically(&self) -> tokio::task::JoinHandle<()> {
+    ///
+    /// Returns a JoinHandle that will be aborted when dropped.
+    pub fn sync_and_flush_periodically(&self) -> tokio::task::JoinHandle<()> {
         let store = self.clone();
 
         let current_span = tracing::Span::current();

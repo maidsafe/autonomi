@@ -107,6 +107,29 @@ pub static IDENTIFY_PROTOCOL_STR: LazyLock<RwLock<String>> = LazyLock::new(|| {
     ))
 });
 
+/// Reachability check peer agent version for dial-back triggering.
+///
+/// ## Purpose
+/// Functions as a user-agent identifier for the reachability check swarm. This swarm
+/// is used to verify that a node is externally reachable before starting the main node.
+///
+/// ## Format
+/// `ant/reachability-check-peer/{ant_protocol_version}/{network_id}`
+///
+/// ## Behavior
+/// - Nodes recognize this agent version and trigger dial-backs for reachability verification
+/// - Uses the same IDENTIFY_PROTOCOL_STR for protocol, but distinct agent_version
+pub static IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR: LazyLock<RwLock<String>> =
+    LazyLock::new(|| {
+        RwLock::new(format!(
+            "ant/reachability-check-peer/{}/{}",
+            get_truncate_version_str(),
+            *NETWORK_ID
+                .read()
+                .expect("Failed to obtain read lock for NETWORK_ID"),
+        ))
+    });
+
 /// Update the NETWORK_ID.
 ///
 /// Other version strings will reference this value. The default is 1, representing the mainnet.
@@ -137,6 +160,19 @@ pub fn set_network_id(id: u8) {
             .write()
             .expect("Failed to obtain write lock for IDENTIFY_PROTOCOL_STR");
         *identify_protocol = format!("ant/{}/{}", get_truncate_version_str(), id);
+    }
+
+    {
+        let mut reachability_version = IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR
+            .write()
+            .expect(
+                "Failed to obtain write lock for IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR",
+            );
+        *reachability_version = format!(
+            "ant/reachability-check-peer/{}/{}",
+            get_truncate_version_str(),
+            id,
+        );
     }
 
     info!("Network id set to: {id} and all protocol strings updated");
