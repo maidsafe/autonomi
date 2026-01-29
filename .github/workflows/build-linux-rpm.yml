@@ -38,7 +38,7 @@ jobs:
           - target: arm-unknown-linux-musleabi
             rpm_arch: armv5tel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install RPM build tools
         run: |
