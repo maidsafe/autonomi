@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769706152078,
+  "lastUpdate": 1769706153432,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -17610,6 +17610,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/58801da799b5ec69ec69728ad57e239dbf7177bf"
         },
         "date": 1769614818244,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "feb645cf4baa676a5d19af28514f12e3ea79ab64",
+          "message": "Merge pull request #3435 from maidsafe/dependabot/npm_and_yarn/autonomi-nodejs/tar-7.5.7\n\nchore(deps): bump tar from 7.5.6 to 7.5.7 in /autonomi-nodejs",
+          "timestamp": "2026-01-29T15:36:00Z",
+          "tree_id": "d8fc6c4af3f9c6fbb39ad1e28c8c88dba4b482ee",
+          "url": "https://github.com/maidsafe/autonomi/commit/feb645cf4baa676a5d19af28514f12e3ea79ab64"
+        },
+        "date": 1769706152178,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
