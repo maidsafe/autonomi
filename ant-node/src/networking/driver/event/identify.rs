@@ -152,6 +152,7 @@ impl SwarmDriver {
         let version_result = check_peer_version(&info.agent_version, min_version_for_check);
 
         // Record metrics for version checks - uses UpperCamelCase for tag values
+        // Note: min_node_version is reported via /metadata endpoint
         #[cfg(feature = "open-metrics")]
         if let Some(metrics) = &self.metrics_recorder {
             let result_str = match &version_result {
@@ -160,11 +161,7 @@ impl SwarmDriver {
                 VersionCheckResult::Legacy => "Legacy",
                 VersionCheckResult::ParseError { .. } => "ParseError",
             };
-            metrics.record_version_check(
-                &peer_type.to_string(),
-                result_str,
-                &min_node_version.to_string(),
-            );
+            metrics.record_version_check(&peer_type.to_string(), result_str);
         }
 
         // Emit event for observability
