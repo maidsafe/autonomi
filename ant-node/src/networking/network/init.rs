@@ -9,12 +9,13 @@
 use ant_protocol::constants::{KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, REPLICATION_FACTOR};
 
 use crate::ReachabilityStatus;
+use crate::networking::bootstrap::InitialBootstrapTrigger;
 use crate::networking::{
     CLOSE_GROUP_SIZE, NetworkEvent,
     bootstrap::InitialBootstrap,
     circular_vec::CircularVec,
     driver::{
-        BLOCKLIST_CACHE_SIZE, InitialBootstrapTrigger, NodeBehaviour, SwarmDriver, behaviour::upnp,
+        BLOCKLIST_CACHE_SIZE, NodeBehaviour, SwarmDriver, behaviour::upnp,
         network_discovery::NetworkDiscovery, network_wide_replication::NetworkWideReplication,
     },
     error::{NetworkError, Result},

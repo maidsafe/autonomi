@@ -126,17 +126,17 @@ impl ContactsFetcher {
 
         while let Some((result, endpoint)) = fetches.next().await {
             match result {
-                Ok(mut endpoing_bootstrap_addresses) => {
+                Ok(mut endpoint_bootstrap_addresses) => {
                     info!(
                         "Successfully fetched {} bootstrap addrs from {}. First few addrs: {:?}",
-                        endpoing_bootstrap_addresses.len(),
+                        endpoint_bootstrap_addresses.len(),
                         endpoint,
-                        endpoing_bootstrap_addresses
+                        endpoint_bootstrap_addresses
                             .iter()
                             .take(3)
                             .collect::<Vec<_>>()
                     );
-                    bootstrap_addresses.append(&mut endpoing_bootstrap_addresses);
+                    bootstrap_addresses.append(&mut endpoint_bootstrap_addresses);
                     if bootstrap_addresses.len() >= self.max_addrs {
                         info!(
                             "Fetched enough bootstrap addresses. Stopping. needed: {} Total fetched: {}",

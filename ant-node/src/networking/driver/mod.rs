@@ -12,7 +12,9 @@ pub(crate) mod event;
 pub(crate) mod network_discovery;
 pub(crate) mod network_wide_replication;
 
-use crate::networking::bootstrap::InitialBootstrap;
+use crate::networking::bootstrap::{
+    INITIAL_BOOTSTRAP_CHECK_INTERVAL, InitialBootstrap, InitialBootstrapTrigger,
+};
 use ant_bootstrap::BootstrapCacheStore;
 use event::NodeEvent;
 use network_discovery::{NETWORK_DISCOVER_INTERVAL, NetworkDiscovery};
@@ -49,7 +51,7 @@ use libp2p::{
 use std::collections::{BTreeMap, HashMap, btree_map::Entry};
 use std::time::Instant;
 use tokio::sync::{mpsc, oneshot, watch};
-use tokio::time::{Duration, interval};
+use tokio::time::{Duration, Interval, interval};
 use tracing::warn;
 
 use super::interface::{LocalSwarmCmd, NetworkEvent, NetworkSwarmCmd};
@@ -64,10 +66,6 @@ pub(crate) const CLOSET_RECORD_CHECK_INTERVAL: Duration = Duration::from_secs(15
 
 /// Interval over which we check if we could dial any peer in the dial queue.
 const DIAL_QUEUE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
-
-/// Periodically trigger the bootstrap process to try connect to more peers in the network.
-pub(crate) const BOOTSTRAP_CHECK_INTERVAL: std::time::Duration =
-    std::time::Duration::from_millis(100);
 
 pub(crate) const NETWORK_WIDE_REPLICATION_INTERVAL: Duration = Duration::from_secs(15 * 60);
 
@@ -174,7 +172,8 @@ impl SwarmDriver {
     pub(crate) async fn run(mut self, mut shutdown_rx: watch::Receiver<bool>) {
         let mut network_discover_interval = interval(NETWORK_DISCOVER_INTERVAL);
         let mut set_farthest_record_interval = interval(CLOSET_RECORD_CHECK_INTERVAL);
-        let mut bootstrap_interval = Some(interval(BOOTSTRAP_CHECK_INTERVAL));
+        let mut initial_bootstrap_trigger_check_interval =
+            Some(interval(INITIAL_BOOTSTRAP_CHECK_INTERVAL));
         let mut dial_queue_check_interval = interval(DIAL_QUEUE_CHECK_INTERVAL);
         let network_wide_replication = duration_with_variance(
             NETWORK_WIDE_REPLICATION_INTERVAL,
@@ -259,25 +258,21 @@ impl SwarmDriver {
                         let _ = self.dial_queue.remove(peer_id);
                     }
                 },
-                // Only call the async closure IF bootstrap_interval is Some. This prevents the tokio::select! from
-                // executing this branch once bootstrap_interval is set to None.
-                _ = async {
-                    debug!("Polling bootstrap interval.");
-                    #[allow(clippy::unwrap_used)]
-                    bootstrap_interval.as_mut().expect("bootstrap interval is checked before executing").tick().await
-                }, if bootstrap_interval.is_some() => {
-                    if self.initial_bootstrap_trigger.should_trigger_initial_bootstrap() {
-                        self.initial_bootstrap.trigger_bootstrapping_process(&mut self.swarm, self.peers_in_rt);
-                        if self.initial_bootstrap.has_terminated() {
-                            info!("Initial bootstrap process completed. Marking bootstrap_interval as None.");
-                            bootstrap_interval = None;
-                        }
-                    }
-                }
                 // runs every NETWORK_WIDE_REPLICATION_INTERVAL time
                 _ = network_wide_replication_interval.tick() => {
                     if let Err(err) = self.network_wide_replication.execute(&mut self.swarm).await {
                         warn!("Error during network wide replication: {err}");
+                    }
+                }
+                // check if we can trigger the initial bootstrap process
+                // once it is triggered, we don't re-trigger it
+                Some(()) = conditional_interval(&mut initial_bootstrap_trigger_check_interval) => {
+                    if self.initial_bootstrap_trigger.should_trigger_initial_bootstrap() {
+                        info!("Triggering initial bootstrap process. This is a one-time operation.");
+                        self.initial_bootstrap.trigger_bootstrapping_process(&mut self.swarm, self.peers_in_rt);
+                        // we will not call this loop anymore, once the initial bootstrap is triggered.
+                        // It should run on its own and complete.
+                        initial_bootstrap_trigger_check_interval = None;
                     }
                 }
                 // runs every bootstrap_interval time
@@ -576,37 +571,14 @@ fn duration_with_variance(duration: Duration, variance: u32) -> Duration {
     }
 }
 
-/// This is used to track the conditions that are required to trigger the initial bootstrap process once.
-pub(crate) struct InitialBootstrapTrigger {
-    pub(crate) upnp: bool,
-    pub(crate) upnp_gateway_result_obtained: bool,
-    pub(crate) listen_addr_obtained: bool,
-}
-
-impl InitialBootstrapTrigger {
-    pub(crate) fn new(upnp: bool) -> Self {
-        Self {
-            upnp,
-            upnp_gateway_result_obtained: false,
-            listen_addr_obtained: false,
+/// To tick an optional interval inside tokio::select! without looping forever.
+async fn conditional_interval(i: &mut Option<Interval>) -> Option<()> {
+    match i {
+        Some(i) => {
+            let _ = i.tick().await;
+            Some(())
         }
-    }
-
-    /// Used to check if we can trigger the initial bootstrap process.
-    ///
-    /// - If we are a client, we should trigger the initial bootstrap process immediately.
-    /// - If we have set upnp flag and if we have obtained the upnp gateway result, we should trigger the initial bootstrap process.
-    /// - If we don't have upnp enabled, then we should trigger the initial bootstrap process only if we have a listen address available.
-    pub(crate) fn should_trigger_initial_bootstrap(&self) -> bool {
-        if self.upnp {
-            return self.upnp_gateway_result_obtained;
-        }
-
-        if self.listen_addr_obtained {
-            return true;
-        }
-
-        false
+        None => None,
     }
 }
 

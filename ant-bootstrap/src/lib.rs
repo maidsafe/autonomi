@@ -27,7 +27,7 @@ extern crate tracing;
 
 pub mod cache_store;
 pub mod config;
-pub mod contacts;
+pub mod contacts_fetcher;
 pub mod error;
 mod initial_peers;
 
@@ -36,7 +36,7 @@ use libp2p::{Multiaddr, PeerId, multiaddr::Protocol};
 
 pub use cache_store::BootstrapCacheStore;
 pub use config::BootstrapCacheConfig;
-pub use contacts::ContactsFetcher;
+pub use contacts_fetcher::ContactsFetcher;
 pub use error::{Error, Result};
 pub use initial_peers::{ANT_PEERS_ENV, InitialPeersConfig};
 
