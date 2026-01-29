@@ -33,10 +33,11 @@ pub struct NetworkSpawner {
 impl NetworkSpawner {
     /// Creates a new `NetworkSpawner` with default configurations.
     ///
-    /// Default values:
+    /// # Default Values
+    ///
     /// - `bootstrap_config`: `None`
-    /// - `evm_network`: `EvmNetwork::default()`
-    /// - `rewards_address`: `RewardsAddress::default()`
+    /// - `evm_network`: `EvmNetwork::default()` (ArbitrumOne mainnet)
+    /// - `rewards_address`: `RewardsAddress::default()` (**zero address - rewards burned!**)
     /// - `no_upnp`: `false`
     /// - `root_dir`: `None`
     /// - `size`: `5`
@@ -175,6 +176,15 @@ async fn spawn_network(
     size: usize,
     bootstrap_config: Option<BootstrapConfig>,
 ) -> eyre::Result<RunningNetwork> {
+    // Warn if using the zero address (default) - rewards would be lost
+    if rewards_address == RewardsAddress::default() {
+        warn!(
+            "Using zero address (0x0...0) for rewards. \
+             Any node rewards will be burned! \
+             Use .with_rewards_address() to set your wallet address."
+        );
+    }
+
     let mut running_nodes: Vec<RunningNode> = vec![];
 
     // Extract local flag from bootstrap_config, default to false
