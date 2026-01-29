@@ -382,7 +382,7 @@ jobs:
           spctl -a -vv -t install "$PKG_FILE"
 
       - name: Upload pkg artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: autonomi-pkg-${{ inputs.arch }}
           path: ${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg
