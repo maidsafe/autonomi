@@ -405,4 +405,106 @@ mod tests {
         assert_eq!(minor, 4);
         assert_eq!(patch, 10);
     }
+
+    // ============ Release Candidate (RC) Version Tests ============
+
+    #[test]
+    fn test_parse_rc_version_semver() {
+        // RC versions should be parsed, stripping the -rc.X suffix
+        let version = PeerVersion::parse_semver("0.4.14-rc.1").unwrap();
+        assert_eq!(version, PeerVersion::new(0, 4, 14));
+
+        let version = PeerVersion::parse_semver("0.4.14-rc.2").unwrap();
+        assert_eq!(version, PeerVersion::new(0, 4, 14));
+
+        let version = PeerVersion::parse_semver("1.0.0-rc.1").unwrap();
+        assert_eq!(version, PeerVersion::new(1, 0, 0));
+    }
+
+    #[test]
+    fn test_parse_rc_version_from_agent_string() {
+        // RC versions in agent strings should be parsed correctly
+        let agent = "ant/node/1.0/0.4.14-rc.1/1";
+        let version = PeerVersion::parse_from_agent_string(agent).unwrap();
+        assert_eq!(version, PeerVersion::new(0, 4, 14));
+
+        let agent = "ant/node/1.0/0.5.0-rc.3/1";
+        let version = PeerVersion::parse_from_agent_string(agent).unwrap();
+        assert_eq!(version, PeerVersion::new(0, 5, 0));
+    }
+
+    #[test]
+    fn test_rc_version_comparison() {
+        // RC versions should compare based on their numeric part only
+        let min_version = PeerVersion::new(0, 4, 10);
+
+        // 0.4.14-rc.1 -> 0.4.14 >= 0.4.10 (should pass)
+        let rc_version = PeerVersion::parse_semver("0.4.14-rc.1").unwrap();
+        assert!(rc_version.meets_minimum(&min_version));
+
+        // 0.4.9-rc.1 -> 0.4.9 < 0.4.10 (should fail)
+        let old_rc_version = PeerVersion::parse_semver("0.4.9-rc.1").unwrap();
+        assert!(!old_rc_version.meets_minimum(&min_version));
+
+        // 0.4.10-rc.1 -> 0.4.10 >= 0.4.10 (should pass - equal)
+        let exact_rc_version = PeerVersion::parse_semver("0.4.10-rc.1").unwrap();
+        assert!(exact_rc_version.meets_minimum(&min_version));
+    }
+
+    #[test]
+    fn test_check_peer_version_with_rc_accepted() {
+        // Peer running RC version above minimum should be accepted
+        let agent = "ant/node/1.0/0.4.14-rc.1/1";
+        let min = PeerVersion::new(0, 4, 10);
+        let result = check_peer_version(agent, Some(&min));
+
+        // Should be accepted with version 0.4.14 (stripped of -rc.1)
+        assert!(
+            matches!(result, VersionCheckResult::Accepted { version } if version == PeerVersion::new(0, 4, 14))
+        );
+    }
+
+    #[test]
+    fn test_check_peer_version_with_rc_rejected() {
+        // Peer running RC version below minimum should be rejected
+        let agent = "ant/node/1.0/0.4.9-rc.2/1";
+        let min = PeerVersion::new(0, 4, 10);
+        let result = check_peer_version(agent, Some(&min));
+
+        // Should be rejected with detected version 0.4.9
+        assert!(
+            matches!(result, VersionCheckResult::Rejected { detected, minimum }
+                if detected == PeerVersion::new(0, 4, 9) && minimum == PeerVersion::new(0, 4, 10))
+        );
+    }
+
+    #[test]
+    fn test_various_prerelease_formats() {
+        // Test various pre-release version formats
+        assert_eq!(
+            PeerVersion::parse_semver("0.4.14-rc.1").unwrap(),
+            PeerVersion::new(0, 4, 14)
+        );
+        assert_eq!(
+            PeerVersion::parse_semver("0.4.14-alpha.1").unwrap(),
+            PeerVersion::new(0, 4, 14)
+        );
+        assert_eq!(
+            PeerVersion::parse_semver("0.4.14-beta.2").unwrap(),
+            PeerVersion::new(0, 4, 14)
+        );
+        assert_eq!(
+            PeerVersion::parse_semver("0.4.14-dev").unwrap(),
+            PeerVersion::new(0, 4, 14)
+        );
+        assert_eq!(
+            PeerVersion::parse_semver("0.4.14-SNAPSHOT").unwrap(),
+            PeerVersion::new(0, 4, 14)
+        );
+        // Multiple hyphens - only first part before hyphen is used
+        assert_eq!(
+            PeerVersion::parse_semver("0.4.14-rc.1-build.123").unwrap(),
+            PeerVersion::new(0, 4, 14)
+        );
+    }
 }
