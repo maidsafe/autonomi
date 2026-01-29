@@ -76,18 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Added
 
-- The `developer closest-peers` command now queries the network for closest peers to a target
-  address, with support for multiple input formats including `PeerId`.
-- The `developer closest-peers` command now supports a comparison mode to compare results from
-  different nodes.
-- The `developer node-version` command queries the version of a specific node on the network.
-- The `developer get-quote` command fetches quotes from specific peers, with the `address` parameter
-  now optional.
+- A `developer` subcommand adds various tools for querying the network.
 
 #### Changed
 
 - The `file cost` and `file upload` commands now require explicit selection of payment mode using
-  `--merkle` or `--regular` flags. The previous automatic selection based on chunk count threshold
+  `--merkle` or `--regular` flags. The previous automatic selection based on chunk-count threshold
   has been removed. [BREAKING]
 - Improved consistency between cost estimation and upload commands.
 - Payment selection logging improved to reduce confusion.
