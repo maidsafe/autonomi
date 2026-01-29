@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769706165162,
+  "lastUpdate": 1769707190387,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -6785,6 +6785,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.605353552296724,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "05029a8b7e0966f498cd996ede031cc31cb4569f",
+          "message": "Merge pull request #3438 from maidsafe/dependabot/github_actions/actions/upload-artifact-6\n\nchore(deps): bump actions/upload-artifact from 4 to 6",
+          "timestamp": "2026-01-29T16:04:39Z",
+          "tree_id": "bc2497b52a0f91af84dc0217f8138f2274c0e337",
+          "url": "https://github.com/maidsafe/autonomi/commit/05029a8b7e0966f498cd996ede031cc31cb4569f"
+        },
+        "date": 1769707182729,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 0.9224196905611372,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.6402421358137325,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.579627868683055,
             "unit": "MiB/s"
           }
         ]
