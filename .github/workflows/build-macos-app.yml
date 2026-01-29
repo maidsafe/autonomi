@@ -461,7 +461,7 @@ jobs:
           spctl -a -vv -t open --context context:primary-signature "$DMG_NAME"
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: node-launchpad-dmg-${{ inputs.arch }}
           path: ${{ steps.version.outputs.version }}.node-launchpad.${{ inputs.arch }}.dmg
