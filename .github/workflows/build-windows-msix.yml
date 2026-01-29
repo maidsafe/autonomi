@@ -38,7 +38,7 @@ jobs:
       SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
       SM_KEYPAIR_ALIAS: ${{ secrets.SM_KEYPAIR_ALIAS }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download signed Windows artifacts
         uses: actions/download-artifact@v4
