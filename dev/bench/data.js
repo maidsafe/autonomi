@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769718350206,
+  "lastUpdate": 1769791119994,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -6863,6 +6863,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.565935456628368,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "14210c997dac96f09d8101353ccacf7df4d413a2",
+          "message": "Merge pull request #3434 from maqi/trusting_score\n\nnode(feature): re-enable trust-based replication scoring",
+          "timestamp": "2026-01-30T15:17:55Z",
+          "tree_id": "6404d9b07e07a32aae134421928decf605c4912b",
+          "url": "https://github.com/maidsafe/autonomi/commit/14210c997dac96f09d8101353ccacf7df4d413a2"
+        },
+        "date": 1769791112040,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0386214255635071,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.500965190426996,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.62001754324286,
             "unit": "MiB/s"
           }
         ]
