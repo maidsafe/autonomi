@@ -102,12 +102,15 @@ pub(crate) struct ReplicationFetcher {
     peers_scores: HashMap<PeerId, (VecDeque<bool>, Instant)>,
     /// Accumulator for majority-based replication validation.
     ///
-    /// Maps (NetworkAddress, ValidationType) → Set of PeerIds that reported this key.
+    /// Maps (NetworkAddress, ValidationType) → (Set of PeerIds, first_seen_timestamp).
     /// When the set size reaches CLOSE_GROUP_SIZE/2, the key is accepted for replication.
+    ///
+    /// The timestamp tracks when the entry was first created, enabling TTL-based cleanup
+    /// of stale entries that never reach majority (prevents unbounded memory growth).
     ///
     /// This provides Byzantine fault tolerance: a single malicious peer cannot
     /// inject arbitrary data without collusion from multiple peers.
-    initial_replicates: HashMap<(NetworkAddress, ValidationType), HashSet<PeerId>>,
+    initial_replicates: HashMap<(NetworkAddress, ValidationType), (HashSet<PeerId>, Instant)>,
 }
 
 impl ReplicationFetcher {
@@ -448,9 +451,18 @@ impl ReplicationFetcher {
                 // Also accumulate for majority - this maintains parallel operation of both approaches
                 let majority_results =
                     self.initial_majority_replicates(holder, new_incoming_keys);
-                for item in majority_results {
-                    if !result.contains(&item) {
-                        result.push(item);
+
+                // Dedup on (addr, val_type) only, ignoring PeerId.
+                // This prevents queuing the same key for fetch from multiple peers,
+                // which would waste the limited fetch slots.
+                for (peer, addr, val_type) in majority_results {
+                    let already_present = result
+                        .iter()
+                        .any(|(_, existing_addr, existing_type)| {
+                            existing_addr == &addr && existing_type == &val_type
+                        });
+                    if !already_present {
+                        result.push((peer, addr, val_type));
                     }
                 }
                 result
@@ -485,10 +497,10 @@ impl ReplicationFetcher {
                 "adding record {:?} from holder {holder:?} into initial accumulator",
                 addr_val_type.0
             );
-            let peers = self
+            let (peers, _first_seen) = self
                 .initial_replicates
                 .entry(addr_val_type.clone())
-                .or_default();
+                .or_insert_with(|| (HashSet::new(), Instant::now()));
             let _ = peers.insert(*holder);
             if peers.len() >= CLOSE_GROUP_SIZE / 2 {
                 majorities.push(addr_val_type);
@@ -498,7 +510,7 @@ impl ReplicationFetcher {
         let mut result = vec![];
         for addr_val_type in majorities {
             debug!("Accumulated majorities: {:?}", addr_val_type.0);
-            if let Some(peers) = self.initial_replicates.remove(&addr_val_type) {
+            if let Some((peers, _first_seen)) = self.initial_replicates.remove(&addr_val_type) {
                 for peer in peers {
                     result.push((peer, addr_val_type.0.clone(), addr_val_type.1.clone()));
                 }
@@ -751,6 +763,33 @@ impl ReplicationFetcher {
         // Such failed_hodlers (if any) shall be reported back and be excluded from RT.
         if !failed_holders.is_empty() {
             self.send_event(NetworkEvent::FailedToFetchHolders(failed_holders));
+        }
+
+        // Prune stale entries from initial_replicates that never reached majority.
+        // This prevents unbounded memory growth under churn or Sybil attacks.
+        // Use PENDING_TIMEOUT as TTL - if an entry hasn't reached majority by then,
+        // it's unlikely to ever reach it.
+        let now = Instant::now();
+        let before_count = self.initial_replicates.len();
+        self.initial_replicates
+            .retain(|(addr, _val_type), (_peers, first_seen)| {
+                let dominated_by_others = now.duration_since(*first_seen) >= PENDING_TIMEOUT;
+                if dominated_by_others {
+                    trace!(
+                        "Pruning stale initial_replicate entry for {:?} (age: {:?})",
+                        addr,
+                        now.duration_since(*first_seen)
+                    );
+                }
+                !dominated_by_others
+            });
+        let pruned_count = before_count.saturating_sub(self.initial_replicates.len());
+        if pruned_count > 0 {
+            trace!(
+                "Pruned {} stale entries from initial_replicates (remaining: {})",
+                pruned_count,
+                self.initial_replicates.len()
+            );
         }
     }
 
