@@ -10,7 +10,10 @@ use std::collections::HashSet;
 
 use super::merkle_tree::{BadMerkleProof, MerkleBranch, MidpointProof};
 use crate::RewardsAddress;
-use evmlib::merkle_batch_payment::{CandidateNode, PoolCommitment, PoolHash};
+use evmlib::merkle_batch_payment::{
+    CandidateNode, PoolCommitment, PoolCommitmentPacked, PoolHash, calculate_total_cost_unit,
+    encode_data_type_and_cost,
+};
 use evmlib::quoting_metrics::QuotingMetrics;
 use libp2p::{
     PeerId,
@@ -74,6 +77,16 @@ pub enum MerklePaymentVerificationError {
         expected: usize,
         got: usize,
     },
+    #[error(
+        "Cost unit mismatch at candidate index {index}: on-chain packed={on_chain_packed}, expected packed={expected_packed}"
+    )]
+    CostUnitMismatch {
+        index: usize,
+        on_chain_packed: String,
+        expected_packed: String,
+    },
+    #[error("Winner pool hash not found in on-chain packed commitments")]
+    WinnerPoolNotInCommitments,
 }
 
 /// A node's signed quote for potential reward eligibility
@@ -231,6 +244,60 @@ impl MerklePaymentCandidatePool {
             pool_hash: self.hash(),
             candidates,
         }
+    }
+
+    /// Convert to packed commitment for compact calldata (v2)
+    ///
+    /// This produces a smaller on-chain representation by packing
+    /// data type and total cost unit into a single U256.
+    pub fn to_commitment_packed(&self) -> PoolCommitmentPacked {
+        self.to_commitment().to_packed()
+    }
+
+    /// Verify that on-chain cost units match what the signed metrics produce
+    ///
+    /// This takes the packed commitments decoded from the payment transaction calldata
+    /// and verifies that the winner pool's candidates have cost units consistent with
+    /// their signed quoting metrics. This prevents clients from sending lower cost units
+    /// to the contract than what the nodes' metrics would produce.
+    ///
+    /// # Arguments
+    /// * `on_chain_commitments` - All packed commitments decoded from the tx calldata
+    /// * `winner_pool_hash` - The winner pool hash to find in the commitments
+    pub fn verify_cost_units(
+        &self,
+        on_chain_commitments: &[PoolCommitmentPacked],
+        winner_pool_hash: &PoolHash,
+    ) -> Result<(), MerklePaymentVerificationError> {
+        // Find the winner pool in the on-chain commitments
+        let on_chain_winner = on_chain_commitments
+            .iter()
+            .find(|pc| pc.pool_hash == *winner_pool_hash)
+            .ok_or(MerklePaymentVerificationError::WinnerPoolNotInCommitments)?;
+
+        // For each candidate, verify the on-chain packed value matches what signed metrics produce
+        for (i, (on_chain_candidate, signed_node)) in on_chain_winner
+            .candidates
+            .iter()
+            .zip(self.candidate_nodes.iter())
+            .enumerate()
+        {
+            // Compute expected packed value from signed metrics
+            let expected_data_type =
+                evmlib::contract::data_type_conversion(signed_node.quoting_metrics.data_type);
+            let expected_cost_unit = calculate_total_cost_unit(&signed_node.quoting_metrics);
+            let expected_packed = encode_data_type_and_cost(expected_data_type, expected_cost_unit);
+
+            if on_chain_candidate.data_type_and_total_cost_unit != expected_packed {
+                return Err(MerklePaymentVerificationError::CostUnitMismatch {
+                    index: i,
+                    on_chain_packed: on_chain_candidate.data_type_and_total_cost_unit.to_string(),
+                    expected_packed: expected_packed.to_string(),
+                });
+            }
+        }
+
+        Ok(())
     }
 
     /// Helper function for PoolCommitment verification

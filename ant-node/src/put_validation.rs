@@ -11,7 +11,9 @@ use std::collections::BTreeSet;
 use crate::error::PutValidationError;
 use crate::{Marker, Result, node::Node};
 use ant_evm::ProofOfPayment;
-use ant_evm::merkle_payment_vault::get_merkle_payment_info;
+use ant_evm::merkle_payment_vault::{
+    get_merkle_payment_info, get_merkle_payment_packed_commitments,
+};
 use ant_evm::merkle_payments::CANDIDATES_PER_POOL;
 use ant_evm::merkle_payments::MerklePaymentProof;
 use ant_evm::payment_vault::verify_data_payment;
@@ -1238,6 +1240,33 @@ impl Node {
             })?;
 
         debug!("Merkle proof structure verified successfully for {pretty_key:?}");
+
+        // Verify cost units: fetch the payment tx calldata and verify cost units match signed metrics
+        debug!("merkle payment: verifying cost units from on-chain calldata");
+        match get_merkle_payment_packed_commitments(self.evm_network(), winner_pool_hash).await {
+            Ok(on_chain_commitments) => {
+                proof
+                    .winner_pool
+                    .verify_cost_units(&on_chain_commitments, &winner_pool_hash)
+                    .map_err(|e| {
+                        let error_msg = format!("Cost unit verification failed: {e:?}");
+                        warn!("{error_msg} for {pretty_key:?}");
+                        PutValidationError::MerklePaymentVerificationFailed {
+                            record_key: pretty_key.clone().into_owned(),
+                            error: error_msg,
+                        }
+                    })?;
+                debug!("Cost unit verification passed for {pretty_key:?}");
+            }
+            Err(e) => {
+                // Log warning but don't fail - the calldata fetch is best-effort
+                // The payment was already verified via the smart contract's payment info
+                warn!(
+                    "Could not verify cost units from calldata for {pretty_key:?}: {e:?}. \
+                     Proceeding with existing verification only."
+                );
+            }
+        }
 
         // Verify network topology: get the N closest peers with majority knowledge
         let midpoint_address = proof.winner_pool.midpoint_proof.address();

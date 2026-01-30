@@ -66,3 +66,29 @@ impl From<QuotingMetrics> for IMerklePaymentVault::QuotingMetrics {
         }
     }
 }
+
+// Conversions for packed types (v2)
+impl From<crate::merkle_batch_payment::PoolCommitmentPacked>
+    for IMerklePaymentVault::PoolCommitmentPacked
+{
+    fn from(pool: crate::merkle_batch_payment::PoolCommitmentPacked) -> Self {
+        let candidates_array: [IMerklePaymentVault::CandidateNodePacked; CANDIDATES_PER_POOL] =
+            pool.candidates.map(|c| c.into());
+
+        Self {
+            poolHash: pool.pool_hash.into(),
+            candidates: candidates_array,
+        }
+    }
+}
+
+impl From<crate::merkle_batch_payment::CandidateNodePacked>
+    for IMerklePaymentVault::CandidateNodePacked
+{
+    fn from(node: crate::merkle_batch_payment::CandidateNodePacked) -> Self {
+        Self {
+            rewardsAddress: node.rewards_address,
+            dataTypeAndTotalCostUnit: node.data_type_and_total_cost_unit,
+        }
+    }
+}
