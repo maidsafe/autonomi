@@ -31,6 +31,7 @@ use ant_protocol::{
     NetworkAddress, PrettyPrintKBucketKey,
     messages::{Request, Response},
     version::{IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR, get_network_id_str},
+    version_gate::get_min_node_version,
 };
 use futures::future::Either;
 use libp2p::Transport as _;
@@ -264,6 +265,14 @@ fn init_swarm_driver(
             Info::new(vec![(
                 "identify_protocol_str".to_string(),
                 identify_protocol_str.clone(),
+            )]),
+        );
+        metadata_sub_reg.register(
+            "min_node_version",
+            "Minimum required node version for connecting peers",
+            Info::new(vec![(
+                "min_node_version".to_string(),
+                get_min_node_version().to_string(),
             )]),
         );
 

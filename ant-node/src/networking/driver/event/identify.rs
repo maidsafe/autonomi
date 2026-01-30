@@ -12,6 +12,7 @@ use crate::networking::{
     relay_manager::{RelayManager, is_a_relayed_peer},
 };
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
+use ant_protocol::version_gate::{PeerType, VersionCheckResult, check_peer_version, get_min_node_version};
 use itertools::Itertools;
 use libp2p::Multiaddr;
 use libp2p::identify::Info;
@@ -132,6 +133,136 @@ impl SwarmDriver {
             }
 
             return;
+        }
+
+        // Phase 2: Version gating with enforcement
+        // - Nodes: Version is enforced (reject if below minimum or no version)
+        // - Clients: Version is NOT enforced (always allowed, metrics only)
+        let peer_type = PeerType::from_agent_string(&info.agent_version);
+        let min_node_version = get_min_node_version();
+
+        // For nodes: check against minimum version
+        // For clients/others: don't enforce (pass None to skip enforcement)
+        let min_version_for_check = match peer_type {
+            PeerType::Node => Some(&min_node_version),
+            // Clients are always allowed - version check is for metrics only
+            PeerType::Client | PeerType::ReachabilityCheckClient | PeerType::Unknown => None,
+        };
+
+        let version_result = check_peer_version(&info.agent_version, min_version_for_check);
+
+        // Record metrics for version checks - uses UpperCamelCase for tag values
+        // Note: min_node_version is reported via /metadata endpoint
+        #[cfg(feature = "open-metrics")]
+        if let Some(metrics) = &self.metrics_recorder {
+            let result_str = match &version_result {
+                VersionCheckResult::Accepted { .. } => "Accepted",
+                VersionCheckResult::Rejected { .. } => "Rejected",
+                VersionCheckResult::Legacy => "Legacy",
+                VersionCheckResult::ParseError { .. } => "ParseError",
+            };
+            metrics.record_version_check(&peer_type.to_string(), result_str);
+        }
+
+        // Emit event for observability
+        self.send_event(NetworkEvent::PeerVersionChecked {
+            peer_id,
+            peer_type,
+            result: version_result.clone(),
+        });
+
+        // Phase 2 enforcement: Reject nodes that fail version check
+        // Note: Clients are NOT enforced (always allowed)
+        if peer_type == PeerType::Node {
+            let should_reject = match &version_result {
+                VersionCheckResult::Accepted { version } => {
+                    trace!(
+                        target: "version_gate",
+                        peer_id = %peer_id,
+                        version = %version,
+                        min_version = %min_node_version,
+                        "Node version accepted"
+                    );
+                    false
+                }
+                VersionCheckResult::Rejected { detected, minimum } => {
+                    warn!(
+                        target: "version_gate",
+                        peer_id = %peer_id,
+                        detected = %detected,
+                        minimum = %minimum,
+                        "Node version below minimum - disconnecting"
+                    );
+                    true
+                }
+                VersionCheckResult::Legacy => {
+                    // Phase 2: Legacy peers (no version) are rejected
+                    warn!(
+                        target: "version_gate",
+                        peer_id = %peer_id,
+                        agent_version = %info.agent_version,
+                        min_version = %min_node_version,
+                        "Legacy node without version - disconnecting"
+                    );
+                    true
+                }
+                VersionCheckResult::ParseError { agent_string } => {
+                    warn!(
+                        target: "version_gate",
+                        peer_id = %peer_id,
+                        agent_string = %agent_string,
+                        "Could not parse node version - disconnecting"
+                    );
+                    true
+                }
+            };
+
+            if should_reject {
+                // Emit rejection event for monitoring
+                self.send_event(NetworkEvent::PeerVersionRejected {
+                    peer_id,
+                    peer_type,
+                    result: version_result,
+                    min_version: min_node_version.to_string(),
+                });
+
+                // Disconnect without blocklisting - allows peer to retry after upgrade
+                let _ = self.swarm.disconnect_peer_id(peer_id);
+                return;
+            }
+        } else {
+            // For non-node peers (clients), just log for observability
+            match &version_result {
+                VersionCheckResult::Accepted { version } => {
+                    trace!(
+                        target: "version_gate",
+                        peer_id = %peer_id,
+                        version = %version,
+                        peer_type = %peer_type,
+                        "Peer version detected (no enforcement for clients)"
+                    );
+                }
+                VersionCheckResult::Legacy => {
+                    debug!(
+                        target: "version_gate",
+                        peer_id = %peer_id,
+                        peer_type = %peer_type,
+                        agent_version = %info.agent_version,
+                        "Legacy peer detected (no enforcement for clients)"
+                    );
+                }
+                VersionCheckResult::ParseError { agent_string } => {
+                    debug!(
+                        target: "version_gate",
+                        peer_id = %peer_id,
+                        agent_string = %agent_string,
+                        "Could not parse peer version (no enforcement for clients)"
+                    );
+                }
+                VersionCheckResult::Rejected { .. } => {
+                    // This shouldn't happen for clients since we pass None for min_version
+                }
+            }
         }
 
         let has_dialed = self.dialed_peers.contains(&peer_id);

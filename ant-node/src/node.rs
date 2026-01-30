@@ -644,6 +644,39 @@ impl Node {
                 event_header = "NetworkWideReplication";
                 self.perform_network_wide_replication(keys);
             }
+            NetworkEvent::PeerVersionChecked {
+                peer_id,
+                peer_type,
+                result,
+            } => {
+                event_header = "PeerVersionChecked";
+                // Version check completed - logging already done in identify handler
+                // This event is primarily for external monitoring/metrics
+                trace!(
+                    target: "version_gate",
+                    peer_id = %peer_id,
+                    peer_type = %peer_type,
+                    result = ?result,
+                    "Peer version check completed"
+                );
+            }
+            NetworkEvent::PeerVersionRejected {
+                peer_id,
+                peer_type,
+                result,
+                min_version,
+            } => {
+                event_header = "PeerVersionRejected";
+                // Phase 2: Peer was rejected due to version requirements
+                warn!(
+                    target: "version_gate",
+                    peer_id = %peer_id,
+                    peer_type = %peer_type,
+                    result = ?result,
+                    min_version = %min_version,
+                    "Peer rejected due to version requirements and disconnected"
+                );
+            }
         }
 
         trace!(
