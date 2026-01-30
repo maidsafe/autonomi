@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769791119994,
+  "lastUpdate": 1769791385039,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -12008,6 +12008,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 216,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "14210c997dac96f09d8101353ccacf7df4d413a2",
+          "message": "Merge pull request #3434 from maqi/trusting_score\n\nnode(feature): re-enable trust-based replication scoring",
+          "timestamp": "2026-01-30T15:17:55Z",
+          "tree_id": "6404d9b07e07a32aae134421928decf605c4912b",
+          "url": "https://github.com/maidsafe/autonomi/commit/14210c997dac96f09d8101353ccacf7df4d413a2"
+        },
+        "date": 1769791384402,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 188,
             "unit": "MB"
           }
         ]
