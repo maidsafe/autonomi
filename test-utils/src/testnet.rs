@@ -81,7 +81,7 @@ impl DeploymentInventory {
         if path_from_env.exists() {
             Ok(path_from_env)
         } else {
-            let path = dirs_next::data_dir()
+            let path = dirs_next::data_local_dir()
                 .ok_or_else(|| eyre!("Could not obtain data_dir"))?
                 .join("autonomi")
                 .join("testnet-deploy")

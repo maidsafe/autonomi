@@ -125,7 +125,7 @@ pub(crate) struct Opt {
     /// The data directory location is platform specific:
     ///  - Linux: $HOME/.local/share/autonomi/client/logs
     ///  - macOS: $HOME/Library/Application Support/autonomi/client/logs
-    ///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\client\logs
+    ///  - Windows: C:\Users\<username>\AppData\Local\autonomi\client\logs
     #[allow(rustdoc::invalid_html_tags)]
     #[clap(long, value_parser = LogOutputDest::parse_from_str, verbatim_doc_comment, default_value = "data-dir"
     )]
