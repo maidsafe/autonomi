@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1769791387000,
+  "lastUpdate": 1769791389137,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -24918,6 +24918,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 30529,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "14210c997dac96f09d8101353ccacf7df4d413a2",
+          "message": "Merge pull request #3434 from maqi/trusting_score\n\nnode(feature): re-enable trust-based replication scoring",
+          "timestamp": "2026-01-30T15:17:55Z",
+          "tree_id": "6404d9b07e07a32aae134421928decf605c4912b",
+          "url": "https://github.com/maidsafe/autonomi/commit/14210c997dac96f09d8101353ccacf7df4d413a2"
+        },
+        "date": 1769791388378,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 13196,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 26819,
             "unit": "ms"
           },
           {
