@@ -192,11 +192,11 @@ pub(crate) struct NodeRecordStore {
     timestamp: SystemTime,
     /// Farthest record to self
     farthest_record: Option<(Key, Distance)>,
-    /// List of XorNames that are known to be paid for.
+    /// List of records that are known to be paid for, keyed by RecordKey.
     /// Enables nodes to know what data they should store and validates replicated data.
-    paid_for_list: HashMap<XorName, PaidForEntry>,
+    paid_for_list: HashMap<Key, PaidForEntry>,
     /// Index of paid-for entries by distance for efficient cleanup.
-    paid_for_by_distance: BTreeMap<Distance, XorName>,
+    paid_for_by_distance: BTreeMap<Distance, Key>,
 }
 
 /// Configuration for a `DiskBackedRecordStore`.
@@ -247,16 +247,19 @@ struct HistoricQuotingMetrics {
     timestamp: SystemTime,
 }
 
-/// Entry in the paid-for list tracking XorNames that have been verified as paid.
+/// Entry in the paid-for list tracking records that have been verified as paid.
 /// This enables nodes to know what data they should store and helps prevent
 /// the free data replication loophole.
 ///
 /// Stores the ProofOfPayment so that receivers can verify claims against the EVM chain.
 /// Without the proof, an attacker could claim data is paid for when it isn't.
+///
+/// Uses RecordKey (same bytes as XorName, wrapped in libp2p's opaque type) for
+/// consistency with the main records store.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct PaidForEntry {
-    /// The XorName/address of the paid data
-    pub xor_name: XorName,
+    /// The record key of the paid data (same bytes as XorName)
+    pub key: Vec<u8>,
     /// Data type (Chunk, Scratchpad, GraphEntry, Pointer)
     pub data_type: DataTypes,
     /// Timestamp when payment was verified
@@ -474,11 +477,11 @@ impl NodeRecordStore {
                 let mut list = HashMap::new();
                 let mut by_distance = BTreeMap::new();
                 for entry in persisted.entries {
-                    let xor_name = entry.xor_name;
-                    let addr = NetworkAddress::from(xor_name);
+                    let key = Key::new(&entry.key);
+                    let addr = NetworkAddress::from(&key);
                     let distance = local_address.distance(&addr);
-                    let _ = list.insert(xor_name, entry);
-                    let _ = by_distance.insert(distance, xor_name);
+                    let _ = list.insert(key.clone(), entry);
+                    let _ = by_distance.insert(distance, key);
                 }
                 info!("Restored {} paid-for entries from disk", list.len());
                 (list, by_distance)
@@ -759,18 +762,17 @@ impl NodeRecordStore {
         self.paid_for_list.len()
     }
 
-    /// Check if an XorName is in the paid-for list.
-    /// Used for replication validation in future phases.
-    #[allow(dead_code)]
-    pub(crate) fn is_paid_for(&self, xor_name: &XorName) -> bool {
-        self.paid_for_list.contains_key(xor_name)
+    /// Check if a record key is in the paid-for list.
+    /// Used during replication to give priority to locally verified paid data.
+    pub(crate) fn is_paid_for(&self, key: &Key) -> bool {
+        self.paid_for_list.contains_key(key)
     }
 
     /// Get a paid-for entry if it exists.
     /// Used for replication validation in future phases.
     #[allow(dead_code)]
-    pub(crate) fn get_paid_for_entry(&self, xor_name: &XorName) -> Option<&PaidForEntry> {
-        self.paid_for_list.get(xor_name)
+    pub(crate) fn get_paid_for_entry(&self, key: &Key) -> Option<&PaidForEntry> {
+        self.paid_for_list.get(key)
     }
 
     /// Add an entry to the paid-for list after payment verification.
@@ -780,26 +782,26 @@ impl NodeRecordStore {
     /// against the EVM chain when this information is gossiped.
     pub(crate) fn add_paid_for_entry(
         &mut self,
-        xor_name: XorName,
+        key: Key,
         data_type: DataTypes,
         proof: ProofOfPayment,
     ) {
-        if self.paid_for_list.contains_key(&xor_name) {
+        if self.paid_for_list.contains_key(&key) {
             return;
         }
 
-        let addr = NetworkAddress::from(xor_name);
+        let addr = NetworkAddress::from(&key);
         let distance = self.local_address.distance(&addr);
 
         let entry = PaidForEntry {
-            xor_name,
+            key: key.as_ref().to_vec(),
             data_type,
             payment_timestamp: SystemTime::now(),
             proof,
         };
 
-        let _ = self.paid_for_list.insert(xor_name, entry);
-        let _ = self.paid_for_by_distance.insert(distance, xor_name);
+        let _ = self.paid_for_list.insert(key.clone(), entry);
+        let _ = self.paid_for_by_distance.insert(distance, key);
 
         // Cleanup if we exceed max entries
         if self.paid_for_list.len() > MAX_PAID_FOR_ENTRIES {
@@ -834,20 +836,20 @@ impl NodeRecordStore {
         }
 
         // Collect the farthest 10% of entries that are beyond the increased distance
-        let xor_names_to_remove: Vec<XorName> = self
+        let keys_to_remove: Vec<Key> = self
             .paid_for_by_distance
             .iter()
             .rev()
             .take(target_cleanup_count)
             .filter(|(distance, _)| **distance >= increased_distance)
-            .map(|(_, xor_name)| *xor_name)
+            .map(|(_, key)| key.clone())
             .collect();
 
-        let removed_count = xor_names_to_remove.len();
+        let removed_count = keys_to_remove.len();
 
-        for xor_name in xor_names_to_remove {
-            if let Some(entry) = self.paid_for_list.remove(&xor_name) {
-                let addr = NetworkAddress::from(entry.xor_name);
+        for key in keys_to_remove {
+            if self.paid_for_list.remove(&key).is_some() {
+                let addr = NetworkAddress::from(&key);
                 let distance = self.local_address.distance(&addr);
                 let _ = self.paid_for_by_distance.remove(&distance);
             }
@@ -2052,37 +2054,39 @@ mod tests {
             peer_quotes: vec![],
         };
 
-        // Add a paid-for entry
+        // Add a paid-for entry using RecordKey (same bytes as XorName)
         let xor_name = XorName::random(&mut rand::thread_rng());
-        store.add_paid_for_entry(xor_name, DataTypes::Chunk, mock_proof.clone());
+        let key = Key::new(&xor_name);
+        store.add_paid_for_entry(key.clone(), DataTypes::Chunk, mock_proof.clone());
 
         // Verify it was added
         assert_eq!(store.paid_for_count(), 1);
-        assert!(store.is_paid_for(&xor_name));
+        assert!(store.is_paid_for(&key));
 
-        let entry = store.get_paid_for_entry(&xor_name);
+        let entry = store.get_paid_for_entry(&key);
         assert!(entry.is_some());
         let entry = entry.unwrap();
-        assert_eq!(entry.xor_name, xor_name);
+        assert_eq!(entry.key, key.as_ref().to_vec());
         assert!(matches!(entry.data_type, DataTypes::Chunk));
 
-        // Adding the same XorName again should not duplicate
-        store.add_paid_for_entry(xor_name, DataTypes::Chunk, mock_proof.clone());
+        // Adding the same key again should not duplicate
+        store.add_paid_for_entry(key.clone(), DataTypes::Chunk, mock_proof.clone());
         assert_eq!(store.paid_for_count(), 1);
 
         // Add another entry with different type
         let xor_name2 = XorName::random(&mut rand::thread_rng());
-        store.add_paid_for_entry(xor_name2, DataTypes::Scratchpad, mock_proof.clone());
+        let key2 = Key::new(&xor_name2);
+        store.add_paid_for_entry(key2.clone(), DataTypes::Scratchpad, mock_proof.clone());
 
         assert_eq!(store.paid_for_count(), 2);
-        assert!(store.is_paid_for(&xor_name2));
+        assert!(store.is_paid_for(&key2));
 
-        let entry2 = store.get_paid_for_entry(&xor_name2);
+        let entry2 = store.get_paid_for_entry(&key2);
         assert!(entry2.is_some());
         assert!(matches!(entry2.unwrap().data_type, DataTypes::Scratchpad));
 
-        // Check that unknown XorName is not in the list
-        let unknown = XorName::random(&mut rand::thread_rng());
+        // Check that unknown key is not in the list
+        let unknown = Key::new(&XorName::random(&mut rand::thread_rng()));
         assert!(!store.is_paid_for(&unknown));
         assert!(store.get_paid_for_entry(&unknown).is_none());
     }
@@ -2113,13 +2117,13 @@ mod tests {
         );
 
         // Add some paid-for entries
-        let xor_name1 = XorName::random(&mut rand::thread_rng());
-        let xor_name2 = XorName::random(&mut rand::thread_rng());
+        let key1 = Key::new(&XorName::random(&mut rand::thread_rng()));
+        let key2 = Key::new(&XorName::random(&mut rand::thread_rng()));
         let mock_proof = ProofOfPayment {
             peer_quotes: vec![],
         };
-        store.add_paid_for_entry(xor_name1, DataTypes::Chunk, mock_proof.clone());
-        store.add_paid_for_entry(xor_name2, DataTypes::GraphEntry, mock_proof.clone());
+        store.add_paid_for_entry(key1.clone(), DataTypes::Chunk, mock_proof.clone());
+        store.add_paid_for_entry(key2.clone(), DataTypes::GraphEntry, mock_proof.clone());
 
         assert_eq!(store.paid_for_count(), 2);
 
@@ -2140,17 +2144,80 @@ mod tests {
 
         // Verify entries were restored
         assert_eq!(new_store.paid_for_count(), 2);
-        assert!(new_store.is_paid_for(&xor_name1));
-        assert!(new_store.is_paid_for(&xor_name2));
+        assert!(new_store.is_paid_for(&key1));
+        assert!(new_store.is_paid_for(&key2));
 
-        let entry1 = new_store.get_paid_for_entry(&xor_name1);
+        let entry1 = new_store.get_paid_for_entry(&key1);
         assert!(entry1.is_some());
         assert!(matches!(entry1.unwrap().data_type, DataTypes::Chunk));
 
-        let entry2 = new_store.get_paid_for_entry(&xor_name2);
+        let entry2 = new_store.get_paid_for_entry(&key2);
         assert!(entry2.is_some());
         assert!(matches!(entry2.unwrap().data_type, DataTypes::GraphEntry));
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_paid_for_lookup_via_network_address() {
+        let temp_dir = std::env::temp_dir();
+        let unique_dir_name = uuid::Uuid::new_v4().to_string();
+        let storage_dir = temp_dir.join(unique_dir_name);
+        fs::create_dir_all(&storage_dir).expect("Failed to create directory");
+
+        let store_config = NodeRecordStoreConfig {
+            storage_dir: storage_dir.clone(),
+            historic_quote_dir: storage_dir,
+            ..Default::default()
+        };
+        let self_id = PeerId::random();
+        let (network_event_sender, _) = mpsc::channel(1);
+        let (swarm_cmd_sender, _) = mpsc::channel(1);
+
+        let mut store = NodeRecordStore::with_config(
+            self_id,
+            store_config,
+            network_event_sender,
+            swarm_cmd_sender,
+            #[cfg(feature = "open-metrics")]
+            None,
+        );
+
+        let mock_proof = ProofOfPayment {
+            peer_quotes: vec![],
+        };
+
+        // Create xornames and add paid-for entries via Key::new (the storage path)
+        let xor_name1 = XorName::random(&mut rand::thread_rng());
+        let xor_name2 = XorName::random(&mut rand::thread_rng());
+        let xor_name_unknown = XorName::random(&mut rand::thread_rng());
+
+        store.add_paid_for_entry(
+            Key::new(&xor_name1),
+            DataTypes::Chunk,
+            mock_proof.clone(),
+        );
+        store.add_paid_for_entry(
+            Key::new(&xor_name2),
+            DataTypes::GraphEntry,
+            mock_proof.clone(),
+        );
+
+        // Build NetworkAddresses from the same xornames (the replication path)
+        let addr1 = NetworkAddress::from(ChunkAddress::new(xor_name1));
+        let addr2 = NetworkAddress::from(ChunkAddress::new(xor_name2));
+        let addr_unknown = NetworkAddress::from(ChunkAddress::new(xor_name_unknown));
+
+        // Verify is_paid_for works via to_record_key() — the exact pattern used
+        // in add_keys_to_replication_fetcher for Phase 3 replication validation
+        assert!(store.is_paid_for(&addr1.to_record_key()));
+        assert!(store.is_paid_for(&addr2.to_record_key()));
+        assert!(!store.is_paid_for(&addr_unknown.to_record_key()));
+
+        // Verify the bytes match: Key::new(&xorname) == addr.to_record_key()
+        assert_eq!(
+            Key::new(&xor_name1).as_ref(),
+            addr1.to_record_key().as_ref()
+        );
     }
 }

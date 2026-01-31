@@ -24,7 +24,6 @@ use libp2p::swarm::ConnectionId;
 use libp2p::{Multiaddr, PeerId, identity::Keypair};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::sleep;
-use xor_name::XorName;
 
 use super::driver::event::MsgResponder;
 use super::error::{NetworkError, Result};
@@ -190,12 +189,12 @@ impl Network {
     /// Includes ProofOfPayment so other nodes can verify claims against EVM chain.
     pub(crate) fn notify_paid_for_entry_added(
         &self,
-        xor_name: XorName,
+        key: RecordKey,
         data_type: DataTypes,
         proof: ProofOfPayment,
     ) {
         self.send_local_swarm_cmd(LocalSwarmCmd::AddPaidForEntry {
-            xor_name,
+            key,
             data_type,
             proof,
         });
