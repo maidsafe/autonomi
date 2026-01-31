@@ -224,7 +224,7 @@ impl SwarmDriver {
                     .payment_received();
             }
             LocalSwarmCmd::AddPaidForEntry {
-                xor_name,
+                key,
                 data_type,
                 proof,
             } => {
@@ -233,7 +233,7 @@ impl SwarmDriver {
                     .behaviour_mut()
                     .kademlia
                     .store_mut()
-                    .add_paid_for_entry(xor_name, data_type, proof);
+                    .add_paid_for_entry(key, data_type, proof);
             }
             LocalSwarmCmd::RecordNotAtTargetLocation => {
                 cmd_string = "RecordNotAtTargetLocation";

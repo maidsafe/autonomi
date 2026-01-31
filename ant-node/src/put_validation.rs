@@ -847,10 +847,8 @@ impl Node {
 
         // Add to paid-for list regardless of reward amount (payment was verified)
         // Store the proof so other nodes can verify claims against EVM chain
-        if let Some(xor_name) = address.xorname() {
-            self.network()
-                .notify_paid_for_entry_added(xor_name, data_type, payment);
-        }
+        self.network()
+            .notify_paid_for_entry_added(address.to_record_key(), data_type, payment);
 
         if !reward_amount.is_zero() {
             // Notify `record_store` that the node received a payment.

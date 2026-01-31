@@ -22,7 +22,6 @@ use libp2p::{
     kad::{KBucketDistance as Distance, Record, RecordKey},
 };
 use tokio::sync::oneshot;
-use xor_name::XorName;
 
 use crate::networking::Addresses;
 
@@ -98,10 +97,10 @@ pub(crate) enum LocalSwarmCmd {
     /// Notify the node received a payment.
     PaymentReceived,
     /// Add an entry to the paid-for list after payment verification.
-    /// This tracks which XorNames have been paid for.
+    /// This tracks which records have been paid for.
     /// Includes ProofOfPayment so other nodes can verify claims against EVM chain.
     AddPaidForEntry {
-        xor_name: XorName,
+        key: RecordKey,
         data_type: DataTypes,
         proof: ProofOfPayment,
     },
@@ -231,13 +230,14 @@ impl Debug for LocalSwarmCmd {
                 write!(f, "LocalSwarmCmd::PaymentReceived")
             }
             LocalSwarmCmd::AddPaidForEntry {
-                xor_name,
+                key,
                 data_type,
                 proof: _,
             } => {
                 write!(
                     f,
-                    "LocalSwarmCmd::AddPaidForEntry {{ xor_name: {xor_name:?}, data_type: {data_type:?}, proof: <proof> }}"
+                    "LocalSwarmCmd::AddPaidForEntry {{ key: {:?}, data_type: {data_type:?}, proof: <proof> }}",
+                    PrettyPrintRecordKey::from(key)
                 )
             }
             LocalSwarmCmd::GetLocalRecord { key, .. } => {
