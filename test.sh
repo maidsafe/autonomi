@@ -243,7 +243,7 @@ EOF
         # Set environment variables for Rust logging
         if [ "$ENABLE_DEBUG_LOGGING" = true ]; then
             export RUST_LOG="debug"
-            export ANT_LOG="all"
+            export ANT_LOG="verbose"
         else
             export RUST_LOG="info"
             export ANT_LOG="networking,client,bootstrap"
@@ -397,7 +397,7 @@ run_test_with_logging() {
         # Set up environment for this test
         local test_env=""
         if [ "$ENABLE_DEBUG_LOGGING" = true ]; then
-            test_env="RUST_LOG=debug ANT_LOG=all"
+            test_env="RUST_LOG=debug ANT_LOG=verbose"
         else
             test_env="RUST_LOG=info"
         fi

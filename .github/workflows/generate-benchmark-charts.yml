@@ -101,7 +101,7 @@ jobs:
         shell: bash
         run: cargo run --bin ant --release -- --log-output-dest data-dir --local file upload the-test-data.zip
         env:
-          ANT_LOG: "all"
+          ANT_LOG: "verbose"
 
       #########################
       ### Stop Network      ###
