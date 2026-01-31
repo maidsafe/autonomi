@@ -367,7 +367,7 @@ impl Client {
             candidate_pools.len()
         );
 
-        // Convert to pool commitments
+        // Convert to pool commitments (for cost estimation)
         let pool_commitments: Vec<PoolCommitment> = candidate_pools
             .iter()
             .map(|pool| pool.to_commitment())
@@ -395,12 +395,16 @@ impl Client {
             .await?;
         let depth = tree.depth();
 
+        // Convert to packed commitments for compact calldata
+        let pool_commitments_packed: Vec<_> =
+            pool_commitments.iter().map(|c| c.to_packed()).collect();
+
         // Submit payment to smart contract
         debug!("Waiting for wallet lock");
         let lock_guard = wallet.lock().await;
         debug!("Locked wallet");
         let (winner_pool_hash, amount, gas_info) = wallet
-            .pay_for_merkle_tree(depth, pool_commitments, merkle_payment_timestamp)
+            .pay_for_merkle_tree(depth, pool_commitments_packed, merkle_payment_timestamp)
             .await?;
         let amount = AttoTokens::from_atto(amount);
         drop(lock_guard);

@@ -136,6 +136,74 @@ contract MerklePaymentVault is IMerklePaymentVault {
         return (winnerPoolHash, totalAmount);
     }
 
+    /// Pay for Merkle tree batch using packed calldata (v2)
+    ///
+    /// Uses packed data structures where each candidate's data type and total cost unit
+    /// are encoded into a single uint256 for smaller calldata and lower gas costs.
+    ///
+    /// @param depth Tree depth (determines number of nodes paid)
+    /// @param poolCommitments Array of packed pool commitments (2^ceil(depth/2))
+    /// @param merklePaymentTimestamp Client-provided timestamp
+    /// @return winnerPoolHash Hash of selected winner pool
+    /// @return totalAmount Total tokens paid to winners
+    function payForMerkleTree2(uint8 depth, PoolCommitmentPacked[] calldata poolCommitments, uint64 merklePaymentTimestamp)
+    external
+    override
+    returns (bytes32 winnerPoolHash, uint256 totalAmount)
+    {
+        // Validate depth
+        if (depth > MAX_MERKLE_DEPTH) {
+            revert DepthTooLarge(depth, MAX_MERKLE_DEPTH);
+        }
+
+        // Validate pool count: 2^ceil(depth/2)
+        uint256 expectedPools = _expectedRewardPools(depth);
+        if (poolCommitments.length != expectedPools) {
+            revert WrongPoolCount(expectedPools, poolCommitments.length);
+        }
+
+        // Select winner pool deterministically
+        uint256 winnerPoolIdx = _selectWinnerPool(poolCommitments.length, msg.sender, merklePaymentTimestamp);
+        PoolCommitmentPacked calldata winnerPool = poolCommitments[winnerPoolIdx];
+        winnerPoolHash = winnerPool.poolHash;
+
+        // Check if payment already exists for this pool
+        if (payments[winnerPoolHash].depth != 0) {
+            revert PaymentAlreadyExists(winnerPoolHash);
+        }
+
+        // Calculate median price from all CANDIDATES_PER_POOL packed candidates
+        uint256 medianPrice = _calculateMedianPricePacked(winnerPool.candidates);
+        uint256 numChunks = 1 << depth; // 2^depth chunks in the merkle tree
+        totalAmount = medianPrice * numChunks;
+
+        // Select depth winner nodes from pool
+        uint8[] memory winnerIndices = _selectWinnerNodes(depth, winnerPoolHash, merklePaymentTimestamp);
+
+        // Initialize storage for payment info
+        PaymentInfo storage info = payments[winnerPoolHash];
+        info.depth = depth;
+        info.merklePaymentTimestamp = merklePaymentTimestamp;
+
+        // Transfer tokens to winners and store payment records
+        // depth winners share the total amount (each gets totalAmount/depth)
+        uint256 amountPerNode = totalAmount / depth;
+        for (uint256 i = 0; i < depth; i++) {
+            uint8 nodeIdx = winnerIndices[i];
+            address rewardsAddress = winnerPool.candidates[nodeIdx].rewardsAddress;
+
+            // Transfer tokens to winner
+            antToken.transferFrom(msg.sender, rewardsAddress, amountPerNode);
+
+            // Store paid node info
+            info.paidNodeAddresses.push(PaidNode({rewardsAddress: rewardsAddress, poolIndex: nodeIdx}));
+        }
+
+        emit MerklePaymentMade(winnerPoolHash, depth, totalAmount, merklePaymentTimestamp);
+
+        return (winnerPoolHash, totalAmount);
+    }
+
     /// Estimate the cost of a Merkle tree payment without executing it
     ///
     /// This is a view function (0 gas) that runs the same pricing logic as
@@ -204,6 +272,73 @@ contract MerklePaymentVault is IMerklePaymentVault {
     function _selectWinnerPool(uint256 poolCount, address sender, uint64 timestamp) internal view returns (uint256) {
         bytes32 seed = keccak256(abi.encodePacked(block.prevrandao, block.timestamp, sender, timestamp));
         return uint256(seed) % poolCount;
+    }
+
+    /// Calculate median price from CANDIDATES_PER_POOL packed candidate quotes (v2)
+    function _calculateMedianPricePacked(CandidateNodePacked[16] calldata candidates) internal view returns (uint256) {
+        // Get quote for each candidate
+        uint256[16] memory quotes;
+        for (uint256 i = 0; i < 16; i++) {
+            quotes[i] = _getQuotePacked(candidates[i].dataTypeAndTotalCostUnit);
+        }
+
+        // Sort quotes
+        _sortQuotes(quotes);
+
+        // Return median (average of 8th and 9th elements, 0-indexed: [7] and [8])
+        return (quotes[7] + quotes[8]) / 2;
+    }
+
+    /// Calculate quote for a single node from packed data (v2)
+    ///
+    /// Unpacks the dataTypeAndTotalCostUnit field and applies the same pricing formula as _getQuote.
+    /// Format: packed = (totalCostUnit << 8) | dataType
+    function _getQuotePacked(uint256 dataTypeAndTotalCostUnit) internal view returns (uint256) {
+        // Unpack: dataType is lower 8 bits, totalCostUnit is upper bits
+        DataType dataType = DataType(uint8(dataTypeAndTotalCostUnit & 0xFF));
+        uint256 totalCostUnit = dataTypeAndTotalCostUnit >> 8;
+
+        uint256 lowerBound = _getBound(totalCostUnit);
+        uint256 upperBound = _getBound(totalCostUnit + costUnitPerDataType[dataType]);
+
+        // Edge cases: if bounds are equal or at precision, return minPrice
+        if (lowerBound == upperBound || lowerBound == PRECISION || upperBound == PRECISION) {
+            return minPrice;
+        }
+
+        // Calculate |rUpper - 1| and |rLower - 1| for logarithm
+        uint256 upperDiff = _absDiff(upperBound, PRECISION);
+        uint256 lowerDiff = _absDiff(lowerBound, PRECISION);
+
+        // Avoid log(0) - return minPrice if either diff is 0
+        if (upperDiff == 0 || lowerDiff == 0) {
+            return minPrice;
+        }
+
+        // Calculate ln|rUpper - 1| - ln|rLower - 1| using PRB Math
+        int256 logUpper = _calculateLn(upperDiff);
+        int256 logLower = _calculateLn(lowerDiff);
+        int256 logDiff = logUpper - logLower;
+
+        // Calculate linear part: rUpper - rLower
+        uint256 linearPart = _absDiff(upperBound, lowerBound);
+
+        // Formula components:
+        // partOne = (-s/ANT) * logDiff
+        // partTwo = pMin * linearPart / PRECISION
+        // partThree = linearPart / ANT
+        int256 partOne = (-int256(scalingFactor) * logDiff) / int256(ANT_PRICE * PRECISION);
+        uint256 partTwo = (linearPart * minPrice) / PRECISION;
+        uint256 partThree = linearPart / ANT_PRICE;
+
+        // Combine: price = partOne + partTwo - partThree
+        int256 price = partOne + int256(partTwo) - int256(partThree);
+
+        // Return price, with minPrice as floor
+        if (price <= 0) {
+            return minPrice;
+        }
+        return uint256(price);
     }
 
     /// Calculate median price from CANDIDATES_PER_POOL candidate quotes

@@ -8,7 +8,7 @@
 
 use crate::contract::merkle_payment_vault::error::Error;
 use crate::contract::merkle_payment_vault::handler::MerklePaymentVaultHandler;
-use crate::merkle_batch_payment::PoolHash;
+use crate::merkle_batch_payment::{PoolCommitmentPacked, PoolHash};
 use crate::utils::http_provider;
 
 pub mod error;
@@ -26,10 +26,37 @@ pub async fn get_merkle_payment_info(
         .merkle_payments_address()
         .ok_or(Error::MerklePaymentsAddressNotConfigured)?;
 
+    debug!(
+        "get_merkle_payment_info: contract={:?}, pool_hash={}",
+        merkle_vault_address,
+        hex::encode(winner_pool_hash)
+    );
+
     let provider = http_provider(network.rpc_url().clone());
     let merkle_vault = MerklePaymentVaultHandler::new(*merkle_vault_address, provider);
 
     merkle_vault.get_payment_info(winner_pool_hash).await
+}
+
+/// Helper function to get the packed pool commitments from a payment transaction's calldata.
+///
+/// Nodes use this to verify that clients sent correct cost units to the contract.
+/// The function finds the MerklePaymentMade event by winnerPoolHash, fetches the
+/// transaction, and decodes the payForMerkleTree2 calldata.
+pub async fn get_merkle_payment_packed_commitments(
+    network: &crate::Network,
+    winner_pool_hash: PoolHash,
+) -> Result<Vec<PoolCommitmentPacked>, Error> {
+    let merkle_vault_address = network
+        .merkle_payments_address()
+        .ok_or(Error::MerklePaymentsAddressNotConfigured)?;
+
+    let provider = http_provider(network.rpc_url().clone());
+    let merkle_vault = MerklePaymentVaultHandler::new(*merkle_vault_address, provider);
+
+    merkle_vault
+        .get_payment_packed_commitments(winner_pool_hash)
+        .await
 }
 
 #[cfg(test)]
@@ -121,10 +148,12 @@ mod tests {
             "Cost should be greater than zero"
         );
 
-        // Test 2: Pay for Merkle tree
+        // Test 2: Pay for Merkle tree (using packed commitments)
         println!("\nTest 2: Paying for Merkle tree...");
+        let pool_commitments_packed: Vec<_> =
+            pool_commitments.iter().map(|c| c.to_packed()).collect();
         let (winner_pool_hash, total_amount, gas_info) = vault_handler
-            .pay_for_merkle_tree(depth, pool_commitments.clone(), timestamp, &tx_config)
+            .pay_for_merkle_tree(depth, pool_commitments_packed, timestamp, &tx_config)
             .await
             .expect("Failed to pay for Merkle tree");
         println!("Gas used: {:?}", gas_info.actual_gas_used);
@@ -164,8 +193,10 @@ mod tests {
 
         // Test 4: Try to pay again for the same tree (should fail with PaymentAlreadyExists)
         println!("\nTest 4: Testing duplicate payment detection...");
+        let pool_commitments_packed: Vec<_> =
+            pool_commitments.iter().map(|c| c.to_packed()).collect();
         let duplicate_result = vault_handler
-            .pay_for_merkle_tree(depth, pool_commitments, timestamp, &tx_config)
+            .pay_for_merkle_tree(depth, pool_commitments_packed, timestamp, &tx_config)
             .await;
 
         match duplicate_result {

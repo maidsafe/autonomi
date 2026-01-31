@@ -61,6 +61,19 @@ interface IMerklePaymentVault {
         CandidateNode[16] candidates; // Fixed size: always 16
     }
 
+    /// @notice Packed candidate node for compact calldata (v2)
+    /// @dev dataTypeAndTotalCostUnit packs (totalCostUnit << 8) | dataType
+    struct CandidateNodePacked {
+        address rewardsAddress;
+        uint256 dataTypeAndTotalCostUnit;
+    }
+
+    /// @notice Packed pool commitment with 16 packed candidates (v2)
+    struct PoolCommitmentPacked {
+        bytes32 poolHash; // Cryptographic commitment to full pool data
+        CandidateNodePacked[16] candidates; // Fixed size: always 16
+    }
+
     /// @notice Individual paid node record
     struct PaidNode {
         address rewardsAddress;
@@ -190,6 +203,18 @@ interface IMerklePaymentVault {
     /// @return winnerPoolHash Hash of selected winner pool
     /// @return totalAmount Total tokens paid to winners
     function payForMerkleTree(uint8 depth, PoolCommitment[] calldata poolCommitments, uint64 merklePaymentTimestamp)
+    external
+    returns (bytes32 winnerPoolHash, uint256 totalAmount);
+
+    /// @notice Pay for Merkle tree batch using packed calldata (v2)
+    /// @dev Uses packed data structures for smaller calldata and lower gas costs.
+    ///      The dataTypeAndTotalCostUnit field packs (totalCostUnit << 8) | dataType.
+    /// @param depth Tree depth (determines number of nodes paid)
+    /// @param poolCommitments Array of packed pool commitments (2^ceil(depth/2))
+    /// @param merklePaymentTimestamp Client-provided timestamp
+    /// @return winnerPoolHash Hash of selected winner pool
+    /// @return totalAmount Total tokens paid to winners
+    function payForMerkleTree2(uint8 depth, PoolCommitmentPacked[] calldata poolCommitments, uint64 merklePaymentTimestamp)
     external
     returns (bytes32 winnerPoolHash, uint256 totalAmount);
 }
