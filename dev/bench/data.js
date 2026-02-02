@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770049911237,
+  "lastUpdate": 1770049913925,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -18217,6 +18217,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/7400ba1efe6bb834fec91823ab22f2ba1c605b9c"
         },
         "date": 1770035730551,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8396ddc5fc1a20214a668251c414743929d44e88",
+          "message": "Merge pull request #3431 from maqi/reject_peers_with_outdated_version\n\nfeat: implement version-based peer rejection (AUTO-822)",
+          "timestamp": "2026-02-02T15:05:26Z",
+          "tree_id": "be9fd145525e05a9d943aef8b3742b623273d9f4",
+          "url": "https://github.com/maidsafe/autonomi/commit/8396ddc5fc1a20214a668251c414743929d44e88"
+        },
+        "date": 1770049912746,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
