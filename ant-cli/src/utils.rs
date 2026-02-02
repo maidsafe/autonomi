@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::access::cached_merkle_payments;
 use ant_protocol::NetworkAddress;
 use autonomi::PublicKey;
 use autonomi::client::data_types::chunk::ChunkAddress;
@@ -67,8 +68,12 @@ pub fn parse_network_address(addr: &str) -> Result<NetworkAddress> {
 
 /// Collects upload summary from the event receiver.
 /// Send a signal to the returned sender to stop collecting and to return the result via the join handle.
+///
+/// If `file_name` is provided, Merkle batch payment receipts will be progressively saved to disk
+/// for upload resume support.
 pub fn collect_upload_summary(
     mut event_receiver: tokio::sync::mpsc::Receiver<ClientEvent>,
+    file_name: Option<String>,
 ) -> (
     tokio::task::JoinHandle<UploadSummary>,
     tokio::sync::oneshot::Sender<()>,
@@ -88,6 +93,14 @@ pub fn collect_upload_summary(
                             record_count += upload_summary.records_paid;
                             records_already_paid += upload_summary.records_already_paid;
                         }
+                        Some(ClientEvent::MerkleBatchPaymentComplete(receipt)) => {
+                            // Progressively save receipt to disk for upload resume
+                            if let Some(ref file) = file_name
+                                && let Err(e) = cached_merkle_payments::save_merkle_payment(file, &receipt)
+                            {
+                                eprintln!("Warning: Failed to save Merkle payment receipt: {e}");
+                            }
+                        }
                         None => break,
                     }
                 }
@@ -102,6 +115,14 @@ pub fn collect_upload_summary(
                     tokens_spent += upload_summary.tokens_spent;
                     record_count += upload_summary.records_paid;
                     records_already_paid += upload_summary.records_already_paid;
+                }
+                ClientEvent::MerkleBatchPaymentComplete(receipt) => {
+                    // Progressively save receipt to disk for upload resume
+                    if let Some(ref file) = file_name
+                        && let Err(e) = cached_merkle_payments::save_merkle_payment(file, &receipt)
+                    {
+                        eprintln!("Warning: Failed to save Merkle payment receipt: {e}");
+                    }
                 }
             }
         }

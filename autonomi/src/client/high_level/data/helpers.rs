@@ -12,6 +12,7 @@ use crate::client::config::{UPLOAD_FLOW_BATCH_SIZE, upload_retry_pause};
 use crate::client::payment::PayError::EvmWalletError;
 use crate::client::payment::PaymentOption;
 use crate::client::payment::Receipt;
+use crate::client::merkle_payments::MerklePaymentReceipt;
 use crate::client::{ClientEvent, PutError, UploadSummary};
 use crate::self_encryption::EncryptionStream;
 use crate::utils::format_upload_error;
@@ -40,6 +41,18 @@ impl Client {
             if let Err(err) = sender.send(ClientEvent::UploadComplete(summary)).await {
                 error!("Failed to send upload completion event: {err:?}");
             }
+        }
+    }
+
+    /// Send a Merkle batch payment completion event to the client event channel.
+    /// This allows progressive saving of the receipt to disk for upload resume.
+    pub(crate) async fn send_merkle_batch_payment_complete(&self, receipt: &MerklePaymentReceipt) {
+        if let Some(sender) = &self.client_event_sender
+            && let Err(err) = sender
+                .send(ClientEvent::MerkleBatchPaymentComplete(receipt.clone()))
+                .await
+        {
+            error!("Failed to send merkle batch payment event: {err:?}");
         }
     }
 

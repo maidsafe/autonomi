@@ -67,7 +67,7 @@ const CLIENT_EVENT_CHANNEL_SIZE: usize = 100;
 
 // Amount of peers to confirm into our routing table before we consider the client ready.
 use crate::client::config::ClientOperatingStrategy;
-use crate::client::merkle_payments::MerkleUploadError;
+use crate::client::merkle_payments::{MerklePaymentReceipt, MerkleUploadError};
 use crate::networking::{Multiaddr, Network, NetworkAddress, NetworkError, multiaddr_is_global};
 pub use ant_protocol::CLOSE_GROUP_SIZE;
 use ant_protocol::storage::RecordKind;
@@ -371,6 +371,9 @@ impl Client {
 #[derive(Debug, Clone)]
 pub enum ClientEvent {
     UploadComplete(UploadSummary),
+    /// Emitted after each Merkle tree batch payment completes.
+    /// This allows progressive saving of the receipt to disk for upload resume.
+    MerkleBatchPaymentComplete(MerklePaymentReceipt),
 }
 
 /// Summary of an upload operation.

@@ -1,0 +1,741 @@
+name: Large File Upload Test
+
+on:
+  merge_group:
+    branches: [main]
+  pull_request:
+    branches: ["*"]
+
+env:
+  ANT_DATA_PATH: /home/runner/.local/share/autonomi
+  CLIENT_DATA_PATH: /home/runner/.local/share/autonomi/client
+  NODE_DATA_PATH: /home/runner/.local/share/autonomi/node
+
+jobs:
+  large-file-upload:
+    name: Large file upload
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/build-binaries
+        timeout-minutes: 30
+
+      - name: Check we're on the right commit
+        run: git log -1 --oneline
+
+      - name: install ripgrep
+        shell: bash
+        run: sudo apt-get install -y ripgrep
+
+      - name: Check the available space
+        run: |
+          df
+          echo "Home dir:"
+          du -sh /home/runner/
+          echo "Home subdirs:"
+          du -sh /home/runner/*/
+          echo "PWD:"
+          du -sh .
+          echo "PWD subdirs:"
+          du -sh */
+
+      - name: Download material (135MB)
+        shell: bash
+        run: |
+          mkdir test_data_1
+          cd test_data_1
+          wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/Qi930/safe-qiWithListeners-x86_64.tar.gz
+          wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/Qi930/safenode-qiWithListeners-x86_64.tar.gz
+          ls -l
+          cd ..
+          tar -cvzf test_data_1.tar.gz test_data_1
+          ls -l
+
+      - name: Start a local network
+        uses: ./.github/actions/local-testnet
+        with:
+          action: start
+          enable-evm-testnet: true
+          node-path: target/release/antnode
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
+
+      - name: Check if ANT_PEERS and EVM_NETWORK are set
+        shell: bash
+        run: |
+          if [[ -z "$ANT_PEERS" ]]; then
+            echo "The ANT_PEERS variable has not been set"
+            exit 1
+          elif [[ -z "$EVM_NETWORK" ]]; then
+            echo "The EVM_NETWORK variable has not been set"
+            exit 1
+          else
+            echo "ANT_PEERS has been set to $ANT_PEERS"
+            echo "EVM_NETWORK has been set to $EVM_NETWORK"
+          fi
+
+      - name: Check the available space post download
+        run: |
+          df
+          echo "Home dir:"
+          du -sh /home/runner/
+          echo "Home subdirs:"
+          du -sh /home/runner/*/
+          echo "PWD:"
+          du -sh .
+          echo "PWD subdirs:"
+          du -sh */
+
+      - name: export default secret key
+        run: echo "SECRET_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" >> $GITHUB_ENV
+        shell: bash
+
+      - name: File upload
+        run: ./target/release/ant --log-output-dest data-dir --local file upload "./test_data_1.tar.gz" > ./upload_output 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 15
+
+      - name: showing the upload terminal output
+        run: cat upload_output
+        shell: bash
+        if: always()
+
+      - name: parse address
+        run: |
+          UPLOAD_ADDRESS=$(rg "At address: ([0-9a-f]*)" -o -r '$1' ./upload_output)
+          echo "Parsed address is $UPLOAD_ADDRESS"
+          echo "UPLOAD_ADDRESS=$UPLOAD_ADDRESS" >> $GITHUB_ENV
+        shell: bash
+
+      - name: File Download Error Check
+        run: ./target/release/ant --log-output-dest data-dir --local file download ${{ env.UPLOAD_ADDRESS }} . > ./error_output 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 5
+        continue-on-error: true
+
+      - name: Verify expected error message
+        run: |
+          cat ./error_output
+          if ! grep -q "cannot be used for streaming disk flushing" ./error_output; then
+            echo "Expected error message 'cannot be used for streaming disk flushing' not found in output"
+            exit 1
+          fi
+          echo "Expected error message found in output"
+        shell: bash
+
+      - name: File Download
+        run: ./target/release/ant --log-output-dest data-dir --local file download ${{ env.UPLOAD_ADDRESS }} ./downloaded_resources/downloaded_file > ./download_output 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 5
+
+      - name: showing the download terminal output
+        run: |
+          cat download_output
+          ls -l
+          cd downloaded_resources
+          ls -l
+        shell: bash
+        if: always()
+
+      - name: Verify chunk cache is empty after download
+        run: |
+          # Define the default chunk cache directory path for the runner
+          CACHE_DIR="$HOME/.local/share/autonomi/client/chunk_cache"
+          echo "Checking chunk cache directory: $CACHE_DIR"
+          echo "Note: Download was run with --disable-cache, so no chunks should be cached"
+          
+          if [ -d "$CACHE_DIR" ]; then
+            echo "Cache directory exists, checking contents..."
+            CACHE_FILES=$(find "$CACHE_DIR" -name "*.chunk" -type f 2>/dev/null | wc -l)
+            echo "Found $CACHE_FILES cached chunk files"
+            
+            if [ "$CACHE_FILES" -eq 0 ]; then
+              echo "✅ SUCCESS: Chunk cache is empty as expected (--disable-cache was used)"
+            else
+              echo "❌ FAILURE: Found $CACHE_FILES cached chunks despite using --disable-cache"
+              echo "Cache directory contents:"
+              ls -la "$CACHE_DIR"
+              exit 1
+            fi
+          else
+            echo "✅ SUCCESS: Chunk cache directory does not exist (expected with --disable-cache)"
+          fi
+        shell: bash
+        if: always()
+
+      - name: Confirming connection errors
+        shell: bash
+        timeout-minutes: 1
+        run: |
+          incoming_connection_errors=$(rg "IncomingConnectionError" $NODE_DATA_PATH -c --stats | \
+            rg "(\d+) matches" | rg "\d+" -o) || { echo "Failed to find IncomingConnectionError error"; exit 0; }
+          if [ -z "$incoming_connection_errors" ]; then
+            echo "Doesn't find any IncomingConnectionError error !"
+          else
+            echo "Found $incoming_connection_errors IncomingConnectionError errors."
+          fi
+          if ! rg "UnexpectedEof" $NODE_DATA_PATH -c --stats; then
+            echo "Doesn't find any UnexpectedEof error !"
+          else
+            echo "Found errors."
+            exit 1
+          fi
+
+      - name: Stop the local network and upload logs
+        if: always()
+        uses: ./.github/actions/local-testnet
+        with:
+          action: stop
+          log_file_prefix: ant_test_logs_large_file_upload
+
+  upload-retry-behavior:
+    name: Upload retry re-quoting behavior
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/build-binaries
+        timeout-minutes: 30
+
+      - name: Check we're on the right commit
+        run: git log -1 --oneline
+
+      - name: install ripgrep
+        shell: bash
+        run: sudo apt-get install -y ripgrep
+
+      - name: Create test file (200MB - large enough for interrupt timing)
+        shell: bash
+        run: |
+          # Create a 200MB file with random data to ensure unique chunks
+          # Using os.urandom() for cryptographically random bytes
+          # This gives enough time for quoting to complete but interrupt before upload finishes
+          python3 -c "
+          import os
+          with open('test_200mb.bin', 'wb') as f:
+              # Write in 1MB chunks to avoid memory issues
+              for _ in range(200):
+                  f.write(os.urandom(1024 * 1024))
+          "
+          ls -la test_200mb.bin
+          # Verify file has random content by checking first few bytes are different
+          echo "First 32 bytes (hex):"
+          xxd -l 32 test_200mb.bin
+
+      - name: Start a local network
+        uses: ./.github/actions/local-testnet
+        with:
+          action: start
+          enable-evm-testnet: true
+          node-path: target/release/antnode
+          antctl-path: target/release/antctl
+          evm-testnet-path: target/release/evm-testnet
+
+      - name: Check if ANT_PEERS and EVM_NETWORK are set
+        shell: bash
+        run: |
+          if [[ -z "$ANT_PEERS" ]]; then
+            echo "The ANT_PEERS variable has not been set"
+            exit 1
+          elif [[ -z "$EVM_NETWORK" ]]; then
+            echo "The EVM_NETWORK variable has not been set"
+            exit 1
+          else
+            echo "ANT_PEERS has been set to $ANT_PEERS"
+            echo "EVM_NETWORK has been set to $EVM_NETWORK"
+          fi
+
+      - name: export default secret key
+        run: echo "SECRET_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" >> $GITHUB_ENV
+        shell: bash
+
+      # ============================================================
+      # STEP 1: First upload - interrupt mid-way after quoting
+      # This leaves some chunks on the network
+      # ============================================================
+      - name: "Step 1: First upload (interrupt after quoting)"
+        run: |
+          echo "=== STEP 1: First upload - interrupt after quoting completes ==="
+          echo "This will leave some chunks on the network but not all."
+          echo ""
+          
+          # Create a named pipe for real-time output monitoring
+          mkfifo upload_pipe_1
+          
+          # Start upload in background with unbuffered output using stdbuf
+          # stdbuf -oL ensures line-buffered stdout, -eL for stderr
+          # Use --merkle flag to force merkle payments (200MB = ~50 chunks, below 64 chunk threshold)
+          stdbuf -oL -eL ./target/release/ant --log-output-dest data-dir --local file upload --merkle "./test_200mb.bin" 2>&1 | tee ./upload_1.log > upload_pipe_1 &
+          TEE_PID=$!
+          
+          # Get the actual ant process PID (parent of tee)
+          sleep 1
+          ANT_PID=$(pgrep -P $$ -f "ant.*upload" | head -1)
+          if [ -z "$ANT_PID" ]; then
+            ANT_PID=$(pgrep -f "ant.*file upload" | head -1)
+          fi
+          echo "Started upload process. TEE_PID: $TEE_PID, ANT_PID: $ANT_PID"
+          
+          # Monitor the pipe in background to keep it draining
+          cat upload_pipe_1 > /dev/null &
+          CAT_PID=$!
+          
+          # Wait for upload phase to start by monitoring the log
+          MAX_WAIT=180
+          WAITED=0
+          QUOTING_DONE=false
+          CHUNKS_STORED=0
+          
+          while [ $WAITED -lt $MAX_WAIT ]; do
+            sleep 1
+            WAITED=$((WAITED + 1))
+            
+            # Check if chunks are being stored (indicates upload phase in progress)
+            if [ -f ./upload_1.log ]; then
+              CHUNKS_STORED=$(rg -c "Chunk stored at:" ./upload_1.log 2>/dev/null || echo "0")
+              
+              # Wait until we see some chunks stored (quoting and payment done, upload started)
+              if [ "$CHUNKS_STORED" -gt 5 ]; then
+                echo "Upload phase in progress: $CHUNKS_STORED chunks stored at ${WAITED}s"
+                QUOTING_DONE=true
+                break
+              fi
+            fi
+            
+            # Check if process already finished
+            if [ -n "$ANT_PID" ] && ! kill -0 $ANT_PID 2>/dev/null; then
+              echo "Upload process finished before we could interrupt"
+              break
+            fi
+            
+            # Print progress every 10 seconds
+            if [ $((WAITED % 10)) -eq 0 ]; then
+              echo "Waiting for upload phase... (${WAITED}s, chunks: $CHUNKS_STORED)"
+            fi
+          done
+          
+          # Kill the upload process if still running
+          if [ -n "$ANT_PID" ] && kill -0 $ANT_PID 2>/dev/null; then
+            echo "Interrupting upload process (simulating Ctrl+C)..."
+            kill -SIGINT $ANT_PID 2>/dev/null || true
+            sleep 2
+            # Force kill if still running
+            if kill -0 $ANT_PID 2>/dev/null; then
+              echo "Force killing process..."
+              kill -SIGKILL $ANT_PID 2>/dev/null || true
+            fi
+          fi
+          
+          # Clean up pipe processes
+          kill $TEE_PID 2>/dev/null || true
+          kill $CAT_PID 2>/dev/null || true
+          wait $TEE_PID 2>/dev/null || true
+          rm -f upload_pipe_1
+          
+          # Give a moment for log file to be fully written
+          sleep 1
+          
+          echo ""
+          echo "=== Upload 1 output ==="
+          cat ./upload_1.log
+          
+          # Check results
+          FINAL_CHUNKS=$(rg -c "Chunk stored at:" ./upload_1.log 2>/dev/null || echo "0")
+          echo ""
+          echo "Chunks stored before interrupt: $FINAL_CHUNKS"
+          
+          if [ "$QUOTING_DONE" = true ]; then
+            if rg -q "At address:" ./upload_1.log 2>/dev/null; then
+              echo "⚠️  Upload completed before interrupt - file may be too small"
+            else
+              echo "✅ Successfully interrupted after quoting phase ($FINAL_CHUNKS chunks uploaded)"
+            fi
+          else
+            echo "⚠️  Could not confirm quoting completion before interrupt"
+          fi
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 15
+
+      # ============================================================
+      # STEP 2: Clean up ALL cached receipts and chunk cache
+      # ============================================================
+      - name: "Step 2: Clean up cached receipts and chunk cache"
+        run: |
+          echo "=== STEP 2: Cleaning up cached data ==="
+          
+          # Show what exists before cleanup
+          echo "Before cleanup:"
+          ls -la $CLIENT_DATA_PATH/ || echo "Client data path doesn't exist"
+          ls -la $CLIENT_DATA_PATH/payments/ 2>/dev/null || echo "No payments directory"
+          ls -la $CLIENT_DATA_PATH/chunk_cache/ 2>/dev/null || echo "No chunk_cache directory"
+          
+          # Remove cached payment receipts
+          rm -rf $CLIENT_DATA_PATH/payments/
+          echo "Removed payments directory"
+          
+          # Remove chunk cache
+          rm -rf $CLIENT_DATA_PATH/chunk_cache/
+          echo "Removed chunk_cache directory"
+          
+          # Show what exists after cleanup
+          echo "After cleanup:"
+          ls -la $CLIENT_DATA_PATH/ || echo "Client data path doesn't exist"
+        shell: bash
+
+      # ============================================================
+      # STEP 3: Second upload - interrupt mid-way after quoting
+      # This demonstrates that quoting happens for ALL chunks again
+      # ============================================================
+      - name: "Step 3: Second upload (interrupt after quoting)"
+        run: |
+          echo "=== STEP 3: Second upload - interrupt after quoting completes ==="
+          echo "BUG: Without cached receipt, ALL chunks will be re-quoted"
+          echo "even though some already exist on the network from Step 1."
+          echo ""
+          
+          # Create a named pipe for real-time output monitoring
+          mkfifo upload_pipe_2
+          
+          # Start upload in background with unbuffered output
+          # Use --merkle flag to force merkle payments
+          stdbuf -oL -eL ./target/release/ant --log-output-dest data-dir --local file upload --merkle "./test_200mb.bin" 2>&1 | tee ./upload_2.log > upload_pipe_2 &
+          TEE_PID=$!
+          
+          # Get the actual ant process PID
+          sleep 1
+          ANT_PID=$(pgrep -P $$ -f "ant.*upload" | head -1)
+          if [ -z "$ANT_PID" ]; then
+            ANT_PID=$(pgrep -f "ant.*file upload" | head -1)
+          fi
+          echo "Started upload process. TEE_PID: $TEE_PID, ANT_PID: $ANT_PID"
+          
+          # Monitor the pipe in background
+          cat upload_pipe_2 > /dev/null &
+          CAT_PID=$!
+          
+          # Wait for upload phase to start
+          MAX_WAIT=180
+          WAITED=0
+          QUOTING_DONE=false
+          CHUNKS_STORED=0
+          
+          while [ $WAITED -lt $MAX_WAIT ]; do
+            sleep 1
+            WAITED=$((WAITED + 1))
+            
+            if [ -f ./upload_2.log ]; then
+              CHUNKS_STORED=$(rg -c "Chunk stored at:" ./upload_2.log 2>/dev/null || echo "0")
+              
+              # Wait until we see some chunks stored
+              if [ "$CHUNKS_STORED" -gt 5 ]; then
+                echo "Upload phase in progress: $CHUNKS_STORED chunks stored at ${WAITED}s"
+                QUOTING_DONE=true
+                break
+              fi
+            fi
+            
+            if [ -n "$ANT_PID" ] && ! kill -0 $ANT_PID 2>/dev/null; then
+              echo "Upload process finished before we could interrupt"
+              break
+            fi
+            
+            if [ $((WAITED % 10)) -eq 0 ]; then
+              echo "Waiting for upload phase... (${WAITED}s, chunks: $CHUNKS_STORED)"
+            fi
+          done
+          
+          # Kill the upload process if still running
+          if [ -n "$ANT_PID" ] && kill -0 $ANT_PID 2>/dev/null; then
+            echo "Interrupting upload process (simulating Ctrl+C)..."
+            kill -SIGINT $ANT_PID 2>/dev/null || true
+            sleep 2
+            if kill -0 $ANT_PID 2>/dev/null; then
+              echo "Force killing process..."
+              kill -SIGKILL $ANT_PID 2>/dev/null || true
+            fi
+          fi
+          
+          # Clean up
+          kill $TEE_PID 2>/dev/null || true
+          kill $CAT_PID 2>/dev/null || true
+          wait $TEE_PID 2>/dev/null || true
+          rm -f upload_pipe_2
+          sleep 1
+          
+          echo ""
+          echo "=== Upload 2 output ==="
+          cat ./upload_2.log
+          
+          # Check results
+          FINAL_CHUNKS=$(rg -c "Chunk stored at:" ./upload_2.log 2>/dev/null || echo "0")
+          echo ""
+          echo "Chunks stored before interrupt: $FINAL_CHUNKS"
+          
+          if [ "$QUOTING_DONE" = true ]; then
+            if rg -q "At address:" ./upload_2.log 2>/dev/null; then
+              echo "⚠️  Upload completed before interrupt"
+            else
+              echo "✅ Successfully interrupted after quoting phase ($FINAL_CHUNKS chunks uploaded)"
+            fi
+          fi
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 15
+
+      # ============================================================
+      # STEP 4: Verify Step 3 behavior (DO NOT clean up receipts)
+      # Check: quoting for all chunks, some existed, partial upload
+      # This step should PASS - verifying quoting happened for all
+      # ============================================================
+      - name: "Step 4: Verify Step 3 behavior"
+        run: |
+          echo "=== STEP 4: Verify Step 3 output ==="
+          echo ""
+          
+          # Show current receipts (DO NOT delete them)
+          echo "Current cached receipts (keeping them for Step 5):"
+          ls -la $CLIENT_DATA_PATH/payments/ 2>/dev/null || echo "No payments directory"
+          
+          # Extract metrics from Step 3 log
+          echo ""
+          echo "Analyzing upload_2.log..."
+          
+          # Check for merkle payment activity (look for "Paying for" pattern - merkle payments)
+          # This indicates payment happened (which requires network queries for candidates)
+          PAYING_FOR_COUNT=$(rg -c "Paying for" ./upload_2.log 2>/dev/null || echo "0")
+          echo "Merkle payment activity (Paying for): $PAYING_FOR_COUNT"
+          
+          # Check for merkle tree processing
+          MERKLE_TREE_COUNT=$(rg -c "Merkle Tree" ./upload_2.log 2>/dev/null || echo "0")
+          echo "Merkle Tree mentions: $MERKLE_TREE_COUNT"
+          
+          # Check for existing chunks detection (chunks that already existed from Step 1)
+          EXISTING_COUNT=$(rg -c "already exist|chunks exist|known to exist" ./upload_2.log 2>/dev/null || echo "0")
+          echo "Existing chunk detections: $EXISTING_COUNT"
+          
+          # Count chunks stored in Step 3
+          CHUNKS_STORED_STEP3=$(rg -c "Chunk stored at:" ./upload_2.log 2>/dev/null || echo "0")
+          echo "Chunks stored in Step 3: $CHUNKS_STORED_STEP3"
+          
+          # Check for gas cost (indicates payment completed)
+          GAS_COST=$(rg -c "Gas cost:" ./upload_2.log 2>/dev/null || echo "0")
+          echo "Gas cost mentions: $GAS_COST"
+          
+          echo ""
+          echo "============================================================"
+          echo "STEP 4 VERIFICATION (Expected: PASS)"
+          echo "============================================================"
+          echo ""
+          echo "Expected behavior:"
+          echo "  1. Merkle payment was carried out (network queries for candidate pools)"
+          echo "  2. Some chunks were detected as already existing (from Step 1)"
+          echo "  3. Only paid/uploaded for chunks not on network"
+          echo ""
+          
+          STEP4_PASS=true
+          
+          # Check 1: Merkle payment should have happened
+          if [ "$PAYING_FOR_COUNT" = "0" ] && [ "$MERKLE_TREE_COUNT" = "0" ]; then
+            echo "❌ FAIL: No merkle payment activity detected in Step 3"
+            STEP4_PASS=false
+          else
+            echo "✅ PASS: Merkle payment was performed (Paying for: $PAYING_FOR_COUNT, Merkle Tree: $MERKLE_TREE_COUNT)"
+          fi
+          
+          # Check 2: Some chunks should have been detected as already existing
+          # This verifies Step 1 successfully uploaded some chunks
+          if [ "$CHUNKS_STORED_STEP3" = "0" ] && [ "$EXISTING_COUNT" = "0" ]; then
+            echo "⚠️  WARNING: Cannot verify existing chunks detection"
+          else
+            echo "✅ PASS: Upload activity detected (stored: $CHUNKS_STORED_STEP3, existing: $EXISTING_COUNT)"
+          fi
+          
+          echo ""
+          
+          # Save metrics for Step 6
+          echo "STEP3_PAYING_COUNT=$PAYING_FOR_COUNT" >> $GITHUB_ENV
+          echo "STEP3_MERKLE_COUNT=$MERKLE_TREE_COUNT" >> $GITHUB_ENV
+          echo "STEP3_CHUNKS_STORED=$CHUNKS_STORED_STEP3" >> $GITHUB_ENV
+          
+          if [ "$STEP4_PASS" = false ]; then
+            echo "❌ STEP 4 FAILED: Expected payment behavior not detected"
+            exit 1
+          else
+            echo "✅ STEP 4 PASSED: Payment behavior verified"
+          fi
+        shell: bash
+
+      # ============================================================
+      # STEP 5: Third upload - resume with cached receipt
+      # Expected: NO re-quoting, only upload remaining chunks
+      # ============================================================
+      - name: "Step 5: Third upload (resume with receipt)"
+        run: |
+          echo "=== STEP 5: Third upload - resume with cached receipt ==="
+          echo "Expected: No re-quoting, only upload chunks not yet uploaded."
+          echo ""
+          
+          # Show that we have a cached receipt
+          echo "Cached receipts available:"
+          ls -la $CLIENT_DATA_PATH/payments/ 2>/dev/null || echo "No payments directory found!"
+          
+          # Run the upload to completion
+          # Use --merkle flag to ensure merkle payment flow (matches Steps 1 and 3)
+          ./target/release/ant --log-output-dest data-dir --local file upload --merkle "./test_200mb.bin" > ./upload_3.log 2>&1 || true
+          
+          echo ""
+          echo "=== Upload 3 output ==="
+          cat ./upload_3.log
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 15
+
+      # ============================================================
+      # STEP 6: Analyze and verify expected behavior
+      # This step should FAIL with current buggy code - re-quoting occurs
+      # After fix: should PASS - no re-quoting when resuming with receipt
+      # ============================================================
+      - name: "Step 6: Analyze and verify behavior"
+        run: |
+          echo "============================================================"
+          echo "UPLOAD RETRY BEHAVIOR ANALYSIS"
+          echo "============================================================"
+          echo ""
+          
+          # Analyze Step 5 (upload_3.log)
+          echo "Analyzing Step 5 (upload_3.log) - Resume with cached receipt:"
+          echo ""
+          
+          # Check for merkle payment activity in Step 5
+          # "Paying for" indicates new payment is happening (which requires network queries)
+          STEP5_PAYING=$(rg -c "Paying for" ./upload_3.log 2>/dev/null || echo "0")
+          echo "  Merkle payment activity (Paying for): $STEP5_PAYING"
+          
+          # Check for merkle tree processing
+          STEP5_MERKLE=$(rg -c "Merkle Tree" ./upload_3.log 2>/dev/null || echo "0")
+          echo "  Merkle Tree mentions: $STEP5_MERKLE"
+          
+          # Check for existence checking activity
+          STEP5_CHECKING=$(rg -c "Checking.*chunks|need checking" ./upload_3.log 2>/dev/null || echo "0")
+          echo "  Existence checking activity: $STEP5_CHECKING"
+          
+          # Check for "All chunks accounted for" message (fix working)
+          ACCOUNTED_FOR=$(rg -c "All.*chunks accounted for|no network check needed" ./upload_3.log 2>/dev/null || echo "0")
+          echo "  'All chunks accounted for' messages: $ACCOUNTED_FOR"
+          
+          # Check for chunk upload activity
+          STEP5_CHUNKS_STORED=$(rg -c "Chunk stored at:" ./upload_3.log 2>/dev/null || echo "0")
+          echo "  Chunks stored: $STEP5_CHUNKS_STORED"
+          
+          # Check if all chunks already exist
+          ALL_EXIST=$(rg -c "All chunks already exist|nothing to upload" ./upload_3.log 2>/dev/null || echo "0")
+          echo "  'All chunks already exist' messages: $ALL_EXIST"
+          
+          # Check for success (upload completed)
+          SUCCESS=$(rg -c "At address:" ./upload_3.log 2>/dev/null || echo "0")
+          echo "  Upload success (At address): $SUCCESS"
+          
+          echo ""
+          echo "============================================================"
+          echo "STEP 6 VERIFICATION (Expected: PASS after fix, FAIL with bug)"
+          echo "============================================================"
+          echo ""
+          echo "Expected behavior (after fix):"
+          echo "  1. NO new payment should happen (receipt contains payment proofs)"
+          echo "  2. NO network existence checking needed (receipt has already_existed)"
+          echo "  3. Only upload chunks that were not uploaded yet"
+          echo ""
+          echo "Buggy behavior:"
+          echo "  1. New payment/quoting happens for chunks already paid"
+          echo "  2. Network queries happen for chunks already known"
+          echo "  3. Unnecessarily burdens the network"
+          echo ""
+          
+          STEP6_PASS=true
+          
+          # Critical check: No new payment should happen when resuming with receipt
+          if [ "$STEP5_PAYING" != "0" ]; then
+            echo "❌ FAIL: New payment occurred in Step 5 ($STEP5_PAYING payment activities)"
+            echo "   BUG DETECTED: Should not pay again when resuming with cached receipt"
+            STEP6_PASS=false
+          else
+            echo "✅ PASS: No new payment occurred in Step 5"
+          fi
+          
+          # Check if existence checking was skipped (fix working)
+          if [ "$ACCOUNTED_FOR" != "0" ]; then
+            echo "✅ PASS: Existence checking was skipped (chunks accounted for from receipt)"
+          elif [ "$STEP5_CHECKING" != "0" ]; then
+            echo "⚠️  INFO: Some existence checking occurred ($STEP5_CHECKING activities)"
+          fi
+          
+          # Check upload completed or all chunks exist
+          if [ "$SUCCESS" != "0" ]; then
+            echo "✅ PASS: Upload completed successfully"
+          elif [ "$ALL_EXIST" != "0" ]; then
+            echo "✅ PASS: All chunks already exist on network"
+          else
+            echo "⚠️  WARNING: Upload may not have completed (success=$SUCCESS, all_exist=$ALL_EXIST)"
+          fi
+          
+          echo ""
+          echo "============================================================"
+          echo "SUMMARY:"
+          echo "============================================================"
+          echo "Step 1: Initial upload interrupted (some chunks uploaded)"
+          echo "Step 2: Cleaned up cached receipts"  
+          echo "Step 3: Second upload interrupted - payment count: $STEP3_PAYING_COUNT"
+          echo "        (Payment happened for chunks as expected)"
+          echo "Step 4: PASSED - Kept receipt, verified payment behavior"
+          echo "Step 5: Resume upload - payment count: $STEP5_PAYING"
+          echo "Step 6: Verifying no re-payment on resume..."
+          echo ""
+          
+          if [ "$STEP6_PASS" = false ]; then
+            echo "============================================================"
+            echo "❌ STEP 6 FAILED: BUG CONFIRMED"
+            echo "============================================================"
+            echo ""
+            echo "New payment occurred when resuming with cached receipt."
+            echo "This demonstrates the bug described in AUTO-848:"
+            echo "  - On retry, ALL chunks require new payment"
+            echo "  - Even chunks with existing payment proofs are re-paid"
+            echo "  - Network queries happen for chunks already known to exist"
+            echo "  - This unnecessarily burdens the network"
+            echo ""
+            echo "Expected behavior after fix:"
+            echo "  - Chunks with payment proofs should NOT be re-paid"
+            echo "  - Chunks known to exist should NOT be re-checked"
+            echo "  - Only upload chunks that haven't been uploaded yet"
+            echo ""
+            exit 1
+          else
+            echo "============================================================"
+            echo "✅ STEP 6 PASSED: No re-payment on resume"
+            echo "============================================================"
+            echo ""
+            echo "Resume behavior is correct - no unnecessary re-payment or re-checking."
+          fi
+        shell: bash
+
+      - name: Upload test logs
+        uses: actions/upload-artifact@v6
+        with:
+          name: upload-retry-test-logs
+          path: |
+            ./upload_1.log
+            ./upload_2.log
+            ./upload_3.log
+        if: always()
+
+      - name: Stop the local network and upload logs
+        if: always()
+        uses: ./.github/actions/local-testnet
+        with:
+          action: stop
+          log_file_prefix: ant_test_logs_upload_retry
