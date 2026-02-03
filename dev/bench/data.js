@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770125246735,
+  "lastUpdate": 1770125248512,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -18421,6 +18421,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/fd9b4ed6bf4412d6d9a5a01784e4f710c0795120"
         },
         "date": 1770116512805,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f5827b10f48fd07074941d83ff8e7bb4bc35b60e",
+          "message": "Merge pull request #3444 from maqi/always_stream_in_parallel_when_upload_with_merkle\n\nfix(autonomi): separate stream batch size from upload concurrency in merkle uploads",
+          "timestamp": "2026-02-03T12:02:13Z",
+          "tree_id": "85470bac7c8866c1a00d0ffe2d11bc1403bf2f1d",
+          "url": "https://github.com/maidsafe/autonomi/commit/f5827b10f48fd07074941d83ff8e7bb4bc35b60e"
+        },
+        "date": 1770125247969,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
