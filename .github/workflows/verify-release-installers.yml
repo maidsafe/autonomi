@@ -27,6 +27,7 @@ on:
         options:
           - deb
           - rpm
+          - apt
         default: deb
 
 jobs:
@@ -248,3 +249,110 @@ jobs:
 
           echo ""
           echo "Basic functionality tests passed"
+
+  verify-apt:
+    if: ${{ inputs.package_type == 'apt' }}
+    name: verify apt repo install
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version from tag
+        id: version
+        run: |
+          tag="${{ inputs.release_tag }}"
+          version="${tag#*-}"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Extracted version: $version"
+
+      - name: Configure APT repository
+        run: |
+          echo "Importing Autonomi signing key..."
+          curl -fsSL "https://${{ secrets.APT_REPO_DOMAIN }}/autonomi-signing-key.asc" \
+            | sudo gpg --dearmor -o /usr/share/keyrings/autonomi-archive-keyring.gpg
+
+          echo "Adding APT repository..."
+          echo "deb [signed-by=/usr/share/keyrings/autonomi-archive-keyring.gpg] https://${{ secrets.APT_REPO_DOMAIN }} stable main" \
+            | sudo tee /etc/apt/sources.list.d/autonomi.list
+
+          echo "Repository configured:"
+          cat /etc/apt/sources.list.d/autonomi.list
+
+      - name: Update package lists
+        run: |
+          echo "Running apt-get update..."
+          sudo apt-get update
+
+          echo "Checking autonomi package is available..."
+          apt-cache show autonomi
+
+      - name: Install autonomi package
+        run: |
+          echo "Installing autonomi via apt-get..."
+          sudo apt-get install -y autonomi
+
+      - name: Verify installed version
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          echo "Expected version: $version"
+
+          echo ""
+          echo "Installed package version:"
+          dpkg -s autonomi | grep -i version
+
+      - name: Verify binaries are installed
+        run: |
+          echo "Checking binary locations..."
+
+          for binary in ant antnode antctl; do
+            path="/usr/local/bin/$binary"
+            if [[ -x "$path" ]]; then
+              echo "  $binary: OK ($path)"
+            else
+              echo "  $binary: MISSING or not executable"
+              exit 1
+            fi
+          done
+
+          echo "All binaries installed correctly"
+
+      - name: Verify binaries execute
+        run: |
+          echo "Testing binary execution..."
+
+          echo "ant --version:"
+          ant --version
+
+          echo ""
+          echo "antnode --version:"
+          antnode --version
+
+          echo ""
+          echo "antctl --version:"
+          antctl --version
+
+          echo ""
+          echo "All binaries execute correctly"
+
+      - name: Test basic functionality
+        run: |
+          echo "Testing basic functionality..."
+
+          echo "ant --help:"
+          ant --help | head -20
+
+          echo ""
+          echo "antnode --help:"
+          antnode --help | head -20
+
+          echo ""
+          echo "antctl --help:"
+          antctl --help | head -20
+
+          echo ""
+          echo "Basic functionality tests passed"
+
+      - name: Verify upgrade path
+        run: |
+          echo "Testing apt-get upgrade path..."
+          sudo apt-get update
+          sudo apt-get upgrade -y autonomi
+          echo "Upgrade check completed successfully"

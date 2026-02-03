@@ -548,6 +548,23 @@ jobs:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
+  publish-apt-repo:
+    if: ${{
+        github.repository_owner == 'maidsafe' &&
+        (github.ref == 'refs/heads/stable' || startsWith(github.ref, 'refs/heads/rc'))
+      }}
+    name: publish apt repo
+    needs: [build-linux-deb]
+    uses: ./.github/workflows/publish-apt-repo.yml
+    secrets:
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+      APT_REPO_AWS_ACCESS_KEY_ID: ${{ secrets.APT_REPO_AWS_ACCESS_KEY_ID }}
+      APT_REPO_AWS_SECRET_ACCESS_KEY: ${{ secrets.APT_REPO_AWS_SECRET_ACCESS_KEY }}
+      APT_REPO_BUCKET_NAME: ${{ secrets.APT_REPO_BUCKET_NAME }}
+      APT_REPO_CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.APT_REPO_CLOUDFRONT_DISTRIBUTION_ID }}
+      APT_REPO_REGION: ${{ secrets.APT_REPO_REGION }}
+
   s3-release:
     if: ${{
         github.repository_owner == 'maidsafe' &&
@@ -925,6 +942,32 @@ jobs:
             echo "ant --version"
             echo "antnode --version"
             echo "antctl --version"
+            echo "\`\`\`"
+            echo ""
+            echo "---"
+            echo ""
+            echo "### Linux CLI Suite via APT Repository (Recommended for Debian/Ubuntu)"
+            echo ""
+            echo "The easiest way to install and keep the Autonomi CLI suite up to date on Debian/Ubuntu."
+            echo ""
+            echo "**One-time setup:**"
+            echo "\`\`\`bash"
+            echo "# Import the signing key"
+            echo "curl -fsSL https://${{ secrets.APT_REPO_DOMAIN }}/autonomi-signing-key.asc | sudo gpg --dearmor -o /usr/share/keyrings/autonomi-archive-keyring.gpg"
+            echo ""
+            echo "# Add the repository"
+            echo "echo 'deb [signed-by=/usr/share/keyrings/autonomi-archive-keyring.gpg] https://${{ secrets.APT_REPO_DOMAIN }} stable main' | sudo tee /etc/apt/sources.list.d/autonomi.list"
+            echo "\`\`\`"
+            echo ""
+            echo "**Install:**"
+            echo "\`\`\`bash"
+            echo "sudo apt-get update"
+            echo "sudo apt-get install autonomi"
+            echo "\`\`\`"
+            echo ""
+            echo "**Update to latest version:**"
+            echo "\`\`\`bash"
+            echo "sudo apt-get update && sudo apt-get upgrade autonomi"
             echo "\`\`\`"
             echo ""
             echo "---"

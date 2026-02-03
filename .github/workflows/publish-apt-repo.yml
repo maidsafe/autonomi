@@ -1,0 +1,246 @@
+# Reusable workflow for publishing Debian packages to the APT repository
+#
+# This workflow downloads DEB artifacts from the build, organises them into a
+# standard APT repository structure (pool/ + dists/), generates and GPG-signs
+# the metadata, syncs everything to S3, and invalidates the CloudFront cache.
+#
+# Usage from release.yml:
+#   publish-apt-repo:
+#     needs: [build-linux-deb]
+#     uses: ./.github/workflows/publish-apt-repo.yml
+#     secrets: inherit
+
+name: publish APT repository
+
+on:
+  workflow_call:
+    secrets:
+      GPG_PRIVATE_KEY:
+        description: 'GPG private key for repo signing (base64 encoded, armored)'
+        required: true
+      GPG_PASSPHRASE:
+        description: 'Passphrase for GPG private key'
+        required: true
+      APT_REPO_AWS_ACCESS_KEY_ID:
+        description: 'AWS access key ID for S3 write access'
+        required: true
+      APT_REPO_AWS_SECRET_ACCESS_KEY:
+        description: 'AWS secret access key for S3 write access'
+        required: true
+      APT_REPO_BUCKET_NAME:
+        description: 'S3 bucket name hosting the APT repository'
+        required: true
+      APT_REPO_CLOUDFRONT_DISTRIBUTION_ID:
+        description: 'CloudFront distribution ID for cache invalidation'
+        required: true
+      APT_REPO_REGION:
+        description: 'AWS region of the S3 bucket'
+        required: true
+
+jobs:
+  publish:
+    name: publish apt repo
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y dpkg-dev
+
+      - name: Set package version
+        id: version
+        run: |
+          release_year=$(grep 'release-year:' release-cycle-info | awk '{print $2}')
+          release_month=$(grep 'release-month:' release-cycle-info | awk '{print $2}')
+          release_cycle=$(grep 'release-cycle:' release-cycle-info | awk '{print $2}')
+          release_cycle_counter=$(grep 'release-cycle-counter:' release-cycle-info | awk '{print $2}')
+          version="$release_year.$release_month.$release_cycle.$release_cycle_counter"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Package version: $version"
+
+      - name: Download all DEB artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: autonomi-deb-*
+          path: deb-artifacts/
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.APT_REPO_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.APT_REPO_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.APT_REPO_REGION }}
+
+      - name: Download existing pool from S3
+        run: |
+          echo "Downloading existing pool/ from S3..."
+          mkdir -p repo
+          aws s3 sync \
+            "s3://${{ secrets.APT_REPO_BUCKET_NAME }}/pool/" \
+            repo/pool/ \
+            --no-progress || echo "No existing pool/ found (first run)"
+
+          echo "Downloading existing GPG public key..."
+          aws s3 cp \
+            "s3://${{ secrets.APT_REPO_BUCKET_NAME }}/autonomi-signing-key.asc" \
+            repo/autonomi-signing-key.asc \
+            --no-progress || echo "No existing key found; will upload from repo"
+
+          # Fall back to the key in the repository if not yet in S3
+          if [[ ! -f repo/autonomi-signing-key.asc ]]; then
+            cp resources/keys/autonomi-signing-key.asc repo/autonomi-signing-key.asc
+          fi
+
+      - name: Organise DEBs into pool structure
+        run: |
+          version="${{ steps.version.outputs.version }}"
+
+          # Architecture mapping: rust target -> debian arch
+          declare -A arch_map=(
+            ["x86_64-unknown-linux-musl"]="amd64"
+            ["aarch64-unknown-linux-musl"]="arm64"
+            ["armv7-unknown-linux-musleabihf"]="armhf"
+            ["arm-unknown-linux-musleabi"]="armel"
+          )
+
+          for target in "${!arch_map[@]}"; do
+            deb_arch="${arch_map[$target]}"
+            src="deb-artifacts/autonomi-deb-${target}/${version}.autonomi.${target}.deb"
+            dest_dir="repo/pool/main/a/autonomi"
+            dest="${dest_dir}/autonomi_${version}_${deb_arch}.deb"
+
+            if [[ -f "$src" ]]; then
+              mkdir -p "$dest_dir"
+              cp "$src" "$dest"
+              echo "Placed: $dest"
+            else
+              echo "Warning: DEB not found for $target at $src"
+            fi
+          done
+
+          echo ""
+          echo "Pool contents:"
+          find repo/pool/ -name "*.deb" | sort
+
+      - name: Generate APT metadata
+        run: |
+          cd repo
+
+          architectures=("amd64" "arm64" "armhf" "armel")
+
+          for arch in "${architectures[@]}"; do
+            pkg_dir="dists/stable/main/binary-${arch}"
+            mkdir -p "$pkg_dir"
+
+            echo "Generating Packages for ${arch}..."
+            dpkg-scanpackages --arch "$arch" pool/ > "$pkg_dir/Packages"
+            gzip -9c "$pkg_dir/Packages" > "$pkg_dir/Packages.gz"
+
+            count=$(grep -c "^Package:" "$pkg_dir/Packages" || true)
+            echo "  ${arch}: ${count} package(s)"
+          done
+
+      - name: Generate Release file
+        run: |
+          cd repo/dists/stable
+
+          # Generate Release file
+          cat > Release <<EOF
+          Origin: Autonomi
+          Label: Autonomi
+          Suite: stable
+          Codename: stable
+          Architectures: amd64 arm64 armhf armel
+          Components: main
+          Description: Autonomi Network CLI Suite
+          Date: $(date -Ru)
+          EOF
+
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' Release
+
+          # Add checksums for all metadata files
+          {
+            echo "MD5Sum:"
+            for f in $(find main/ -type f \( -name "Packages" -o -name "Packages.gz" \)); do
+              md5=$(md5sum "$f" | cut -d' ' -f1)
+              size=$(stat -c%s "$f")
+              echo " $md5 $size $f"
+            done
+
+            echo "SHA256:"
+            for f in $(find main/ -type f \( -name "Packages" -o -name "Packages.gz" \)); do
+              sha256=$(sha256sum "$f" | cut -d' ' -f1)
+              size=$(stat -c%s "$f")
+              echo " $sha256 $size $f"
+            done
+          } >> Release
+
+          echo "Release file:"
+          cat Release
+
+      - name: Import GPG key
+        id: gpg
+        run: |
+          echo "Importing GPG key..."
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | base64 -d | gpg --batch --import
+
+          key_id=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
+          echo "GPG Key ID: $key_id"
+          echo "key_id=$key_id" >> $GITHUB_OUTPUT
+
+          # Configure GPG for non-interactive use
+          mkdir -p ~/.gnupg
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          gpg-connect-agent reloadagent /bye || true
+
+      - name: Sign Release file
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          cd repo/dists/stable
+          key_id="${{ steps.gpg.outputs.key_id }}"
+
+          echo "Signing Release file..."
+
+          # Create InRelease (clearsigned - modern standard)
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$GPG_PASSPHRASE" --default-key "$key_id" \
+            --clearsign -o InRelease Release
+
+          # Create Release.gpg (detached signature - backwards compatibility)
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$GPG_PASSPHRASE" --default-key "$key_id" \
+            --detach-sign --armor -o Release.gpg Release
+
+          echo "Signed files:"
+          ls -la InRelease Release.gpg
+
+      - name: Sync to S3
+        run: |
+          echo "Syncing APT repository to S3..."
+          aws s3 sync repo/ "s3://${{ secrets.APT_REPO_BUCKET_NAME }}/" \
+            --delete \
+            --no-progress
+
+          echo "Sync complete"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          echo "Invalidating CloudFront cache..."
+          invalidation_id=$(aws cloudfront create-invalidation \
+            --distribution-id "${{ secrets.APT_REPO_CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/*" \
+            --query 'Invalidation.Id' \
+            --output text)
+
+          echo "Invalidation created: $invalidation_id"
+          echo "Waiting for invalidation to complete..."
+
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "${{ secrets.APT_REPO_CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --id "$invalidation_id"
+
+          echo "CloudFront cache invalidated"
