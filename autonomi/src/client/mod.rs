@@ -369,11 +369,15 @@ impl Client {
 
 /// Events that can be sent by the client.
 #[derive(Debug, Clone)]
+#[allow(clippy::enum_variant_names)]
 pub enum ClientEvent {
     UploadComplete(UploadSummary),
     /// Emitted after each Merkle tree batch payment completes.
     /// This allows progressive saving of the receipt to disk for upload resume.
     MerkleBatchPaymentComplete(MerklePaymentReceipt),
+    /// Emitted after each regular (non-merkle) batch payment completes.
+    /// This allows progressive saving of the receipt to disk for upload resume.
+    RegularBatchPaymentComplete(Receipt),
 }
 
 /// Summary of an upload operation.

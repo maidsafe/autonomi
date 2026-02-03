@@ -1575,6 +1575,7 @@ impl PyClientEvent {
         match self.inner {
             ClientEvent::UploadComplete(_) => "UploadComplete",
             ClientEvent::MerkleBatchPaymentComplete(_) => "MerkleBatchPaymentComplete",
+            ClientEvent::RegularBatchPaymentComplete(_) => "RegularBatchPaymentComplete",
         }
     }
 
@@ -1585,6 +1586,7 @@ impl PyClientEvent {
                 inner: summary.clone(),
             }),
             ClientEvent::MerkleBatchPaymentComplete(_) => None,
+            ClientEvent::RegularBatchPaymentComplete(_) => None,
         }
     }
 

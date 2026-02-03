@@ -8,7 +8,6 @@
 
 use autonomi::client::{ChunkBatchUploadState, payment::Receipt};
 use color_eyre::eyre::{Context, Result};
-use std::collections::HashMap;
 use std::fs::{DirEntry, File};
 use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
@@ -25,20 +24,30 @@ pub fn get_payments_dir() -> Result<PathBuf> {
     Ok(payments_dir)
 }
 
-/// Save the payment for the given file name to be reused later.
-pub fn save_payment(file: &str, upload_state: &ChunkBatchUploadState) -> Result<()> {
+/// Save a regular payment receipt directly to disk.
+/// This writes the `Receipt` in a format compatible with `load_payment_for_file`.
+pub fn save_regular_payment(file: &str, receipt: &Receipt) -> Result<()> {
     let dir = get_payments_dir()?;
-    let timestamp =
-        get_timestamp_from_receipt(upload_state.payment.as_ref().unwrap_or(&HashMap::new()));
+    let timestamp = get_timestamp_from_receipt(receipt);
     let file_hash = filename_short(file);
     let file_path = dir.join(format!("{timestamp}_{file_hash}"));
 
-    let file = File::create(&file_path)?;
-    let writer = BufWriter::new(&file);
-    serde_json::to_writer(writer, &upload_state)?;
+    let f = File::create(&file_path)?;
+    let writer = BufWriter::new(&f);
+    serde_json::to_writer(writer, receipt)?;
 
     println!("Cached payment for {file:?} to {}", file_path.display());
     Ok(())
+}
+
+/// Save the payment from a failed upload's batch state.
+/// Extracts the receipt and delegates to `save_regular_payment`.
+pub fn save_payment(file: &str, upload_state: &ChunkBatchUploadState) -> Result<()> {
+    if let Some(receipt) = &upload_state.payment {
+        save_regular_payment(file, receipt)
+    } else {
+        Ok(())
+    }
 }
 
 /// Load the payment for the given file name.
