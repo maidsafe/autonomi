@@ -429,6 +429,9 @@ pub async fn upload(
     } else {
         println!("Successfully uploaded: {file}");
         println!("At address: {local_addr}");
+        if !public {
+            println!("The above private address links to network address: {archive_addr}");
+        }
         info!("Successfully uploaded: {file} at address: {local_addr}");
         println!("Number of chunks uploaded: {}", summary.records_paid);
         println!(
