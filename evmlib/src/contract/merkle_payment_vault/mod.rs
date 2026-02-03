@@ -46,6 +46,7 @@ pub async fn get_merkle_payment_info(
 pub async fn get_merkle_payment_packed_commitments(
     network: &crate::Network,
     winner_pool_hash: PoolHash,
+    merkle_payment_timestamp: u64,
 ) -> Result<Vec<PoolCommitmentPacked>, Error> {
     let merkle_vault_address = network
         .merkle_payments_address()
@@ -55,7 +56,7 @@ pub async fn get_merkle_payment_packed_commitments(
     let merkle_vault = MerklePaymentVaultHandler::new(*merkle_vault_address, provider);
 
     merkle_vault
-        .get_payment_packed_commitments(winner_pool_hash)
+        .get_payment_packed_commitments(winner_pool_hash, merkle_payment_timestamp)
         .await
 }
 

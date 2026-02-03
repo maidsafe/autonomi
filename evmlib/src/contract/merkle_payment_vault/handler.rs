@@ -19,12 +19,23 @@ use alloy::primitives::FixedBytes;
 use alloy::providers::Provider;
 use alloy::sol_types::SolCall;
 use exponential_backoff::Backoff;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
-/// Maximum number of recent blocks to search when querying for MerklePaymentMade events.
-/// Public RPC providers reject unbounded eth_getLogs queries, so we limit the range.
-/// At ~0.25s block time on Arbitrum, 200_000 blocks covers roughly 14 hours.
-const EVENT_LOOKBACK_BLOCKS: u64 = 200_000;
+/// Arbitrum produces ~4 blocks per second (0.25s block time).
+const ARBITRUM_BLOCKS_PER_SECOND: u64 = 4;
+
+/// Fixed padding (in seconds) added to the adaptive lookback to absorb clock skew.
+const LOOKBACK_PADDING_SECS: u64 = 3600;
+
+/// Minimum lookback (blocks). Floor for fresh payments; ~14 hours at Arbitrum block time.
+const MIN_LOOKBACK_BLOCKS: u64 = 200_000;
+
+/// Maximum lookback (blocks). ~7.2 days at Arbitrum block time, aligns with
+/// `MERKLE_PAYMENT_EXPIRATION`.
+const MAX_LOOKBACK_BLOCKS: u64 = 2_500_000;
+
+/// Divisor for the safety margin added to the raw lookback estimate (1/5 = 20%).
+const LOOKBACK_MARGIN_DIVISOR: u64 = 5;
 
 pub struct MerklePaymentVaultHandler<P: Provider<N>, N: Network> {
     pub contract: IMerklePaymentVaultInstance<P, N>,
@@ -312,20 +323,33 @@ where
     pub async fn get_payment_packed_commitments(
         &self,
         winner_pool_hash: PoolHash,
+        merkle_payment_timestamp: u64,
     ) -> Result<Vec<PoolCommitmentPacked>, Error> {
         // Find the MerklePaymentMade event for this pool hash
         let pool_hash_topic = FixedBytes::<32>::from(winner_pool_hash);
 
         // Get the current block number so we can scope the event query.
         // Public RPC providers limit unbounded eth_getLogs queries, so we
-        // query only the most recent EVENT_LOOKBACK_BLOCKS blocks.
+        // compute an adaptive lookback based on the payment's age.
         let current_block = self
             .contract
             .provider()
             .get_block_number()
             .await
             .map_err(|e| Error::Rpc(format!("Failed to get current block number: {e}")))?;
-        let from_block = current_block.saturating_sub(EVENT_LOOKBACK_BLOCKS);
+
+        let now_unix = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let age_secs = now_unix.saturating_sub(merkle_payment_timestamp);
+        let raw_blocks = age_secs.saturating_mul(ARBITRUM_BLOCKS_PER_SECOND);
+        // Add 20% margin plus fixed padding for clock skew
+        let buffered = raw_blocks
+            .saturating_add(raw_blocks / LOOKBACK_MARGIN_DIVISOR)
+            .saturating_add(LOOKBACK_PADDING_SECS.saturating_mul(ARBITRUM_BLOCKS_PER_SECOND));
+        let lookback = buffered.clamp(MIN_LOOKBACK_BLOCKS, MAX_LOOKBACK_BLOCKS);
+        let from_block = current_block.saturating_sub(lookback);
 
         // Query events filtered by the indexed winnerPoolHash within the recent block range
         let events = self

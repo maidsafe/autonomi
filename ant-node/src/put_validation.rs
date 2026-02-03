@@ -1250,8 +1250,12 @@ impl Node {
         // to pay less than the correct amount, so we must not skip verification on transient failures.
         debug!("merkle payment: verifying cost units from on-chain calldata");
         let on_chain_commitments = {
-            let mut result =
-                get_merkle_payment_packed_commitments(self.evm_network(), winner_pool_hash).await;
+            let mut result = get_merkle_payment_packed_commitments(
+                self.evm_network(),
+                winner_pool_hash,
+                payment_info.merkle_payment_timestamp,
+            )
+            .await;
             for attempt in 2..=MAX_COST_UNIT_FETCH_RETRIES {
                 match &result {
                     Ok(_) => break,
@@ -1267,9 +1271,12 @@ impl Node {
                     RETRY_PAYMENT_VERIFICATION_WAIT_TIME_SECS,
                 ))
                 .await;
-                result =
-                    get_merkle_payment_packed_commitments(self.evm_network(), winner_pool_hash)
-                        .await;
+                result = get_merkle_payment_packed_commitments(
+                    self.evm_network(),
+                    winner_pool_hash,
+                    payment_info.merkle_payment_timestamp,
+                )
+                .await;
             }
             result.map_err(|e| {
                 let error_msg = format!(
