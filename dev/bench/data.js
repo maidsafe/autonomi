@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770125248512,
+  "lastUpdate": 1770125250545,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -25482,6 +25482,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 28417,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f5827b10f48fd07074941d83ff8e7bb4bc35b60e",
+          "message": "Merge pull request #3444 from maqi/always_stream_in_parallel_when_upload_with_merkle\n\nfix(autonomi): separate stream batch size from upload concurrency in merkle uploads",
+          "timestamp": "2026-02-03T12:02:13Z",
+          "tree_id": "85470bac7c8866c1a00d0ffe2d11bc1403bf2f1d",
+          "url": "https://github.com/maidsafe/autonomi/commit/f5827b10f48fd07074941d83ff8e7bb4bc35b60e"
+        },
+        "date": 1770125249999,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9794,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20384,
             "unit": "ms"
           },
           {
