@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770116513140,
+  "lastUpdate": 1770116514513,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -25341,6 +25341,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 30933,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fd9b4ed6bf4412d6d9a5a01784e4f710c0795120",
+          "message": "Merge pull request #3440 from maqi/cli-improvements\n\nfeat: CLI improvements to show network address for private uploads",
+          "timestamp": "2026-02-03T09:36:41Z",
+          "tree_id": "6e0102ecf36c4faa97326eab5ed8b569859f8c68",
+          "url": "https://github.com/maidsafe/autonomi/commit/fd9b4ed6bf4412d6d9a5a01784e4f710c0795120"
+        },
+        "date": 1770116514202,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 13857,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 28417,
             "unit": "ms"
           },
           {
