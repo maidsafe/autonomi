@@ -1367,7 +1367,8 @@ impl Component for Status<'_> {
                     format!(
                         "Each node will use {GB_PER_NODE}GB of storage and a small amount of memory, \
                         CPU, and Network bandwidth. Most computers can run many nodes at once, \
-                        but we recommend you add them gradually"
+                        but we recommend you add them gradually. \
+                        Welcome to launchpad"
                     ),
                     Style::default().fg(LIGHT_PERIWINKLE),
                 )]);
