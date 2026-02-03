@@ -20,7 +20,7 @@ ant-evm = { path = "../ant-evm", version = "0.1.20" }
 ant-merkle = "1.5.1"
 blake2 = "0.10"
 bls = { package = "blsttc", version = "8.0.1" }
-bytes = { version = "1.0.1", features = ["serde"] }
+bytes = { version = "1.11.1", features = ["serde"] }
 color-eyre = "0.6.3"
 crdts = { version = "7.3", default-features = false, features = ["merkle"] }
 custom_debug = "~0.6.1"
