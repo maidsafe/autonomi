@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770116514513,
+  "lastUpdate": 1770124977550,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7019,6 +7019,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.627466582309051,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f5827b10f48fd07074941d83ff8e7bb4bc35b60e",
+          "message": "Merge pull request #3444 from maqi/always_stream_in_parallel_when_upload_with_merkle\n\nfix(autonomi): separate stream batch size from upload concurrency in merkle uploads",
+          "timestamp": "2026-02-03T12:02:13Z",
+          "tree_id": "85470bac7c8866c1a00d0ffe2d11bc1403bf2f1d",
+          "url": "https://github.com/maidsafe/autonomi/commit/f5827b10f48fd07074941d83ff8e7bb4bc35b60e"
+        },
+        "date": 1770124968157,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 0.9628774369116669,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.622087993282205,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.6488232506414375,
             "unit": "MiB/s"
           }
         ]
