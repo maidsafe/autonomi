@@ -21,6 +21,11 @@ use alloy::sol_types::SolCall;
 use exponential_backoff::Backoff;
 use std::time::Duration;
 
+/// Maximum number of recent blocks to search when querying for MerklePaymentMade events.
+/// Public RPC providers reject unbounded eth_getLogs queries, so we limit the range.
+/// At ~0.25s block time on Arbitrum, 200_000 blocks covers roughly 14 hours.
+const EVENT_LOOKBACK_BLOCKS: u64 = 200_000;
+
 pub struct MerklePaymentVaultHandler<P: Provider<N>, N: Network> {
     pub contract: IMerklePaymentVaultInstance<P, N>,
 }
@@ -311,11 +316,24 @@ where
         // Find the MerklePaymentMade event for this pool hash
         let pool_hash_topic = FixedBytes::<32>::from(winner_pool_hash);
 
-        // Query events filtered by the indexed winnerPoolHash
+        // Get the current block number so we can scope the event query.
+        // Public RPC providers limit unbounded eth_getLogs queries, so we
+        // query only the most recent EVENT_LOOKBACK_BLOCKS blocks.
+        let current_block = self
+            .contract
+            .provider()
+            .get_block_number()
+            .await
+            .map_err(|e| Error::Rpc(format!("Failed to get current block number: {e}")))?;
+        let from_block = current_block.saturating_sub(EVENT_LOOKBACK_BLOCKS);
+
+        // Query events filtered by the indexed winnerPoolHash within the recent block range
         let events = self
             .contract
             .MerklePaymentMade_filter()
             .topic1(pool_hash_topic)
+            .from_block(from_block)
+            .to_block(current_block)
             .query()
             .await
             .map_err(|e| {

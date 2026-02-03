@@ -28,10 +28,14 @@ use ant_protocol::{
 use libp2p::PeerId;
 use libp2p::kad::{KBucketDistance as Distance, Record, RecordKey, U256};
 use std::collections::HashSet;
+use std::time::Duration;
 use xor_name::XorName;
 
 // We retry the payment verification once after waiting this many seconds to rule out the possibility of an EVM node state desync
 const RETRY_PAYMENT_VERIFICATION_WAIT_TIME_SECS: u64 = 5;
+
+// Maximum number of attempts when fetching on-chain calldata for cost unit verification
+const MAX_COST_UNIT_FETCH_RETRIES: u32 = 3;
 
 // Number of peers to query for topology verification in Merkle payments
 const PEERS_TO_QUERY: usize = CANDIDATES_PER_POOL + (CANDIDATES_PER_POOL / 4);
@@ -823,7 +827,7 @@ impl Node {
             Err(e) => {
                 warn!("Failed to verify record payment on the first attempt: {e}");
                 // Try again, because there could be a possible EVM node desync
-                tokio::time::sleep(std::time::Duration::from_secs(
+                tokio::time::sleep(Duration::from_secs(
                     RETRY_PAYMENT_VERIFICATION_WAIT_TIME_SECS,
                 ))
                 .await;
@@ -1178,7 +1182,7 @@ impl Node {
             } else {
                 warn!("Failed to get Merkle payment info on the first attempt, retrying...");
                 // Try again, because there could be a possible EVM node desync
-                tokio::time::sleep(std::time::Duration::from_secs(
+                tokio::time::sleep(Duration::from_secs(
                     RETRY_PAYMENT_VERIFICATION_WAIT_TIME_SECS,
                 ))
                 .await;
@@ -1241,32 +1245,56 @@ impl Node {
 
         debug!("Merkle proof structure verified successfully for {pretty_key:?}");
 
-        // Verify cost units: fetch the payment tx calldata and verify cost units match signed metrics
+        // Verify cost units: fetch the payment tx calldata and verify cost units match signed metrics.
+        // This check is mandatory — a malicious client could submit artificially low cost units
+        // to pay less than the correct amount, so we must not skip verification on transient failures.
         debug!("merkle payment: verifying cost units from on-chain calldata");
-        match get_merkle_payment_packed_commitments(self.evm_network(), winner_pool_hash).await {
-            Ok(on_chain_commitments) => {
-                proof
-                    .winner_pool
-                    .verify_cost_units(&on_chain_commitments, &winner_pool_hash)
-                    .map_err(|e| {
-                        let error_msg = format!("Cost unit verification failed: {e:?}");
-                        warn!("{error_msg} for {pretty_key:?}");
-                        PutValidationError::MerklePaymentVerificationFailed {
-                            record_key: pretty_key.clone().into_owned(),
-                            error: error_msg,
-                        }
-                    })?;
-                debug!("Cost unit verification passed for {pretty_key:?}");
+        let on_chain_commitments = {
+            let mut result =
+                get_merkle_payment_packed_commitments(self.evm_network(), winner_pool_hash).await;
+            for attempt in 2..=MAX_COST_UNIT_FETCH_RETRIES {
+                match &result {
+                    Ok(_) => break,
+                    Err(e) => {
+                        warn!(
+                            "Cost unit calldata fetch attempt {}/{MAX_COST_UNIT_FETCH_RETRIES} \
+                             failed for {pretty_key:?}: {e:?}. Retrying...",
+                            attempt - 1
+                        );
+                    }
+                }
+                tokio::time::sleep(Duration::from_secs(
+                    RETRY_PAYMENT_VERIFICATION_WAIT_TIME_SECS,
+                ))
+                .await;
+                result =
+                    get_merkle_payment_packed_commitments(self.evm_network(), winner_pool_hash)
+                        .await;
             }
-            Err(e) => {
-                // Log warning but don't fail - the calldata fetch is best-effort
-                // The payment was already verified via the smart contract's payment info
-                warn!(
-                    "Could not verify cost units from calldata for {pretty_key:?}: {e:?}. \
-                     Proceeding with existing verification only."
+            result.map_err(|e| {
+                let error_msg = format!(
+                    "Cost unit calldata fetch failed after {MAX_COST_UNIT_FETCH_RETRIES} attempts: {e:?}"
                 );
-            }
-        }
+                warn!("{error_msg} for {pretty_key:?}");
+                PutValidationError::MerklePaymentVerificationFailed {
+                    record_key: pretty_key.clone().into_owned(),
+                    error: error_msg,
+                }
+            })?
+        };
+
+        proof
+            .winner_pool
+            .verify_cost_units(&on_chain_commitments, &winner_pool_hash)
+            .map_err(|e| {
+                let error_msg = format!("Cost unit verification failed: {e:?}");
+                warn!("{error_msg} for {pretty_key:?}");
+                PutValidationError::MerklePaymentVerificationFailed {
+                    record_key: pretty_key.clone().into_owned(),
+                    error: error_msg,
+                }
+            })?;
+        debug!("Cost unit verification passed for {pretty_key:?}");
 
         // Verify network topology: get the N closest peers with majority knowledge
         let midpoint_address = proof.winner_pool.midpoint_proof.address();

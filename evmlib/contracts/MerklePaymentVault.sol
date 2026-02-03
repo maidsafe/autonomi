@@ -43,9 +43,6 @@ contract MerklePaymentVault is IMerklePaymentVault {
     /// Maximum cost unit for capacity calculation
     uint256 public maxCostUnit = 1e24;
 
-    /// Default cost unit assigned to each data type
-    uint256 public constant DEFAULT_COST_UNIT = 1e18;
-
     /// Cost unit per data type
     mapping(DataType => uint256) public costUnitPerDataType;
 
@@ -55,11 +52,11 @@ contract MerklePaymentVault is IMerklePaymentVault {
         require(_antToken != address(0), "Invalid token address");
         antToken = IERC20(_antToken);
 
-        // Initialize cost units per data type
-        costUnitPerDataType[DataType.Chunk] = DEFAULT_COST_UNIT;
-        costUnitPerDataType[DataType.GraphEntry] = DEFAULT_COST_UNIT;
-        costUnitPerDataType[DataType.Scratchpad] = DEFAULT_COST_UNIT;
-        costUnitPerDataType[DataType.Pointer] = DEFAULT_COST_UNIT;
+        // Initialize cost units per data type (matching prod contract)
+        costUnitPerDataType[DataType.GraphEntry] = 1;
+        costUnitPerDataType[DataType.Scratchpad] = 100;
+        costUnitPerDataType[DataType.Chunk] = 10;
+        costUnitPerDataType[DataType.Pointer] = 20;
     }
 
     // ============ Main Functions ============

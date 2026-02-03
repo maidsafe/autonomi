@@ -35,6 +35,30 @@ pub const CANDIDATES_PER_POOL: usize = 16;
 /// Maximum supported Merkle tree depth
 pub const MAX_MERKLE_DEPTH: u8 = 8;
 
+/// Number of bits available for total_cost_unit when packed with data_type (u8 = 8 bits)
+const TOTAL_COST_UNIT_BITS: usize = 248;
+
+/// Cost unit weights per data type, matching the production contract's `costUnitPerDataType` mapping.
+/// These weights determine the relative storage cost of each data type.
+const COST_UNIT_GRAPH_ENTRY: u64 = 1;
+const COST_UNIT_SCRATCHPAD: u64 = 100;
+const COST_UNIT_CHUNK: u64 = 10;
+const COST_UNIT_POINTER: u64 = 20;
+
+/// Get the cost unit for a Solidity DataType index.
+///
+/// Matches the contract's `costUnitPerDataType` mapping:
+///   GraphEntry(0) = 1, Scratchpad(1) = 100, Chunk(2) = 10, Pointer(3) = 20
+fn cost_unit_for_data_type(solidity_data_type: u8) -> U256 {
+    match solidity_data_type {
+        0 => U256::from(COST_UNIT_GRAPH_ENTRY),
+        1 => U256::from(COST_UNIT_SCRATCHPAD),
+        2 => U256::from(COST_UNIT_CHUNK),
+        3 => U256::from(COST_UNIT_POINTER),
+        _ => U256::ZERO,
+    }
+}
+
 /// Calculate expected number of reward pools for a given tree depth
 ///
 /// Formula: 2^ceil(depth/2)
@@ -100,6 +124,10 @@ pub struct PoolCommitmentPacked {
 /// - dataType occupies bits 0-7 (lower 8 bits)
 /// - totalCostUnit occupies bits 8-255
 pub fn encode_data_type_and_cost(data_type: u8, total_cost_unit: U256) -> U256 {
+    assert!(
+        total_cost_unit < (U256::from(1) << TOTAL_COST_UNIT_BITS),
+        "total_cost_unit must fit in {TOTAL_COST_UNIT_BITS} bits (top 8 bits reserved for packing)"
+    );
     (total_cost_unit << 8) | U256::from(data_type)
 }
 
@@ -114,26 +142,29 @@ pub fn decode_data_type_and_cost(packed: U256) -> (u8, U256) {
 
 /// Calculate total cost unit from QuotingMetrics
 ///
-/// The total cost unit is the node's total record count (1 cost unit per record).
+/// Matches the contract's `_getTotalCostUnit`: for each record type, multiplies the record
+/// count by that type's `costUnitPerDataType` weight, then sums the results.
 /// Falls back to close_records_stored if records_per_type is empty (fresh nodes).
 /// Uses a minimum of 1 to ensure non-zero cost unit.
 pub fn calculate_total_cost_unit(metrics: &QuotingMetrics) -> U256 {
-    // Sum records from records_per_type
-    let total_from_types: u64 = metrics
-        .records_per_type
-        .iter()
-        .map(|(_, count)| *count as u64)
-        .sum();
+    // Sum: costUnitPerDataType[dataType] * records, matching the contract
+    let total_from_types: U256 =
+        metrics
+            .records_per_type
+            .iter()
+            .fold(U256::ZERO, |acc, (data_type, count)| {
+                let solidity_type = data_type_conversion(*data_type);
+                acc + cost_unit_for_data_type(solidity_type) * U256::from(*count)
+            });
 
-    // Use close_records_stored as fallback for fresh nodes
-    let total_records = if total_from_types > 0 {
+    if total_from_types > U256::ZERO {
         total_from_types
     } else {
-        // Use close_records_stored, with minimum of 1 to ensure non-zero cost
-        std::cmp::max(metrics.close_records_stored as u64, 1)
-    };
-
-    U256::from(total_records)
+        // Use close_records_stored as fallback for fresh nodes, with minimum of 1
+        let fallback = std::cmp::max(metrics.close_records_stored as u64, 1);
+        let solidity_type = data_type_conversion(metrics.data_type);
+        cost_unit_for_data_type(solidity_type) * U256::from(fallback)
+    }
 }
 
 impl CandidateNode {
@@ -413,8 +444,11 @@ mod tests {
 
         let total_cost = calculate_total_cost_unit(&metrics);
 
-        // Total records = 10 + 20 + 5 = 35
-        assert_eq!(total_cost, U256::from(35));
+        // Rust type 0 -> Chunk(cost=10):   10 * 10 = 100
+        // Rust type 1 -> GraphEntry(cost=1): 20 * 1  = 20
+        // Rust type 2 -> Pointer(cost=20):   5  * 20 = 100
+        // Total = 220
+        assert_eq!(total_cost, U256::from(220u64));
     }
 
     #[test]
@@ -432,8 +466,8 @@ mod tests {
         };
 
         let total_cost = calculate_total_cost_unit(&metrics);
-        // Minimum of 1 record to ensure non-zero cost
-        assert_eq!(total_cost, U256::from(1));
+        // Fallback: max(0, 1) = 1 record, data_type 0 -> Chunk(cost=10), total = 10
+        assert_eq!(total_cost, U256::from(10u64));
     }
 
     #[test]
@@ -463,7 +497,7 @@ mod tests {
         let (data_type, total_cost) =
             decode_data_type_and_cost(packed.data_type_and_total_cost_unit);
         assert_eq!(data_type, 2); // Chunk data type after conversion
-        assert_eq!(total_cost, U256::from(10)); // 10 records * 1 cost unit per record
+        assert_eq!(total_cost, U256::from(100u64)); // 10 records * Chunk cost unit (10)
     }
 
     #[test]
