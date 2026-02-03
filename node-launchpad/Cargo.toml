@@ -2,7 +2,7 @@
 authors = ["MaidSafe Developers <dev@maidsafe.net>"]
 description = "TUI for running nodes on the Autonomi network"
 name = "node-launchpad"
-version = "0.6.2"
+version = "0.6.3-rc.1"
 edition = "2024"
 license = "GPL-3.0"
 homepage = "https://maidsafe.net"
