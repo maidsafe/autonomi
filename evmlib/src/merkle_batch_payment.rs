@@ -134,6 +134,7 @@ pub fn encode_data_type_and_cost(data_type: u8, total_cost_unit: U256) -> U256 {
 /// Decode data type and total cost unit from a packed U256
 ///
 /// Returns (data_type, total_cost_unit)
+#[cfg(test)]
 pub fn decode_data_type_and_cost(packed: U256) -> (u8, U256) {
     let data_type = (packed & U256::from(0xFF)).to::<u8>();
     let total_cost_unit = packed >> 8;
