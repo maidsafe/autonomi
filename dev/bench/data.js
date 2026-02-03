@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770116511763,
+  "lastUpdate": 1770116513140,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -18319,6 +18319,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/8396ddc5fc1a20214a668251c414743929d44e88"
         },
         "date": 1770049912746,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fd9b4ed6bf4412d6d9a5a01784e4f710c0795120",
+          "message": "Merge pull request #3440 from maqi/cli-improvements\n\nfeat: CLI improvements to show network address for private uploads",
+          "timestamp": "2026-02-03T09:36:41Z",
+          "tree_id": "6e0102ecf36c4faa97326eab5ed8b569859f8c68",
+          "url": "https://github.com/maidsafe/autonomi/commit/fd9b4ed6bf4412d6d9a5a01784e4f710c0795120"
+        },
+        "date": 1770116512805,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
