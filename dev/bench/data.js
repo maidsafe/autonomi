@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770222835042,
+  "lastUpdate": 1770222836782,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -18727,6 +18727,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/25e8a1718211f7b034e389b8e52600b866024433"
         },
         "date": 1770219755882,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8f61750d692392441d3278e2d8f1c24c32aa72a0",
+          "message": "Merge pull request #3447 from jacderida/chore-set_minimum_node_version\n\nchore: update minimum node version",
+          "timestamp": "2026-02-04T15:04:56Z",
+          "tree_id": "1804b52ad6f9f5caf841b75201888cde4728ed61",
+          "url": "https://github.com/maidsafe/autonomi/commit/8f61750d692392441d3278e2d8f1c24c32aa72a0"
+        },
+        "date": 1770222836285,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
