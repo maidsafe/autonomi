@@ -35,11 +35,11 @@ use std::fmt;
 /// This can be overridden via the `ANT_MIN_NODE_VERSION` environment variable.
 ///
 /// Format: (major, minor, patch)
-pub const MIN_NODE_VERSION: (u16, u16, u16) = (0, 4, 10);
+pub const MIN_NODE_VERSION: (u16, u16, u16) = (0, 4, 14);
 
 /// Get the minimum node version, checking environment variable override first.
 ///
-/// Environment variable format: `ANT_MIN_NODE_VERSION=0.4.10`
+/// Environment variable format: `ANT_MIN_NODE_VERSION=0.4.14`
 pub fn get_min_node_version() -> PeerVersion {
     if let Ok(env_version) = std::env::var("ANT_MIN_NODE_VERSION")
         && let Some(version) = PeerVersion::parse_semver(&env_version)
@@ -403,7 +403,7 @@ mod tests {
         let (major, minor, patch) = MIN_NODE_VERSION;
         assert_eq!(major, 0);
         assert_eq!(minor, 4);
-        assert_eq!(patch, 10);
+        assert_eq!(patch, 14);
     }
 
     // ============ Release Candidate (RC) Version Tests ============
