@@ -294,8 +294,10 @@ impl Client {
             );
         }
 
-        // Emit event for progressive saving of regular receipt to disk
-        if is_new_payment {
+        // Emit event for progressive saving of regular receipt to disk.
+        // Skip when receipt is empty (all chunks were free) to avoid caching
+        // an empty receipt that would cause all chunks to be skipped on resume.
+        if is_new_payment && !receipt.is_empty() {
             self.send_regular_batch_payment_complete(&receipt).await;
         }
 

@@ -10,7 +10,7 @@ use autonomi::client::{ChunkBatchUploadState, payment::Receipt};
 use color_eyre::eyre::{Context, Result};
 use std::fs::{DirEntry, File};
 use std::io::{BufReader, BufWriter};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // Cleanup old cached payments after 30 days
@@ -26,10 +26,19 @@ pub fn get_payments_dir() -> Result<PathBuf> {
 
 /// Save a regular payment receipt directly to disk.
 /// This writes the `Receipt` in a format compatible with `load_payment_for_file`.
+///
+/// Removes any previously saved receipt for the same file before writing,
+/// so that progressive saves don't accumulate stale files with different timestamps.
 pub fn save_regular_payment(file: &str, receipt: &Receipt) -> Result<()> {
     let dir = get_payments_dir()?;
-    let timestamp = get_timestamp_from_receipt(receipt);
     let file_hash = filename_short(file);
+
+    // Remove any existing receipt files for this file hash before saving the new one.
+    // Progressive saves can produce files with different timestamp prefixes;
+    // leaving stale files around risks loading an outdated receipt on resume.
+    remove_existing_receipts_for_hash(&dir, &file_hash)?;
+
+    let timestamp = get_timestamp_from_receipt(receipt);
     let file_path = dir.join(format!("{timestamp}_{file_hash}"));
 
     let f = File::create(&file_path)?;
@@ -89,6 +98,22 @@ fn cleanup_outdated_payments() -> Result<()> {
     for file in expired_files {
         println!("Removing expired cached payment file: {}", file.display());
         std::fs::remove_file(file)?;
+    }
+    Ok(())
+}
+
+/// Remove all existing receipt files whose name contains the given `file_hash`.
+/// Called before saving a new receipt so that progressive saves don't leave
+/// stale files with different timestamp prefixes.
+fn remove_existing_receipts_for_hash(dir: &Path, file_hash: &str) -> Result<()> {
+    let entries = std::fs::read_dir(dir)?;
+    for entry in entries.flatten() {
+        if let Some(name) = entry.file_name().to_str()
+            && name.contains(file_hash)
+            && entry.path().is_file()
+        {
+            std::fs::remove_file(entry.path())?;
+        }
     }
     Ok(())
 }
