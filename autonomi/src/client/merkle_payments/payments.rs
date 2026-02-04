@@ -18,7 +18,7 @@ use ant_protocol::{
     NetworkAddress,
     storage::{ChunkAddress, DataTypes},
 };
-use evmlib::merkle_batch_payment::{CostUnitOverflow, PoolCommitment};
+use evmlib::merkle_batch_payment::PoolCommitment;
 use futures::stream::FuturesUnordered;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -85,8 +85,6 @@ pub enum MerklePaymentError {
     TimestampError(#[from] std::time::SystemTimeError),
     #[error("Candidate pool verification failed: {0}")]
     PoolVerification(#[from] MerklePaymentVerificationError),
-    #[error("Cost unit packing overflow: {0}")]
-    CostUnitOverflow(#[from] CostUnitOverflow),
 }
 
 impl Client {
@@ -397,18 +395,12 @@ impl Client {
             .await?;
         let depth = tree.depth();
 
-        // Convert to packed commitments for compact calldata
-        let pool_commitments_packed = pool_commitments
-            .iter()
-            .map(|c| c.to_packed())
-            .collect::<Result<Vec<_>, _>>()?;
-
         // Submit payment to smart contract
         debug!("Waiting for wallet lock");
         let lock_guard = wallet.lock().await;
         debug!("Locked wallet");
         let (winner_pool_hash, amount, gas_info) = wallet
-            .pay_for_merkle_tree(depth, pool_commitments_packed, merkle_payment_timestamp)
+            .pay_for_merkle_tree(depth, pool_commitments, merkle_payment_timestamp)
             .await?;
         let amount = AttoTokens::from_atto(amount);
         drop(lock_guard);
