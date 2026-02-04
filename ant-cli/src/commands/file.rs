@@ -353,7 +353,8 @@ pub async fn upload(
     wallet.set_transaction_config(TransactionConfig { max_fee_per_gas });
 
     let event_receiver = client.enable_client_events();
-    let (upload_summary_thread, upload_completed_tx) = collect_upload_summary(event_receiver);
+    let (upload_summary_thread, upload_completed_tx) =
+        collect_upload_summary(event_receiver, Some(file.to_string()));
 
     info!(
         "Uploading {} file: {file}",

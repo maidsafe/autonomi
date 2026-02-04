@@ -6,10 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::access::{cached_merkle_payments, cached_payments};
 use ant_protocol::NetworkAddress;
 use autonomi::PublicKey;
 use autonomi::client::data_types::chunk::ChunkAddress;
 use autonomi::client::data_types::graph::GraphEntryAddress;
+use autonomi::client::payment::Receipt;
 use autonomi::client::{Amount, ClientEvent, UploadSummary};
 use autonomi::networking::PeerId;
 use color_eyre::Result;
@@ -67,8 +69,12 @@ pub fn parse_network_address(addr: &str) -> Result<NetworkAddress> {
 
 /// Collects upload summary from the event receiver.
 /// Send a signal to the returned sender to stop collecting and to return the result via the join handle.
+///
+/// If `file_name` is provided, payment receipts (both Merkle and regular) will be progressively
+/// saved to disk for upload resume support.
 pub fn collect_upload_summary(
     mut event_receiver: tokio::sync::mpsc::Receiver<ClientEvent>,
+    file_name: Option<String>,
 ) -> (
     tokio::task::JoinHandle<UploadSummary>,
     tokio::sync::oneshot::Sender<()>,
@@ -78,6 +84,7 @@ pub fn collect_upload_summary(
         let mut tokens_spent: Amount = Amount::from(0);
         let mut record_count = 0;
         let mut records_already_paid = 0;
+        let mut accumulated_regular_receipt = Receipt::new();
 
         loop {
             tokio::select! {
@@ -87,6 +94,23 @@ pub fn collect_upload_summary(
                             tokens_spent += upload_summary.tokens_spent;
                             record_count += upload_summary.records_paid;
                             records_already_paid += upload_summary.records_already_paid;
+                        }
+                        Some(ClientEvent::MerkleBatchPaymentComplete(receipt)) => {
+                            // Progressively save receipt to disk for upload resume
+                            if let Some(ref file) = file_name
+                                && let Err(e) = cached_merkle_payments::save_merkle_payment(file, &receipt)
+                            {
+                                eprintln!("Warning: Failed to save Merkle payment receipt: {e}");
+                            }
+                        }
+                        Some(ClientEvent::RegularBatchPaymentComplete(batch_receipt)) => {
+                            // Accumulate and progressively save receipt to disk for upload resume
+                            if let Some(ref file) = file_name {
+                                accumulated_regular_receipt.extend(batch_receipt);
+                                if let Err(e) = cached_payments::save_regular_payment(file, &accumulated_regular_receipt) {
+                                    eprintln!("Warning: Failed to save regular payment receipt: {e}");
+                                }
+                            }
                         }
                         None => break,
                     }
@@ -102,6 +126,23 @@ pub fn collect_upload_summary(
                     tokens_spent += upload_summary.tokens_spent;
                     record_count += upload_summary.records_paid;
                     records_already_paid += upload_summary.records_already_paid;
+                }
+                ClientEvent::MerkleBatchPaymentComplete(receipt) => {
+                    // Progressively save receipt to disk for upload resume
+                    if let Some(ref file) = file_name
+                        && let Err(e) = cached_merkle_payments::save_merkle_payment(file, &receipt)
+                    {
+                        eprintln!("Warning: Failed to save Merkle payment receipt: {e}");
+                    }
+                }
+                ClientEvent::RegularBatchPaymentComplete(batch_receipt) => {
+                    // Accumulate and progressively save receipt to disk for upload resume
+                    if let Some(ref file) = file_name {
+                        accumulated_regular_receipt.extend(batch_receipt);
+                        if let Err(e) = cached_payments::save_regular_payment(file, &accumulated_regular_receipt) {
+                            eprintln!("Warning: Failed to save regular payment receipt: {e}");
+                        }
+                    }
                 }
             }
         }

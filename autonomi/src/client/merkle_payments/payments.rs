@@ -35,6 +35,10 @@ pub struct MerklePaymentReceipt {
     pub file_chunk_counts: HashMap<String, usize>,
     /// Total amount paid for this Merkle batch
     pub amount_paid: AttoTokens,
+    /// Chunks that were found to already exist on the network (no payment needed)
+    /// This is persisted to avoid re-querying the network on resume
+    #[serde(default)]
+    pub already_existed: std::collections::HashSet<XorName>,
 }
 
 impl Default for MerklePaymentReceipt {
@@ -43,6 +47,7 @@ impl Default for MerklePaymentReceipt {
             proofs: HashMap::new(),
             file_chunk_counts: HashMap::new(),
             amount_paid: AttoTokens::zero(),
+            already_existed: std::collections::HashSet::new(),
         }
     }
 }
@@ -57,6 +62,12 @@ impl MerklePaymentReceipt {
                 .as_atto()
                 .saturating_add(other.amount_paid.as_atto()),
         );
+        self.already_existed.extend(other.already_existed);
+    }
+
+    /// Add chunks that were found to already exist on the network
+    pub fn add_already_existed(&mut self, chunks: impl IntoIterator<Item = XorName>) {
+        self.already_existed.extend(chunks);
     }
 }
 
@@ -437,6 +448,7 @@ impl Client {
             proofs,
             file_chunk_counts: HashMap::new(),
             amount_paid: amount,
+            already_existed: std::collections::HashSet::new(),
         };
 
         info!(
