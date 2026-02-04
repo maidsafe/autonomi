@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770216416676,
+  "lastUpdate": 1770216713310,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -12348,6 +12348,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 217,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b3a542a086958fce907357281cd5d4d5c5f37101",
+          "message": "Merge pull request #3445 from maqi/avoid_quoting_existed_chunks_during_reattempt_on_failure\n\nfix(autonomi): avoid re-quoting chunks on upload resume (AUTO-848)",
+          "timestamp": "2026-02-04T13:24:56Z",
+          "tree_id": "ec95a8a2ec3df5658feff443c4e5edf7b7de0b1c",
+          "url": "https://github.com/maidsafe/autonomi/commit/b3a542a086958fce907357281cd5d4d5c5f37101"
+        },
+        "date": 1770216712166,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 224,
             "unit": "MB"
           }
         ]
