@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770125250545,
+  "lastUpdate": 1770216416676,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7058,6 +7058,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.6488232506414375,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b3a542a086958fce907357281cd5d4d5c5f37101",
+          "message": "Merge pull request #3445 from maqi/avoid_quoting_existed_chunks_during_reattempt_on_failure\n\nfix(autonomi): avoid re-quoting chunks on upload resume (AUTO-848)",
+          "timestamp": "2026-02-04T13:24:56Z",
+          "tree_id": "ec95a8a2ec3df5658feff443c4e5edf7b7de0b1c",
+          "url": "https://github.com/maidsafe/autonomi/commit/b3a542a086958fce907357281cd5d4d5c5f37101"
+        },
+        "date": 1770216408132,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0271529581339394,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.57773872912589,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.600562237580573,
             "unit": "MiB/s"
           }
         ]
