@@ -151,8 +151,10 @@ mod tests {
 
         // Test 2: Pay for Merkle tree (using packed commitments)
         println!("\nTest 2: Paying for Merkle tree...");
-        let pool_commitments_packed: Vec<_> =
-            pool_commitments.iter().map(|c| c.to_packed()).collect();
+        let pool_commitments_packed: Vec<_> = pool_commitments
+            .iter()
+            .map(|c| c.to_packed().expect("cost unit packing"))
+            .collect();
         let (winner_pool_hash, total_amount, gas_info) = vault_handler
             .pay_for_merkle_tree(depth, pool_commitments_packed, timestamp, &tx_config)
             .await
@@ -194,8 +196,10 @@ mod tests {
 
         // Test 4: Try to pay again for the same tree (should fail with PaymentAlreadyExists)
         println!("\nTest 4: Testing duplicate payment detection...");
-        let pool_commitments_packed: Vec<_> =
-            pool_commitments.iter().map(|c| c.to_packed()).collect();
+        let pool_commitments_packed: Vec<_> = pool_commitments
+            .iter()
+            .map(|c| c.to_packed().expect("cost unit packing"))
+            .collect();
         let duplicate_result = vault_handler
             .pay_for_merkle_tree(depth, pool_commitments_packed, timestamp, &tx_config)
             .await;

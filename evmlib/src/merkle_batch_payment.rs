@@ -26,6 +26,21 @@ use std::path::PathBuf;
 #[cfg(any(test, feature = "test-utils"))]
 use thiserror::Error;
 
+/// Error returned when `total_cost_unit` exceeds the 248-bit limit during packing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CostUnitOverflow;
+
+impl std::fmt::Display for CostUnitOverflow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "total_cost_unit exceeds {TOTAL_COST_UNIT_BITS}-bit limit (top 8 bits reserved for packing)"
+        )
+    }
+}
+
+impl std::error::Error for CostUnitOverflow {}
+
 /// Pool hash type (32 bytes) - compatible with XorName without the dependency
 pub type PoolHash = [u8; 32];
 
@@ -123,12 +138,14 @@ pub struct PoolCommitmentPacked {
 /// Format: `packed = (totalCostUnit << 8) | dataType`
 /// - dataType occupies bits 0-7 (lower 8 bits)
 /// - totalCostUnit occupies bits 8-255
-pub fn encode_data_type_and_cost(data_type: u8, total_cost_unit: U256) -> U256 {
-    assert!(
-        total_cost_unit < (U256::from(1) << TOTAL_COST_UNIT_BITS),
-        "total_cost_unit must fit in {TOTAL_COST_UNIT_BITS} bits (top 8 bits reserved for packing)"
-    );
-    (total_cost_unit << 8) | U256::from(data_type)
+pub fn encode_data_type_and_cost(
+    data_type: u8,
+    total_cost_unit: U256,
+) -> Result<U256, CostUnitOverflow> {
+    if total_cost_unit >= (U256::from(1) << TOTAL_COST_UNIT_BITS) {
+        return Err(CostUnitOverflow);
+    }
+    Ok((total_cost_unit << 8) | U256::from(data_type))
 }
 
 /// Decode data type and total cost unit from a packed U256
@@ -170,23 +187,30 @@ pub fn calculate_total_cost_unit(metrics: &QuotingMetrics) -> U256 {
 
 impl CandidateNode {
     /// Convert to packed format for v2 contract calls
-    pub fn to_packed(&self) -> CandidateNodePacked {
+    pub fn to_packed(&self) -> Result<CandidateNodePacked, CostUnitOverflow> {
         let data_type = data_type_conversion(self.metrics.data_type);
         let total_cost_unit = calculate_total_cost_unit(&self.metrics);
-        CandidateNodePacked {
+        Ok(CandidateNodePacked {
             rewards_address: self.rewards_address,
-            data_type_and_total_cost_unit: encode_data_type_and_cost(data_type, total_cost_unit),
-        }
+            data_type_and_total_cost_unit: encode_data_type_and_cost(data_type, total_cost_unit)?,
+        })
     }
 }
 
 impl PoolCommitment {
     /// Convert to packed format for v2 contract calls
-    pub fn to_packed(&self) -> PoolCommitmentPacked {
-        PoolCommitmentPacked {
-            pool_hash: self.pool_hash,
-            candidates: self.candidates.clone().map(|c| c.to_packed()),
+    pub fn to_packed(&self) -> Result<PoolCommitmentPacked, CostUnitOverflow> {
+        let mut packed_candidates = Vec::with_capacity(CANDIDATES_PER_POOL);
+        for c in &self.candidates {
+            packed_candidates.push(c.to_packed()?);
         }
+        let candidates: [CandidateNodePacked; CANDIDATES_PER_POOL] = packed_candidates
+            .try_into()
+            .expect("Vec length matches CANDIDATES_PER_POOL");
+        Ok(PoolCommitmentPacked {
+            pool_hash: self.pool_hash,
+            candidates,
+        })
     }
 }
 
@@ -386,7 +410,7 @@ mod tests {
         let data_type: u8 = 2; // Chunk
         let total_cost_unit = U256::from(1000u64); // Record count
 
-        let packed = encode_data_type_and_cost(data_type, total_cost_unit);
+        let packed = encode_data_type_and_cost(data_type, total_cost_unit).unwrap();
         let (decoded_type, decoded_cost) = decode_data_type_and_cost(packed);
 
         assert_eq!(decoded_type, data_type);
@@ -399,7 +423,7 @@ mod tests {
         let data_type: u8 = 255;
         let total_cost_unit = U256::from(100u64);
 
-        let packed = encode_data_type_and_cost(data_type, total_cost_unit);
+        let packed = encode_data_type_and_cost(data_type, total_cost_unit).unwrap();
         let (decoded_type, decoded_cost) = decode_data_type_and_cost(packed);
 
         assert_eq!(decoded_type, data_type);
@@ -409,11 +433,19 @@ mod tests {
     #[test]
     fn test_encode_decode_zero_values() {
         // Test with zero values
-        let packed = encode_data_type_and_cost(0, U256::ZERO);
+        let packed = encode_data_type_and_cost(0, U256::ZERO).unwrap();
         let (decoded_type, decoded_cost) = decode_data_type_and_cost(packed);
 
         assert_eq!(decoded_type, 0);
         assert_eq!(decoded_cost, U256::ZERO);
+    }
+
+    #[test]
+    fn test_encode_returns_error_on_overflow() {
+        // total_cost_unit that uses all 256 bits should fail
+        let overflow_value = U256::MAX;
+        let result = encode_data_type_and_cost(0, overflow_value);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -422,7 +454,7 @@ mod tests {
         let data_type: u8 = 1;
         let large_cost = U256::from(u128::MAX);
 
-        let packed = encode_data_type_and_cost(data_type, large_cost);
+        let packed = encode_data_type_and_cost(data_type, large_cost).unwrap();
         let (decoded_type, decoded_cost) = decode_data_type_and_cost(packed);
 
         assert_eq!(decoded_type, data_type);
@@ -490,7 +522,7 @@ mod tests {
             metrics,
         };
 
-        let packed = candidate.to_packed();
+        let packed = candidate.to_packed().unwrap();
 
         assert_eq!(packed.rewards_address, candidate.rewards_address);
 
@@ -524,7 +556,7 @@ mod tests {
             candidates,
         };
 
-        let packed = pool.to_packed();
+        let packed = pool.to_packed().unwrap();
 
         assert_eq!(packed.pool_hash, pool.pool_hash);
         assert_eq!(packed.candidates.len(), CANDIDATES_PER_POOL);

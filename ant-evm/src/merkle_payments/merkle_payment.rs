@@ -11,8 +11,8 @@ use std::collections::HashSet;
 use super::merkle_tree::{BadMerkleProof, MerkleBranch, MidpointProof};
 use crate::RewardsAddress;
 use evmlib::merkle_batch_payment::{
-    CandidateNode, PoolCommitment, PoolCommitmentPacked, PoolHash, calculate_total_cost_unit,
-    encode_data_type_and_cost,
+    CandidateNode, CostUnitOverflow, PoolCommitment, PoolCommitmentPacked, PoolHash,
+    calculate_total_cost_unit, encode_data_type_and_cost,
 };
 use evmlib::quoting_metrics::QuotingMetrics;
 use libp2p::{
@@ -87,6 +87,8 @@ pub enum MerklePaymentVerificationError {
     },
     #[error("Winner pool hash not found in on-chain packed commitments")]
     WinnerPoolNotInCommitments,
+    #[error("Cost unit overflow during packing: {0}")]
+    CostUnitOverflow(#[from] CostUnitOverflow),
 }
 
 /// A node's signed quote for potential reward eligibility
@@ -250,7 +252,7 @@ impl MerklePaymentCandidatePool {
     ///
     /// This produces a smaller on-chain representation by packing
     /// data type and total cost unit into a single U256.
-    pub fn to_commitment_packed(&self) -> PoolCommitmentPacked {
+    pub fn to_commitment_packed(&self) -> Result<PoolCommitmentPacked, CostUnitOverflow> {
         self.to_commitment().to_packed()
     }
 
@@ -286,7 +288,8 @@ impl MerklePaymentCandidatePool {
             let expected_data_type =
                 evmlib::contract::data_type_conversion(signed_node.quoting_metrics.data_type);
             let expected_cost_unit = calculate_total_cost_unit(&signed_node.quoting_metrics);
-            let expected_packed = encode_data_type_and_cost(expected_data_type, expected_cost_unit);
+            let expected_packed =
+                encode_data_type_and_cost(expected_data_type, expected_cost_unit)?;
 
             if on_chain_candidate.data_type_and_total_cost_unit != expected_packed {
                 return Err(MerklePaymentVerificationError::CostUnitMismatch {
