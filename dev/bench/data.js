@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770219756445,
+  "lastUpdate": 1770219758308,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -25764,6 +25764,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 29263,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "25e8a1718211f7b034e389b8e52600b866024433",
+          "message": "Merge pull request #3443 from mickvandijke/feat-compact-merkle-calldata\n\nfeat(evmlib): add compact merkle payment calldata (v2)",
+          "timestamp": "2026-02-04T14:24:53Z",
+          "tree_id": "6297612ca98d20ccf71d5e597a71a7dd4f54ffcf",
+          "url": "https://github.com/maidsafe/autonomi/commit/25e8a1718211f7b034e389b8e52600b866024433"
+        },
+        "date": 1770219757765,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 12014,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 22947,
             "unit": "ms"
           },
           {
