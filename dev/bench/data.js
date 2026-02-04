@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770219653241,
+  "lastUpdate": 1770219754661,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -12416,6 +12416,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 224,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "25e8a1718211f7b034e389b8e52600b866024433",
+          "message": "Merge pull request #3443 from mickvandijke/feat-compact-merkle-calldata\n\nfeat(evmlib): add compact merkle payment calldata (v2)",
+          "timestamp": "2026-02-04T14:24:53Z",
+          "tree_id": "6297612ca98d20ccf71d5e597a71a7dd4f54ffcf",
+          "url": "https://github.com/maidsafe/autonomi/commit/25e8a1718211f7b034e389b8e52600b866024433"
+        },
+        "date": 1770219754074,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 201,
             "unit": "MB"
           }
         ]
