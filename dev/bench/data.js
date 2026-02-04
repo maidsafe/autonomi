@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770216718655,
+  "lastUpdate": 1770219653241,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7097,6 +7097,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.600562237580573,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "25e8a1718211f7b034e389b8e52600b866024433",
+          "message": "Merge pull request #3443 from mickvandijke/feat-compact-merkle-calldata\n\nfeat(evmlib): add compact merkle payment calldata (v2)",
+          "timestamp": "2026-02-04T14:24:53Z",
+          "tree_id": "6297612ca98d20ccf71d5e597a71a7dd4f54ffcf",
+          "url": "https://github.com/maidsafe/autonomi/commit/25e8a1718211f7b034e389b8e52600b866024433"
+        },
+        "date": 1770219645451,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.058934294954348,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.8793239917892475,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.628274832977057,
             "unit": "MiB/s"
           }
         ]
