@@ -257,6 +257,64 @@
   },
   {
     "type": "function",
+    "name": "payForMerkleTree2",
+    "inputs": [
+      {
+        "name": "depth",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "poolCommitments",
+        "type": "tuple[]",
+        "internalType": "struct IMerklePaymentVault.PoolCommitmentPacked[]",
+        "components": [
+          {
+            "name": "poolHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "candidates",
+            "type": "tuple[16]",
+            "internalType": "struct IMerklePaymentVault.CandidateNodePacked[16]",
+            "components": [
+              {
+                "name": "rewardsAddress",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "dataTypeAndTotalCostUnit",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "merklePaymentTimestamp",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "winnerPoolHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "totalAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "payments",
     "inputs": [
       {

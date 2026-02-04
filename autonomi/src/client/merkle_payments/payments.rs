@@ -378,7 +378,7 @@ impl Client {
             candidate_pools.len()
         );
 
-        // Convert to pool commitments
+        // Convert to pool commitments (for cost estimation)
         let pool_commitments: Vec<PoolCommitment> = candidate_pools
             .iter()
             .map(|pool| pool.to_commitment())
