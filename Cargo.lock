@@ -867,7 +867,7 @@ dependencies = [
 
 [[package]]
 name = "ant-cli"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "ant-build-info",
  "ant-logging",
@@ -902,7 +902,7 @@ dependencies = [
 
 [[package]]
 name = "ant-evm"
-version = "0.1.20"
+version = "0.1.21"
 dependencies = [
  "ant-merkle",
  "custom_debug",
@@ -972,7 +972,7 @@ dependencies = [
 
 [[package]]
 name = "ant-node"
-version = "0.4.14"
+version = "0.4.15"
 dependencies = [
  "aes-gcm-siv",
  "ant-bootstrap",
@@ -1121,7 +1121,7 @@ dependencies = [
 
 [[package]]
 name = "ant-protocol"
-version = "1.0.12"
+version = "1.0.13"
 dependencies = [
  "ant-build-info",
  "ant-evm",
@@ -1684,7 +1684,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "autonomi"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "alloy",
  "ant-bootstrap",
@@ -3533,7 +3533,7 @@ dependencies = [
 
 [[package]]
 name = "evmlib"
-version = "0.4.8"
+version = "0.4.9"
 dependencies = [
  "alloy",
  "dirs-next",

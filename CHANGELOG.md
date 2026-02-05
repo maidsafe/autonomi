@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2026-02-04
+
+### Network
+
+#### Added
+
+- Version-based peer rejection system that enforces minimum node version requirements during the
+  identify protocol exchange. Nodes running versions below the minimum are disconnected.
+- New metrics for version gating: `version_check_result` (tracking accepted, rejected, legacy, and
+  parse error outcomes) and `peer_type` (tracking node, client, and unknown peer types).
+
+#### Changed
+
+- Trust-based replication scoring has been re-enabled, allowing nodes to factor peer trust scores
+  into replication decisions.
+- The minimum required node version has been set to `0.4.14`.
+
+### Payments
+
+#### Changed
+
+- Merkle payment calldata has been compacted by packing data type and total cost unit into a single
+  `U256` value. This reduces on-chain transaction size and gas costs for merkle batch payments.
+
+### API
+
+#### Added
+
+- `MerkleBatchPaymentComplete` client event, emitted after each merkle tree batch payment completes.
+  This enables progressive saving of receipts to disk for upload resume support.
+- `RegularBatchPaymentComplete` client event, emitted after each regular batch payment completes,
+  providing the same progressive saving capability for non-merkle uploads.
+- `MerklePaymentReceipt::add_already_existed` method to record chunks that were found to already
+  exist on the network, avoiding redundant network queries on upload resume.
+- `already_existed` field on `MerklePaymentReceipt` to persist the set of chunks known to exist on
+  the network across upload resume attempts.
+
+#### Changed
+
+- Merkle upload resume now skips network existence checks for chunks that are already known to exist
+  or have been previously paid for, reducing unnecessary network queries.
+- Stream batch size and upload concurrency are now configured independently in merkle uploads. Stream
+  batch size uses `UPLOAD_FLOW_BATCH_SIZE` while upload concurrency uses `CHUNK_UPLOAD_BATCH_SIZE`.
+
+#### Fixed
+
+- Chunks that already existed on the network are no longer re-quoted during upload resume,
+  preventing unnecessary payment attempts.
+
+### Ant Client
+
+#### Added
+
+- The `file upload` command now displays the network address for private uploads alongside the
+  private address.
+
+#### Changed
+
+- Payment receipts are now progressively saved to disk during uploads for both merkle and regular
+  payment modes. This improves upload resume reliability by preserving payment state as batches
+  complete rather than only on failure.
+- Cached payment receipt files are now cleaned up before saving a new receipt, preventing stale
+  files with different timestamp prefixes from accumulating.
+
 ## 2026-01-28
 
 ### API
