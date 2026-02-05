@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770293301728,
+  "lastUpdate": 1770315051877,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7214,6 +7214,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.619679086623775,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ddedb690e927176c9de633630c3caefc603f2994",
+          "message": "Merge pull request #3448 from maidsafe/dependabot/github_actions/digicert/ssm-code-signing-1.2.1\n\nchore(deps): bump digicert/ssm-code-signing from 1.2.0 to 1.2.1",
+          "timestamp": "2026-02-05T16:50:12Z",
+          "tree_id": "11ad007b4cda22fcfebbf8bbe57dc4fded147209",
+          "url": "https://github.com/maidsafe/autonomi/commit/ddedb690e927176c9de633630c3caefc603f2994"
+        },
+        "date": 1770315044297,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.014411802598385,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.7416482895610255,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.596138042104578,
             "unit": "MiB/s"
           }
         ]
