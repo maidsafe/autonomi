@@ -246,7 +246,7 @@ jobs:
           "sm_client_cert_b64=$clean" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Setup DigiCert Software Trust Manager tools (installs smctl)
-        uses: digicert/ssm-code-signing@v1.2.0
+        uses: digicert/ssm-code-signing@v1.2.1
         with:
           sm_host: ${{ secrets.SM_HOST }}
           sm_api_key: ${{ secrets.SM_API_KEY }}
