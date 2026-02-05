@@ -36,10 +36,10 @@ jobs:
           - target: arm-unknown-linux-musleabi
             deb_arch: armel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: autonomi-${{ matrix.target }}
           path: artifacts/${{ matrix.target }}/release
@@ -162,7 +162,7 @@ jobs:
           gpg --verify "$output_deb.asc" "$output_deb"
 
       - name: Upload deb artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: autonomi-deb-${{ matrix.target }}
           path: |

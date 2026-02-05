@@ -12,6 +12,7 @@ use crate::client::config::{UPLOAD_FLOW_BATCH_SIZE, upload_retry_pause};
 use crate::client::payment::PayError::EvmWalletError;
 use crate::client::payment::PaymentOption;
 use crate::client::payment::Receipt;
+use crate::client::merkle_payments::MerklePaymentReceipt;
 use crate::client::{ClientEvent, PutError, UploadSummary};
 use crate::self_encryption::EncryptionStream;
 use crate::utils::format_upload_error;
@@ -40,6 +41,30 @@ impl Client {
             if let Err(err) = sender.send(ClientEvent::UploadComplete(summary)).await {
                 error!("Failed to send upload completion event: {err:?}");
             }
+        }
+    }
+
+    /// Send a Merkle batch payment completion event to the client event channel.
+    /// This allows progressive saving of the receipt to disk for upload resume.
+    pub(crate) async fn send_merkle_batch_payment_complete(&self, receipt: &MerklePaymentReceipt) {
+        if let Some(sender) = &self.client_event_sender
+            && let Err(err) = sender
+                .send(ClientEvent::MerkleBatchPaymentComplete(receipt.clone()))
+                .await
+        {
+            error!("Failed to send merkle batch payment event: {err:?}");
+        }
+    }
+
+    /// Send a regular batch payment completion event to the client event channel.
+    /// This allows progressive saving of the receipt to disk for upload resume.
+    pub(crate) async fn send_regular_batch_payment_complete(&self, receipt: &Receipt) {
+        if let Some(sender) = &self.client_event_sender
+            && let Err(err) = sender
+                .send(ClientEvent::RegularBatchPaymentComplete(receipt.clone()))
+                .await
+        {
+            error!("Failed to send regular batch payment event: {err:?}");
         }
     }
 
@@ -234,6 +259,9 @@ impl Client {
             crate::loud_info!("Processing chunk ({}/{est_total}){maybe_file}", i + 1);
         }
 
+        // Check if this is a new payment (wallet) vs cached receipt
+        let is_new_payment = matches!(&payment_option, PaymentOption::Wallet(_));
+
         // Process payment for this batch
         let (receipt, free_chunks) = match self
             .pay_for_content_addrs(DataTypes::Chunk, payment_info.into_iter(), payment_option)
@@ -264,6 +292,13 @@ impl Client {
                 "{free_chunks} chunks were free in this batch {}",
                 batch_chunks.len()
             );
+        }
+
+        // Emit event for progressive saving of regular receipt to disk.
+        // Skip when receipt is empty (all chunks were free) to avoid caching
+        // an empty receipt that would cause all chunks to be skipped on resume.
+        if is_new_payment && !receipt.is_empty() {
+            self.send_regular_batch_payment_complete(&receipt).await;
         }
 
         // Upload all chunks in batch, schedule failed_chunks for retry (if retry_failed set)

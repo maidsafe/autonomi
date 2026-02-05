@@ -14,7 +14,7 @@ use crate::contract::network_token::NetworkToken;
 use crate::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::contract::{network_token, payment_vault};
-use crate::merkle_batch_payment::PoolCommitment;
+use crate::merkle_batch_payment::{CostUnitOverflow, PoolCommitment};
 use crate::retry::GasInfo;
 use crate::transaction_config::TransactionConfig;
 use crate::utils::http_provider;
@@ -47,8 +47,8 @@ pub enum Error {
     ChunkPaymentsContract(#[from] payment_vault::error::Error),
     #[error("Merkle payment vault contract error: {0}")]
     MerklePaymentVaultContract(#[from] MerkleHandlerError),
-    #[error("Merkle batch payment error: {0}")]
-    MerklePayment(String),
+    #[error("Cost unit packing overflow: {0}")]
+    CostUnitOverflow(#[from] CostUnitOverflow),
 }
 
 #[derive(Clone, Debug)]
@@ -162,74 +162,57 @@ impl Wallet {
         .await
     }
 
-    /// Pay for a Merkle tree batch using smart contract
+    /// Pay for a Merkle tree batch using packed calldata.
     ///
-    /// # Arguments
-    /// * `depth` - The Merkle tree depth
-    /// * `pool_commitments` - Vector of pool commitments with metrics (one per reward pool)
-    /// * `merkle_payment_timestamp` - Unix timestamp for the payment
-    ///
-    /// # Returns
-    /// * The winner pool hash (32 bytes) selected by the contract, the amount paid, and gas info
+    /// Estimates the cost via the contract's view function, validates balance
+    /// and allowance, packs commitments for compact calldata, then submits.
     pub async fn pay_for_merkle_tree(
         &self,
         depth: u8,
         pool_commitments: Vec<PoolCommitment>,
         merkle_payment_timestamp: u64,
     ) -> Result<(PoolHash, Amount, GasInfo), Error> {
-        info!(
-            "Paying for Merkle tree: depth={depth}, pools={}, timestamp={merkle_payment_timestamp}",
-            pool_commitments.len()
-        );
-
-        // Get accurate cost estimate from smart contract (0 gas view function)
-        let estimated_amount = self
-            .estimate_merkle_payment_cost(depth, &pool_commitments, merkle_payment_timestamp)
-            .await?;
-
-        info!("Estimated Merkle payment cost: {estimated_amount}");
-
-        // Get current wallet token balance
-        let wallet_balance = self.balance_of_tokens().await?;
-
-        // Check if wallet contains enough payment tokens
-        if wallet_balance < estimated_amount {
-            return Err(Error::InsufficientTokensForQuotes(
-                wallet_balance,
-                estimated_amount,
-            ));
-        }
-
-        // Get current allowance for Merkle payment vault
         let merkle_vault_address = *self
             .network
             .merkle_payments_address()
-            .ok_or_else(|| Error::MerklePayment("Merkle payments address not configured for this network. Set MERKLE_PAYMENTS_ADDRESS environment variable.".to_string()))?;
-        let allowance = self.token_allowance(merkle_vault_address).await?;
+            .ok_or(MerkleHandlerError::MerklePaymentsAddressNotConfigured)?;
 
-        // Check if allowance is sufficient, if not approve
-        if allowance < estimated_amount {
+        let provider = self.to_provider();
+        let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
+
+        let packed: Vec<_> = pool_commitments
+            .iter()
+            .map(|c| c.to_packed())
+            .collect::<Result<_, _>>()?;
+
+        let estimated_cost = handler
+            .estimate_merkle_tree_cost(depth, pool_commitments, merkle_payment_timestamp)
+            .await?;
+        info!("Estimated Merkle tree cost: {estimated_cost}");
+
+        let wallet_balance = self.balance_of_tokens().await?;
+        if wallet_balance < estimated_cost {
+            return Err(Error::InsufficientTokensForQuotes(
+                wallet_balance,
+                estimated_cost,
+            ));
+        }
+
+        let allowance = self.token_allowance(merkle_vault_address).await?;
+        if allowance < estimated_cost {
             info!("Approving Merkle payment vault to spend tokens");
             self.approve_to_spend_tokens(merkle_vault_address, U256::MAX)
                 .await?;
         }
 
-        // Create provider with wallet
-        let provider = self.to_provider();
-
-        // Create Merkle payment vault handler
-        let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
-
-        // Submit payment to smart contract
         let (winner_pool_hash, actual_amount, gas_info) = handler
             .pay_for_merkle_tree(
                 depth,
-                pool_commitments.clone(),
+                packed,
                 merkle_payment_timestamp,
                 &self.transaction_config,
             )
-            .await
-            .map_err(|e| Error::MerklePayment(format!("Payment failed: {e}")))?;
+            .await?;
 
         info!(
             "Merkle payment successful, winner pool: {}, amount: {actual_amount}",
@@ -237,31 +220,6 @@ impl Wallet {
         );
 
         Ok((winner_pool_hash, actual_amount, gas_info))
-    }
-
-    /// Estimate the cost of a Merkle tree batch using smart contract
-    ///
-    /// This calls the smart contract's view function (0 gas) which runs the exact same
-    /// pricing logic as the actual payment, ensuring accurate cost estimation.
-    ///
-    /// # Arguments
-    /// * `depth` - The Merkle tree depth
-    /// * `pool_commitments` - Vector of pool commitments with metrics (one per reward pool)
-    /// * `merkle_payment_timestamp` - Unix timestamp for the payment
-    ///
-    /// # Returns
-    /// * Estimated total cost in AttoTokens
-    pub async fn estimate_merkle_payment_cost(
-        &self,
-        depth: u8,
-        pool_commitments: &[PoolCommitment],
-        merkle_payment_timestamp: u64,
-    ) -> Result<Amount, Error> {
-        // Delegate to Network method (no wallet needed for view calls)
-        self.network
-            .estimate_merkle_payment_cost(depth, pool_commitments, merkle_payment_timestamp)
-            .await
-            .map_err(Error::from)
     }
 
     /// Build a provider using this wallet.

@@ -78,8 +78,15 @@ const HIGHEST_SCORE: usize = 100;
 /// Max is to be 100 * 100
 const MIN_ACCEPTABLE_HEALTHY_SCORE: usize = 3000;
 
-/// in ms, expecting average StorageChallenge complete time to be around 250ms.
-const TIME_STEP: usize = 20;
+/// Time step in milliseconds for duration scoring.
+/// Production measurements show StorageChallenge typically completes in 2-3 seconds.
+/// This step maps 0-5000ms evenly to the score range (HIGHEST_SCORE down to 0).
+/// With TIME_STEP = 50ms and HIGHEST_SCORE = 100:
+///   - 0ms     → score 100 (instant response, best possible)
+///   - 1000ms  → score 80  (1 second, excellent)
+///   - 2500ms  → score 50  (2.5 seconds, average)
+///   - 5000ms  → score 0   (5 seconds or more, slowest acceptable)
+const TIME_STEP: usize = 50;
 
 /// Delay before retrying a failed replicated record fetch.
 const REPLICA_FETCH_RETRY_DELAY: Duration = Duration::from_secs(15 * 60);
@@ -636,6 +643,39 @@ impl Node {
             NetworkEvent::NetworkWideReplication { keys } => {
                 event_header = "NetworkWideReplication";
                 self.perform_network_wide_replication(keys);
+            }
+            NetworkEvent::PeerVersionChecked {
+                peer_id,
+                peer_type,
+                result,
+            } => {
+                event_header = "PeerVersionChecked";
+                // Version check completed - logging already done in identify handler
+                // This event is primarily for external monitoring/metrics
+                trace!(
+                    target: "version_gate",
+                    peer_id = %peer_id,
+                    peer_type = %peer_type,
+                    result = ?result,
+                    "Peer version check completed"
+                );
+            }
+            NetworkEvent::PeerVersionRejected {
+                peer_id,
+                peer_type,
+                result,
+                min_version,
+            } => {
+                event_header = "PeerVersionRejected";
+                // Phase 2: Peer was rejected due to version requirements
+                warn!(
+                    target: "version_gate",
+                    peer_id = %peer_id,
+                    peer_type = %peer_type,
+                    result = ?result,
+                    min_version = %min_version,
+                    "Peer rejected due to version requirements and disconnected"
+                );
             }
         }
 
@@ -2035,11 +2075,94 @@ async fn scoring_peer(
     }
 }
 
-// Based on following metrics:
-//   * the duration
-//   * is there false answer
-//   * percentage of correct answers among the expected closest
-// The higher the score, the better confidence on the peer
+// ========================================================================================
+// TRUST SCORE CALCULATION AND USAGE DOCUMENTATION
+// ========================================================================================
+//
+// ## Overview
+//
+// The trust scoring system evaluates peer reliability through StorageChallenge responses.
+// Scores are used to determine whether to accept replication requests from specific peers,
+// providing protection against malicious actors trying to inject invalid data.
+//
+// ## Score Calculation
+//
+// The final trust score is calculated as: `duration_score * challenge_score`
+//
+// ### Duration Score (0-100)
+// - Measures how quickly a peer responds to StorageChallenge
+// - Calculated using `duration_score_scheme()`:
+//   * score = HIGHEST_SCORE - min(HIGHEST_SCORE, duration_ms / TIME_STEP)
+//   * With TIME_STEP=50ms: 0ms→100, 2500ms→50, 5000ms+→0
+// - Rationale: Faster responses indicate a healthy, responsive node
+//
+// ### Challenge Score (0-100)
+// - Measures the correctness of StorageChallenge responses
+// - Calculated using `challenge_score_scheme()`:
+//   * Returns 0 immediately if ANY false answer is detected (critical failure)
+//   * Otherwise: min(100, 100 * correct_answers / expected_proofs)
+// - Rationale: Correct proofs indicate the peer actually stores the claimed data
+//
+// ### Combined Score (0-10000)
+// - Final score = duration_score * challenge_score
+// - Range: 0 (completely untrustworthy) to 10000 (perfect)
+// - Threshold: MIN_ACCEPTABLE_HEALTHY_SCORE (3000) determines healthy vs unhealthy
+//
+// ## Score Usage in Replication
+//
+// The ReplicationFetcher uses trust scores with a dual-approach strategy:
+//
+// ### 1. Trust-Based Approach
+// - Each peer maintains a history of the last 2 challenge scores (healthy/unhealthy)
+// - `is_peer_trustworthy()` returns:
+//   * Some(true)  - Peer has 2+ scores, at least 2 healthy → accept immediately
+//   * Some(false) - Peer has 2+ scores, fewer than 2 healthy → reject
+//   * None        - Insufficient history → cannot determine
+//
+// ### 2. Majority Approach
+// - For unknown peers (or as parallel validation), accumulate replication requests
+// - Accept a key when CLOSE_GROUP_SIZE/2 different peers report the same key
+// - Provides Byzantine fault tolerance against malicious peers
+//
+// ### Parallel Operation
+// Both approaches work simultaneously:
+// - Trustworthy peers: Keys accepted immediately AND added to majority accumulator
+// - Untrustworthy peers: Keys rejected entirely (not added to majority)
+// - Unknown peers: Keys added to majority accumulator only (wait for consensus)
+//
+// This dual approach provides defense-in-depth:
+// - Fast acceptance from proven trustworthy peers
+// - Byzantine fault tolerance for unknown/new peers
+// - Protection against malicious peers through scoring history
+//
+// ## Score Lifecycle
+//
+// 1. StorageChallenge is triggered periodically (STORE_CHALLENGE_INTERVAL_MAX_S)
+// 2. Random chunks are selected and proofs requested from peers
+// 3. Responses are scored using `mark_peer()`
+// 4. Scores are recorded in ReplicationFetcher via `add_peer_scores()`
+// 5. Scores influence subsequent replication acceptance decisions
+//
+// ## Security Considerations
+//
+// - Any false proof immediately results in score 0 (zero tolerance for data corruption)
+// - At least 2 healthy scores required to be considered trustworthy
+// - Majority consensus required for unknown peers (Byzantine fault tolerance)
+// - Score history is limited to 2 entries (recent behavior matters most)
+// - Peer score entries pruned to 20 most recent (bounded memory usage)
+//
+// ========================================================================================
+
+/// Calculates the overall trust score for a peer based on StorageChallenge response.
+///
+/// The score combines two metrics:
+///   * Duration: How quickly the peer responded (faster = higher score)
+///   * Correctness: Whether the proofs provided are valid (any false = 0)
+///
+/// Returns: A score from 0 to 10000 (HIGHEST_SCORE * HIGHEST_SCORE)
+///   * 0: Untrustworthy (false proof or extremely slow)
+///   * 3000+: Healthy (MIN_ACCEPTABLE_HEALTHY_SCORE threshold)
+///   * 10000: Perfect (instant response, all proofs correct)
 fn mark_peer(
     duration: Duration,
     answers: Vec<(NetworkAddress, ChunkProof)>,
@@ -2051,21 +2174,45 @@ fn mark_peer(
     duration_score * challenge_score
 }
 
-// Less duration shall get higher score
+/// Calculates a score based on response duration - faster responses get higher scores.
+///
+/// The scoring uses a linear step function that maps duration to score:
+///   score = HIGHEST_SCORE - min(HIGHEST_SCORE, duration_ms / TIME_STEP)
+///
+/// With current constants (TIME_STEP=50ms, HIGHEST_SCORE=100):
+///   - 0ms     → 100 (instant, best)
+///   - 500ms   → 90
+///   - 1000ms  → 80
+///   - 2000ms  → 60
+///   - 2500ms  → 50 (midpoint)
+///   - 4000ms  → 20
+///   - 5000ms+ → 0  (slowest, capped)
+///
+/// This scheme is designed for production networks where StorageChallenge
+/// typically completes in 2-3 seconds under normal conditions.
 fn duration_score_scheme(duration: Duration) -> usize {
-    // So far just a simple stepped scheme, capped by HIGHEST_SCORE
     let in_ms = if let Some(value) = duration.as_millis().to_usize() {
         value
     } else {
         info!("Cannot get milli seconds from {duration:?}, using a default value of 1000ms.");
-        1000
+        HIGHEST_SCORE * TIME_STEP 
     };
 
     let step = std::cmp::min(HIGHEST_SCORE, in_ms / TIME_STEP);
     HIGHEST_SCORE - step
 }
 
-// Any false answer shall result in 0 score immediately
+/// Calculates a score based on the correctness of StorageChallenge responses.
+///
+/// Scoring rules:
+/// - Any false proof (invalid ChunkProof) → returns 0 immediately (zero tolerance)
+/// - All proofs valid → returns percentage of correct answers (0-100)
+///
+/// The zero-tolerance policy for false proofs is critical for security:
+/// a malicious node trying to fake storage will be immediately detected
+/// and marked as untrustworthy.
+///
+/// Returns: A score from 0 to HIGHEST_SCORE (100)
 fn challenge_score_scheme(
     answers: Vec<(NetworkAddress, ChunkProof)>,
     expected_proofs: &HashMap<NetworkAddress, ChunkProof>,
@@ -2078,16 +2225,13 @@ fn challenge_score_scheme(
             } else {
                 info!("Spot a false answer to the challenge regarding {addr:?}");
                 // Any false answer shall result in 0 score immediately
+                // This is zero-tolerance policy for data integrity
                 return 0;
             }
         }
     }
-    // TODO: For those answers not among the expected_proofs,
-    //       it could be due to having different knowledge of records to us.
-    //       shall we:
-    //         * set the target being close to us, so that neighbours sharing same knowledge in higher chance
-    //         * fetch from local to testify
-    //         * fetch from network to testify
+    // For answers not among expected_proofs, they might be valid but unknown to us
+    // (due to different network knowledge). We only score what we can verify.
     std::cmp::min(
         HIGHEST_SCORE,
         HIGHEST_SCORE * correct_answers / expected_proofs.len(),

@@ -6,6 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// Build scripts need to panic/expect on errors since they run at compile time
+#![allow(clippy::expect_used, clippy::panic)]
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Emit build information
     vergen::EmitBuilder::builder()

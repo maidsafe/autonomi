@@ -8,7 +8,7 @@
 
 use super::payments::MerklePaymentReceipt;
 use crate::Client;
-use crate::client::config::CHUNK_UPLOAD_BATCH_SIZE;
+use crate::client::config::{CHUNK_UPLOAD_BATCH_SIZE, UPLOAD_FLOW_BATCH_SIZE};
 use crate::client::data_types::chunk::DataMapChunk;
 use crate::client::files::Metadata;
 use crate::networking::NetworkError;
@@ -107,7 +107,10 @@ impl Client {
         let mut chunks_uploaded = 0;
         let mut chunks_attempted = 0;
         let total_files = receipt.file_chunk_counts.len();
-        let upload_batch_size = std::cmp::max(1, *CHUNK_UPLOAD_BATCH_SIZE);
+        // Separate stream batch size (how many chunks to get) from upload concurrency (parallel uploads)
+        // This matches the regular upload behavior which uses UPLOAD_FLOW_BATCH_SIZE for batching
+        let stream_batch_size = *UPLOAD_FLOW_BATCH_SIZE;
+        let upload_concurrency = std::cmp::max(1, *CHUNK_UPLOAD_BATCH_SIZE);
 
         while chunks_attempted < limit {
             let Some(stream) = streams.first_mut() else {
@@ -116,9 +119,9 @@ impl Client {
 
             // Try to get next batch of chunks from current stream
             let remaining_in_batch = limit - chunks_attempted;
-            let batch_size = std::cmp::min(upload_batch_size, remaining_in_batch);
+            let batch_to_get = std::cmp::min(stream_batch_size, remaining_in_batch);
 
-            match stream.next_batch(batch_size) {
+            match stream.next_batch(batch_to_get) {
                 Some(chunks) if !chunks.is_empty() => {
                     // Upload this batch of chunks, keeping chunk data for potential retry
                     let mut tasks = Vec::with_capacity(chunks.len());
@@ -143,7 +146,7 @@ impl Client {
                     }
 
                     let task_count = tasks.len();
-                    let results = process_tasks_with_max_concurrency(tasks, batch_size).await;
+                    let results = process_tasks_with_max_concurrency(tasks, upload_concurrency).await;
 
                     // Count all attempted chunks (success or failure)
                     chunks_attempted += task_count;
@@ -302,7 +305,7 @@ impl Client {
         retry_pause_secs: u64,
     ) -> Result<Vec<(Chunk, String)>, MerklePutError> {
         let mut retry_attempt = 0;
-        let upload_batch_size = std::cmp::max(1, *CHUNK_UPLOAD_BATCH_SIZE);
+        let upload_concurrency = std::cmp::max(1, *CHUNK_UPLOAD_BATCH_SIZE);
 
         while !failed_chunks.is_empty() && retry_attempt < max_retries {
             retry_attempt += 1;
@@ -341,7 +344,7 @@ impl Client {
                 });
             }
 
-            let results = process_tasks_with_max_concurrency(tasks, upload_batch_size).await;
+            let results = process_tasks_with_max_concurrency(tasks, upload_concurrency).await;
 
             // Collect new failures
             failed_chunks = Vec::new();

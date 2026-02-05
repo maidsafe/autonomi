@@ -10,13 +10,32 @@ use crate::common::{Address, Amount, Calldata};
 use crate::contract::merkle_payment_vault::error::Error;
 use crate::contract::merkle_payment_vault::interface::IMerklePaymentVault;
 use crate::contract::merkle_payment_vault::interface::IMerklePaymentVault::IMerklePaymentVaultInstance;
-use crate::merkle_batch_payment::PoolHash;
+use crate::merkle_batch_payment::{CandidateNodePacked, PoolCommitmentPacked, PoolHash};
 use crate::retry::{GasInfo, TransactionError};
 use crate::transaction_config::TransactionConfig;
+use alloy::consensus::Transaction;
 use alloy::network::{Network, TransactionResponse};
+use alloy::primitives::FixedBytes;
 use alloy::providers::Provider;
+use alloy::sol_types::SolCall;
 use exponential_backoff::Backoff;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
+
+/// Arbitrum produces ~4 blocks per second (0.25s block time).
+const ARBITRUM_BLOCKS_PER_SECOND: u64 = 4;
+
+/// Fixed padding (in seconds) added to the adaptive lookback to absorb clock skew.
+const LOOKBACK_PADDING_SECS: u64 = 3600;
+
+/// Minimum lookback (blocks). Floor for fresh payments; ~14 hours at Arbitrum block time.
+const MIN_LOOKBACK_BLOCKS: u64 = 200_000;
+
+/// Maximum lookback (blocks). ~7.2 days at Arbitrum block time, aligns with
+/// `MERKLE_PAYMENT_EXPIRATION`.
+const MAX_LOOKBACK_BLOCKS: u64 = 2_500_000;
+
+/// Divisor for the safety margin added to the raw lookback estimate (1/5 = 20%).
+const LOOKBACK_MARGIN_DIVISOR: u64 = 5;
 
 pub struct MerklePaymentVaultHandler<P: Provider<N>, N: Network> {
     pub contract: IMerklePaymentVaultInstance<P, N>,
@@ -131,52 +150,6 @@ where
             })
     }
 
-    /// Pay for Merkle tree batch
-    ///
-    /// # Arguments
-    /// * `depth` - Merkle tree depth
-    /// * `pool_commitments` - Pool commitments with metrics
-    /// * `merkle_payment_timestamp` - Payment timestamp
-    /// * `transaction_config` - Transaction configuration
-    ///
-    /// # Returns
-    /// * Tuple of (winner pool hash, total amount paid, gas info)
-    pub async fn pay_for_merkle_tree<I, T>(
-        &self,
-        depth: u8,
-        pool_commitments: I,
-        merkle_payment_timestamp: u64,
-        transaction_config: &TransactionConfig,
-    ) -> Result<(PoolHash, Amount, GasInfo), Error>
-    where
-        I: IntoIterator<Item = T>,
-        T: Into<IMerklePaymentVault::PoolCommitment>,
-    {
-        debug!("Paying for Merkle tree: depth={depth}, timestamp={merkle_payment_timestamp}");
-
-        let (calldata, to) =
-            self.pay_for_merkle_tree_calldata(depth, pool_commitments, merkle_payment_timestamp)?;
-
-        let (tx_hash, gas_info) = self
-            .send_transaction_and_handle_errors(calldata, to, transaction_config)
-            .await?;
-
-        let event = self.get_merkle_payment_event(tx_hash).await?;
-
-        let winner_pool_hash = event.winnerPoolHash.0;
-        let total_amount = event.totalAmount;
-
-        debug!(
-            "MerklePaymentMade event: winnerPoolHash={}, depth={}, totalAmount={}, timestamp={}",
-            hex::encode(winner_pool_hash),
-            event.depth,
-            total_amount,
-            event.merklePaymentTimestamp
-        );
-
-        Ok((winner_pool_hash, total_amount, gas_info))
-    }
-
     /// Send transaction with retries and handle revert errors
     async fn send_transaction_and_handle_errors(
         &self,
@@ -227,7 +200,56 @@ where
         })
     }
 
-    /// Get calldata for payForMerkleTree
+    /// Pay for Merkle tree batch using packed calldata
+    ///
+    /// Uses the `payForMerkleTree2` contract function which accepts
+    /// packed data structures for smaller calldata and lower gas costs.
+    ///
+    /// # Arguments
+    /// * `depth` - Merkle tree depth
+    /// * `pool_commitments` - Packed pool commitments
+    /// * `merkle_payment_timestamp` - Payment timestamp
+    /// * `transaction_config` - Transaction configuration
+    ///
+    /// # Returns
+    /// * Tuple of (winner pool hash, total amount paid, gas info)
+    pub async fn pay_for_merkle_tree<I, T>(
+        &self,
+        depth: u8,
+        pool_commitments: I,
+        merkle_payment_timestamp: u64,
+        transaction_config: &TransactionConfig,
+    ) -> Result<(PoolHash, Amount, GasInfo), Error>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<IMerklePaymentVault::PoolCommitmentPacked>,
+    {
+        debug!("Paying for Merkle tree: depth={depth}, timestamp={merkle_payment_timestamp}");
+
+        let (calldata, to) =
+            self.pay_for_merkle_tree_calldata(depth, pool_commitments, merkle_payment_timestamp)?;
+
+        let (tx_hash, gas_info) = self
+            .send_transaction_and_handle_errors(calldata, to, transaction_config)
+            .await?;
+
+        let event = self.get_merkle_payment_event(tx_hash).await?;
+
+        let winner_pool_hash = event.winnerPoolHash.0;
+        let total_amount = event.totalAmount;
+
+        debug!(
+            "MerklePaymentMade event: winnerPoolHash={}, depth={}, totalAmount={}, timestamp={}",
+            hex::encode(winner_pool_hash),
+            event.depth,
+            total_amount,
+            event.merklePaymentTimestamp
+        );
+
+        Ok((winner_pool_hash, total_amount, gas_info))
+    }
+
+    /// Get calldata for payForMerkleTree2 (packed format)
     fn pay_for_merkle_tree_calldata<I, T>(
         &self,
         depth: u8,
@@ -236,16 +258,16 @@ where
     ) -> Result<(Calldata, Address), Error>
     where
         I: IntoIterator<Item = T>,
-        T: Into<IMerklePaymentVault::PoolCommitment>,
+        T: Into<IMerklePaymentVault::PoolCommitmentPacked>,
     {
-        let pool_commitments: Vec<IMerklePaymentVault::PoolCommitment> = pool_commitments
+        let pool_commitments: Vec<IMerklePaymentVault::PoolCommitmentPacked> = pool_commitments
             .into_iter()
             .map(|item| item.into())
             .collect();
 
         let calldata = self
             .contract
-            .payForMerkleTree(depth, pool_commitments, merkle_payment_timestamp)
+            .payForMerkleTree2(depth, pool_commitments, merkle_payment_timestamp)
             .calldata()
             .to_owned();
 
@@ -291,6 +313,113 @@ where
         Ok(total_amount)
     }
 
+    /// Get the packed pool commitments from a payment transaction's calldata
+    ///
+    /// This finds the MerklePaymentMade event by winnerPoolHash (indexed),
+    /// fetches the transaction, and decodes the payForMerkleTree2 calldata
+    /// to extract the PoolCommitmentPacked array that was submitted on-chain.
+    ///
+    /// This is used by nodes to verify that clients sent correct cost units.
+    pub async fn get_payment_packed_commitments(
+        &self,
+        winner_pool_hash: PoolHash,
+        merkle_payment_timestamp: u64,
+    ) -> Result<Vec<PoolCommitmentPacked>, Error> {
+        // Find the MerklePaymentMade event for this pool hash
+        let pool_hash_topic = FixedBytes::<32>::from(winner_pool_hash);
+
+        // Get the current block number so we can scope the event query.
+        // Public RPC providers limit unbounded eth_getLogs queries, so we
+        // compute an adaptive lookback based on the payment's age.
+        let current_block = self
+            .contract
+            .provider()
+            .get_block_number()
+            .await
+            .map_err(|e| Error::Rpc(format!("Failed to get current block number: {e}")))?;
+
+        let now_unix = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let age_secs = now_unix.saturating_sub(merkle_payment_timestamp);
+        let raw_blocks = age_secs.saturating_mul(ARBITRUM_BLOCKS_PER_SECOND);
+        // Add 20% margin plus fixed padding for clock skew
+        let buffered = raw_blocks
+            .saturating_add(raw_blocks / LOOKBACK_MARGIN_DIVISOR)
+            .saturating_add(LOOKBACK_PADDING_SECS.saturating_mul(ARBITRUM_BLOCKS_PER_SECOND));
+        let lookback = buffered.clamp(MIN_LOOKBACK_BLOCKS, MAX_LOOKBACK_BLOCKS);
+        let from_block = current_block.saturating_sub(lookback);
+
+        // Query events filtered by the indexed winnerPoolHash within the recent block range
+        let events = self
+            .contract
+            .MerklePaymentMade_filter()
+            .topic1(pool_hash_topic)
+            .from_block(from_block)
+            .to_block(current_block)
+            .query()
+            .await
+            .map_err(|e| {
+                Error::Rpc(format!(
+                    "Failed to query MerklePaymentMade events for pool hash {}: {e}",
+                    hex::encode(winner_pool_hash)
+                ))
+            })?;
+
+        let (_event, log) = events.into_iter().next().ok_or_else(|| {
+            Error::Rpc(format!(
+                "No MerklePaymentMade event found for pool hash {}",
+                hex::encode(winner_pool_hash)
+            ))
+        })?;
+
+        let tx_hash = log.transaction_hash.ok_or_else(|| {
+            Error::Rpc("MerklePaymentMade event log has no transaction hash".to_string())
+        })?;
+
+        // Fetch the full transaction to get its calldata
+        let tx = self
+            .contract
+            .provider()
+            .get_transaction_by_hash(tx_hash)
+            .await
+            .map_err(|e| Error::Rpc(format!("Failed to get transaction {tx_hash}: {e}")))?
+            .ok_or_else(|| Error::Rpc(format!("Transaction {tx_hash} not found")))?;
+
+        // Get the input/calldata from the transaction
+        let input = tx.input();
+
+        // Decode the payForMerkleTree2 calldata
+        let decoded = IMerklePaymentVault::payForMerkleTree2Call::abi_decode(input)
+            .map_err(|e| Error::Rpc(format!("Failed to decode payForMerkleTree2 calldata: {e}")))?;
+
+        // Convert from contract types to our types
+        let packed_commitments: Vec<PoolCommitmentPacked> = decoded
+            .poolCommitments
+            .into_iter()
+            .map(|pc| {
+                let candidates: Vec<CandidateNodePacked> = pc
+                    .candidates
+                    .into_iter()
+                    .map(|c| CandidateNodePacked {
+                        rewards_address: c.rewardsAddress,
+                        data_type_and_total_cost_unit: c.dataTypeAndTotalCostUnit,
+                    })
+                    .collect();
+
+                PoolCommitmentPacked {
+                    pool_hash: pc.poolHash.0,
+                    candidates: candidates
+                        .try_into()
+                        .expect("contract enforces CANDIDATES_PER_POOL candidates"),
+                }
+            })
+            .collect();
+
+        Ok(packed_commitments)
+    }
+
     /// Get payment info for a winner pool hash
     pub async fn get_payment_info(
         &self,
@@ -312,6 +441,13 @@ where
         if info.depth == 0 {
             return Err(Error::PaymentNotFound(hex::encode(winner_pool_hash)));
         }
+
+        debug!(
+            "getPaymentInfo returned: depth={}, timestamp={}, paid_nodes={}",
+            info.depth,
+            info.merklePaymentTimestamp,
+            info.paidNodeAddresses.len()
+        );
 
         Ok(info)
     }

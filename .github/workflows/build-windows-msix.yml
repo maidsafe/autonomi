@@ -38,10 +38,10 @@ jobs:
       SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
       SM_KEYPAIR_ALIAS: ${{ secrets.SM_KEYPAIR_ALIAS }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download signed Windows artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: autonomi-x86_64-pc-windows-msvc-signed
           path: artifacts/x86_64-pc-windows-msvc-signed/release
@@ -137,7 +137,7 @@ jobs:
           "sm_client_cert_b64=$clean" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Setup DigiCert Software Trust Manager tools
-        uses: digicert/ssm-code-signing@v1.1.1
+        uses: digicert/ssm-code-signing@v1.2.1
         with:
           sm_host: ${{ secrets.SM_HOST }}
           sm_api_key: ${{ secrets.SM_API_KEY }}
@@ -342,7 +342,7 @@ jobs:
           Get-Content $appInstallerFileName
 
       - name: Upload MSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: node-launchpad-msix-x86_64-pc-windows-msvc
           path: |

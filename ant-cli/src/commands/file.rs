@@ -353,7 +353,8 @@ pub async fn upload(
     wallet.set_transaction_config(TransactionConfig { max_fee_per_gas });
 
     let event_receiver = client.enable_client_events();
-    let (upload_summary_thread, upload_completed_tx) = collect_upload_summary(event_receiver);
+    let (upload_summary_thread, upload_completed_tx) =
+        collect_upload_summary(event_receiver, Some(file.to_string()));
 
     info!(
         "Uploading {} file: {file}",
@@ -429,6 +430,9 @@ pub async fn upload(
     } else {
         println!("Successfully uploaded: {file}");
         println!("At address: {local_addr}");
+        if !public {
+            println!("The above private address links to network address: {archive_addr}");
+        }
         info!("Successfully uploaded: {file} at address: {local_addr}");
         println!("Number of chunks uploaded: {}", summary.records_paid);
         println!(

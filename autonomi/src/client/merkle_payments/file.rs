@@ -117,10 +117,21 @@ impl Client {
         info!("Collected {total_chunks} XorNames from {total_files} files");
 
         // Check which chunks already exist on the network and split into existing/new
-        let (mut already_exist, mut xor_to_pay_ordered) =
-            self.split_existing_and_new_chunks(all_xor_names).await;
+        // Use the receipt's already_existed set to avoid re-querying known chunks
+        let (mut already_exist, mut xor_to_pay_ordered) = self
+            .split_existing_and_new_chunks(all_xor_names, &receipt)
+            .await;
         let to_pay_len = xor_to_pay_ordered.len();
         let already_paid_count = already_exist.len();
+
+        // Update receipt with newly discovered existing chunks
+        receipt.add_already_existed(already_exist.iter().copied());
+
+        // Emit event to save updated already_existed state (helps with resume)
+        // Only emit if receipt has proofs (indicating we're resuming) or already_existed changed
+        if !receipt.proofs.is_empty() || !receipt.already_existed.is_empty() {
+            self.send_merkle_batch_payment_complete(&receipt).await;
+        }
 
         // Early return if all chunks already exist - no need for second encryption
         if to_pay_len == 0 {
@@ -186,6 +197,9 @@ impl Client {
                     )
                     .await
                     .map_err(|kind| MerkleUploadErrorWithReceipt::new(receipt.clone(), kind))?;
+
+                // Emit event so CLI can progressively save receipt to disk for upload resume
+                self.send_merkle_batch_payment_complete(&receipt).await;
             }
 
             crate::loud_info!(
@@ -372,45 +386,100 @@ impl Client {
     /// - set of existing chunks (already on network, no payment needed)
     /// - vec of new chunks (need payment), in original order with duplicates removed
     ///
+    /// When resuming with a cached receipt, chunks that are:
+    /// - In `receipt.already_existed` - skip network check (known to exist)
+    /// - In `receipt.proofs` - skip network check (already paid, will be uploaded)
+    ///
+    /// This avoids unnecessary network queries on resume.
+    ///
     /// Takes ownership of the input to avoid unnecessary copies.
     async fn split_existing_and_new_chunks(
         &self,
         xornames: Vec<XorName>,
+        receipt: &MerklePaymentReceipt,
     ) -> (HashSet<XorName>, Vec<XorName>) {
-        crate::loud_info!("Checking for existing chunks on the network...");
-
         // Dedupe while preserving order (keep first occurrence only)
         let mut seen: HashSet<XorName> = HashSet::new();
         let unique_ordered: Vec<XorName> =
             xornames.into_iter().filter(|xn| seen.insert(*xn)).collect();
         let total = unique_ordered.len();
 
-        // Check existence on network
-        let addresses: Vec<NetworkAddress> = unique_ordered
+        // Separate chunks into:
+        // 1. Known to exist (from receipt.already_existed) - no network check needed
+        // 2. Already paid (from receipt.proofs) - no network check needed, will upload
+        // 3. Unknown - need network existence check
+        let mut known_existing: HashSet<XorName> = HashSet::new();
+        let mut already_paid: HashSet<XorName> = HashSet::new();
+        let mut need_check: Vec<XorName> = Vec::new();
+
+        for xn in &unique_ordered {
+            if receipt.already_existed.contains(xn) {
+                known_existing.insert(*xn);
+            } else if receipt.proofs.contains_key(xn) {
+                already_paid.insert(*xn);
+            } else {
+                need_check.push(*xn);
+            }
+        }
+
+        let known_count = known_existing.len();
+        let paid_count = already_paid.len();
+        let check_count = need_check.len();
+
+        if known_count > 0 || paid_count > 0 {
+            crate::loud_info!(
+                "Resuming: {known_count} chunks known to exist, {paid_count} already paid, {check_count} need checking"
+            );
+        }
+
+        // Only check network for unknown chunks
+        if need_check.is_empty() {
+            crate::loud_info!(
+                "All {total} chunks accounted for (no network check needed)"
+            );
+            // Return known_existing and chunks that need upload (already_paid)
+            // Note: already_paid chunks still need to be uploaded, so they go in the "new" list
+            let new_chunks: Vec<XorName> = unique_ordered
+                .into_iter()
+                .filter(|xn| !known_existing.contains(xn))
+                .collect();
+            return (known_existing, new_chunks);
+        }
+
+        crate::loud_info!("Checking {check_count} chunks for existence on the network...");
+
+        // Check existence on network only for unknown chunks
+        let addresses: Vec<NetworkAddress> = need_check
             .iter()
             .map(|xn| NetworkAddress::from(ChunkAddress::new(*xn)))
             .collect();
         let batch_size = std::cmp::max(16, *CHUNK_UPLOAD_BATCH_SIZE);
         let existing_addrs = self.check_records_exist_batch(&addresses, batch_size).await;
 
-        // Convert to XorName set
-        let existing_set: HashSet<XorName> = existing_addrs
+        // Convert to XorName set and merge with known existing
+        let newly_found_existing: HashSet<XorName> = existing_addrs
             .into_iter()
             .filter_map(|addr| addr.xorname())
             .collect();
 
-        let existing_count = existing_set.len();
+        // Merge all existing chunks
+        let mut all_existing = known_existing;
+        all_existing.extend(newly_found_existing.iter().copied());
+
+        let existing_count = all_existing.len();
+        let newly_found_count = newly_found_existing.len();
         crate::loud_info!(
-            "Found {existing_count}/{total} unique chunks already exist on the network"
+            "Found {newly_found_count} more chunks on network. Total existing: {existing_count}/{total}"
         );
 
         // Filter out existing, keeping original order
+        // Note: already_paid chunks are NOT filtered out - they need to be uploaded
         let new_chunks: Vec<XorName> = unique_ordered
             .into_iter()
-            .filter(|xn| !existing_set.contains(xn))
+            .filter(|xn| !all_existing.contains(xn))
             .collect();
 
-        (existing_set, new_chunks)
+        (all_existing, new_chunks)
     }
 
     /// Pay for a Merkle Tree batch, returning the merged receipt

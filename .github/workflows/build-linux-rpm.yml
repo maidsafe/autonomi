@@ -38,14 +38,14 @@ jobs:
           - target: arm-unknown-linux-musleabi
             rpm_arch: armv5tel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install RPM build tools
         run: |
           dnf install -y rpm-build rpm-sign gnupg2
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: autonomi-${{ matrix.target }}
           path: artifacts/${{ matrix.target }}/release
@@ -167,7 +167,7 @@ jobs:
           gpg --verify "$output_rpm.asc" "$output_rpm"
 
       - name: Upload rpm artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: autonomi-rpm-${{ matrix.target }}
           path: |

@@ -47,10 +47,10 @@ jobs:
     name: build pkg (${{ inputs.arch }})
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: autonomi-${{ inputs.arch }}
           path: artifacts/${{ inputs.arch }}/release
@@ -382,7 +382,7 @@ jobs:
           spctl -a -vv -t install "$PKG_FILE"
 
       - name: Upload pkg artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: autonomi-pkg-${{ inputs.arch }}
           path: ${{ steps.version.outputs.version }}.autonomi.${{ inputs.arch }}.pkg
