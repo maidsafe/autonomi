@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 autonomi = { path = "../autonomi", version = "0.10.0" }
-bytes = { version = "1.0.1", features = ["serde"] }
+bytes = { version = "1.11.1", features = ["serde"] }
 eyre = "0.6.12"
 futures = "0.3"
 napi = { version = "2.12.2", default-features = false, features = ["napi4", "napi6", "tokio_rt", "serde-json"] }

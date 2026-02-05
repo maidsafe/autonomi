@@ -33,7 +33,7 @@ ant-releases = "0.4.3"
 ant-service-management = { path = "../ant-service-management", version = "0.5.1" }
 async-trait = "0.1"
 bls = { package = "blsttc", version = "8.0.1" }
-bytes = { version = "1.0.1", features = ["serde"] }
+bytes = { version = "1.11.1", features = ["serde"] }
 clap = { version = "4.2.1", features = ["derive"] }
 crdts = { version = "7.3", default-features = false, features = ["merkle"] }
 chrono = "~0.4.19"
