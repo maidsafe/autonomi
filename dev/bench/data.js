@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770315315210,
+  "lastUpdate": 1770315316864,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -18931,6 +18931,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/01fab9bb4f2100634edad57e2ada1da912f82bef"
         },
         "date": 1770293299236,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ddedb690e927176c9de633630c3caefc603f2994",
+          "message": "Merge pull request #3448 from maidsafe/dependabot/github_actions/digicert/ssm-code-signing-1.2.1\n\nchore(deps): bump digicert/ssm-code-signing from 1.2.0 to 1.2.1",
+          "timestamp": "2026-02-05T16:50:12Z",
+          "tree_id": "11ad007b4cda22fcfebbf8bbe57dc4fded147209",
+          "url": "https://github.com/maidsafe/autonomi/commit/ddedb690e927176c9de633630c3caefc603f2994"
+        },
+        "date": 1770315316473,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
