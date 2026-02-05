@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770315316864,
+  "lastUpdate": 1770315318511,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -26187,6 +26187,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 28997,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ddedb690e927176c9de633630c3caefc603f2994",
+          "message": "Merge pull request #3448 from maidsafe/dependabot/github_actions/digicert/ssm-code-signing-1.2.1\n\nchore(deps): bump digicert/ssm-code-signing from 1.2.0 to 1.2.1",
+          "timestamp": "2026-02-05T16:50:12Z",
+          "tree_id": "11ad007b4cda22fcfebbf8bbe57dc4fded147209",
+          "url": "https://github.com/maidsafe/autonomi/commit/ddedb690e927176c9de633630c3caefc603f2994"
+        },
+        "date": 1770315318135,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 13786,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 28694,
             "unit": "ms"
           },
           {
