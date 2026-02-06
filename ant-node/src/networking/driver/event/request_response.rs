@@ -460,24 +460,51 @@ impl SwarmDriver {
         //        fetch them if close enough to us
         //   2, For those GraphEntry that we have that differ in the hash, we fetch the other version
         //         and update our local copy.
-        let all_keys = self
-            .swarm
-            .behaviour_mut()
-            .kademlia
-            .store_mut()
-            .record_addresses_ref();
-        let keys_to_fetch = self.replication_fetcher.add_keys(
-            holder,
-            incoming_keys,
-            all_keys,
-            is_fresh_replicate,
-            closest_40_peers
-                .iter()
-                .map(|(peer_id, _addrs)| NetworkAddress::from(*peer_id))
-                .collect(),
-            #[cfg(feature = "open-metrics")]
-            self.metrics_recorder.as_ref(),
-        );
+        //
+        // Before passing to the trust/majority scheme, check each key against the paid-for list.
+        // Keys locally verified as paid bypass trust/majority (treated like FreshReplicate).
+        // Keys not in the paid-for list go through the existing validation unchanged.
+        let store = self.swarm.behaviour_mut().kademlia.store_mut();
+        let (paid_keys, unpaid_keys): (Vec<_>, Vec<_>) = incoming_keys
+            .into_iter()
+            .partition(|(addr, _)| store.is_paid_for(&addr.to_record_key()));
+        let all_keys = store.record_addresses_ref();
+
+        let closest_peers: Vec<NetworkAddress> = closest_40_peers
+            .iter()
+            .map(|(peer_id, _addrs)| NetworkAddress::from(*peer_id))
+            .collect();
+
+        let mut keys_to_fetch = Vec::new();
+
+        if !paid_keys.is_empty() {
+            debug!(
+                "Replication: {} keys are locally verified as paid, treating as priority",
+                paid_keys.len()
+            );
+            keys_to_fetch.extend(self.replication_fetcher.add_keys(
+                holder,
+                paid_keys,
+                all_keys,
+                true,
+                closest_peers.clone(),
+                #[cfg(feature = "open-metrics")]
+                self.metrics_recorder.as_ref(),
+            ));
+        }
+
+        if !unpaid_keys.is_empty() {
+            keys_to_fetch.extend(self.replication_fetcher.add_keys(
+                holder,
+                unpaid_keys,
+                all_keys,
+                is_fresh_replicate,
+                closest_peers,
+                #[cfg(feature = "open-metrics")]
+                self.metrics_recorder.as_ref(),
+            ));
+        }
+
         if keys_to_fetch.is_empty() {
             debug!("no waiting keys to fetch from the network");
         } else {
