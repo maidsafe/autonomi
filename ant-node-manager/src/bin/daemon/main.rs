@@ -192,7 +192,7 @@ fn get_log_builder() -> Result<LogBuilder> {
     ];
     let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
 
-    let output_dest = dirs_next::data_dir()
+    let output_dest = dirs_next::data_local_dir()
         .ok_or_else(|| eyre!("Could not obtain user data directory"))?
         .join("autonomi")
         .join("antctld")

@@ -32,7 +32,7 @@ const MAX_DOWNLOAD_RETRIES: u8 = 3;
 // We need deterministic and fix path for the faucet wallet.
 // Otherwise the test instances will not be able to find the same faucet instance.
 pub fn get_faucet_data_dir() -> PathBuf {
-    let mut data_dirs = dirs_next::data_dir().expect("A homedir to exist.");
+    let mut data_dirs = dirs_next::data_local_dir().expect("A homedir to exist.");
     data_dirs.push("autonomi");
     data_dirs.push("test_faucet");
     std::fs::create_dir_all(data_dirs.as_path())

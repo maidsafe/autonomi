@@ -57,7 +57,7 @@ struct Labels {
 }
 
 fn main() -> Result<()> {
-    let default_log_dir = dirs_next::data_dir()
+    let default_log_dir = dirs_next::data_local_dir()
         .ok_or_else(|| eyre!("could not obtain data directory path".to_string()))?
         .join("autonomi")
         .join("node");

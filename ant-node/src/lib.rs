@@ -89,7 +89,7 @@ impl RunningNode {
     /// appended. The default location is platform specific:
     ///  - Linux: $HOME/.local/share/autonomi/node/<peer-id>
     ///  - macOS: $HOME/Library/Application Support/autonomi/node/<peer-id>
-    ///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\node\<peer-id>
+    ///  - Windows: C:\Users\<username>\AppData\Local\autonomi\node\<peer-id>
     #[expect(rustdoc::invalid_html_tags)]
     pub fn root_dir_path(&self) -> PathBuf {
         self.root_dir_path.clone()
