@@ -5,6 +5,7 @@
 /deploy/
 /packaged_architectures/
 /packaged_bins/
+resources/terraform
 
 .claude/plugins
 # Planning files (local session artifacts)
