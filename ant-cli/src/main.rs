@@ -38,6 +38,7 @@ use crate::commands::SubCmd;
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().expect("Failed to initialise error handler");
+    println!("Welcome to ant");
     let mut opt = Opt::parse();
 
     // The clone is necessary to resolve a clippy warning related to a mutex.
