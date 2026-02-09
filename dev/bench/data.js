@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770649967147,
+  "lastUpdate": 1770654120094,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7409,6 +7409,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.465075502255959,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b27e4cefbc478939bc56ba9672cdeabc746a4892",
+          "message": "Merge pull request #3454 from maqi/retry-failed_not_effective_with_merkle_upload\n\nnode(fix): honour --retry-failed for merkle uploads",
+          "timestamp": "2026-02-09T14:59:06Z",
+          "tree_id": "7b1fe53f3cf9b0e9f23f4c3d593170a3d1b721b7",
+          "url": "https://github.com/maidsafe/autonomi/commit/b27e4cefbc478939bc56ba9672cdeabc746a4892"
+        },
+        "date": 1770654110878,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0052762671803226,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.586739690234249,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.520233156343539,
             "unit": "MiB/s"
           }
         ]
