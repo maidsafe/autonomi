@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770649964015,
+  "lastUpdate": 1770649967147,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -26751,6 +26751,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 22031,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e4b1fa1878a60a16c6b01c1344d2a8b6aa828c1f",
+          "message": "Merge pull request #3453 from maqi/more_merkel_upload_progress_visibility\n\nclient(feature): merkle upload progress every 10th chunk (loud_info)",
+          "timestamp": "2026-02-09T13:46:42Z",
+          "tree_id": "4d7e7164a2f2a846670a8d68bd7d0125ad4af52b",
+          "url": "https://github.com/maidsafe/autonomi/commit/e4b1fa1878a60a16c6b01c1344d2a8b6aa828c1f"
+        },
+        "date": 1770649965751,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 17660,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 39162,
             "unit": "ms"
           },
           {
