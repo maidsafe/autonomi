@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770644070236,
+  "lastUpdate": 1770644073097,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -26610,6 +26610,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 23684,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "694062e377f482f5e3998341bab0cee549218de8",
+          "message": "Merge pull request #3450 from maidsafe/dependabot/cargo/time-0.3.47\n\nchore(deps): bump time from 0.3.44 to 0.3.47",
+          "timestamp": "2026-02-09T12:05:12Z",
+          "tree_id": "a33a484603a4555e3c4aef56ea4919669dae3c88",
+          "url": "https://github.com/maidsafe/autonomi/commit/694062e377f482f5e3998341bab0cee549218de8"
+        },
+        "date": 1770644071866,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10743,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 22031,
             "unit": "ms"
           },
           {
