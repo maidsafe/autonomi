@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770660596937,
+  "lastUpdate": 1770673359194,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7487,6 +7487,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.541498680395277,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "212c6466d59ace2d6cfa6339f260f443caa05741",
+          "message": "Merge pull request #3457 from jacderida/chore-format_fixup\n\nchore: apply rustfmt formatting fixes",
+          "timestamp": "2026-02-09T20:20:20Z",
+          "tree_id": "5aa9622326586fe1b033267dd97c70a38231cce9",
+          "url": "https://github.com/maidsafe/autonomi/commit/212c6466d59ace2d6cfa6339f260f443caa05741"
+        },
+        "date": 1770673351386,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 0.9986729239211795,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.494632228046883,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.592167125185908,
             "unit": "MiB/s"
           }
         ]
