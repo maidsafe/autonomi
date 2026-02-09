@@ -206,6 +206,9 @@ impl Client {
                 "🌳 Merkle Tree {batch_num}/{num_batches}: Uploading {batch_size} chunks..."
             );
 
+            let already_exist_before_batch: HashSet<XorName> =
+                already_exist.iter().copied().collect();
+
             // Upload this batch's chunks (skip chunks that already exist)
             let upload_result = self
                 .upload_batch_with_merkle(streams, &receipt, &mut already_exist, batch_size)
@@ -238,6 +241,16 @@ impl Client {
                         }),
                     ));
                 }
+            }
+
+            // Persist which chunks we uploaded so resume can skip them
+            let newly_uploaded = already_exist
+                .difference(&already_exist_before_batch)
+                .copied()
+                .collect::<Vec<_>>();
+            if !newly_uploaded.is_empty() {
+                receipt.add_uploaded(newly_uploaded);
+                self.send_merkle_batch_payment_complete(&receipt).await;
             }
 
             info!(
@@ -388,6 +401,7 @@ impl Client {
     ///
     /// When resuming with a cached receipt, chunks that are:
     /// - In `receipt.already_existed` - skip network check (known to exist)
+    /// - In `receipt.uploaded` - skip network check (already uploaded in a previous batch)
     /// - In `receipt.proofs` - skip network check (already paid, will be uploaded)
     ///
     /// This avoids unnecessary network queries on resume.
@@ -405,7 +419,7 @@ impl Client {
         let total = unique_ordered.len();
 
         // Separate chunks into:
-        // 1. Known to exist (from receipt.already_existed) - no network check needed
+        // 1. Known to exist (receipt.already_existed or receipt.uploaded) - no network check needed
         // 2. Already paid (from receipt.proofs) - no network check needed, will upload
         // 3. Unknown - need network existence check
         let mut known_existing: HashSet<XorName> = HashSet::new();
@@ -413,7 +427,7 @@ impl Client {
         let mut need_check: Vec<XorName> = Vec::new();
 
         for xn in &unique_ordered {
-            if receipt.already_existed.contains(xn) {
+            if receipt.already_existed.contains(xn) || receipt.uploaded.contains(xn) {
                 known_existing.insert(*xn);
             } else if receipt.proofs.contains_key(xn) {
                 already_paid.insert(*xn);
@@ -428,7 +442,7 @@ impl Client {
 
         if known_count > 0 || paid_count > 0 {
             crate::loud_info!(
-                "Resuming: {known_count} chunks known to exist, {paid_count} already paid, {check_count} need checking"
+                "Resuming: {known_count} chunks known to exist (incl. previously uploaded), {paid_count} already paid, {check_count} need checking"
             );
         }
 
