@@ -146,7 +146,8 @@ impl Client {
                     }
 
                     let task_count = tasks.len();
-                    let results = process_tasks_with_max_concurrency(tasks, upload_concurrency).await;
+                    let results =
+                        process_tasks_with_max_concurrency(tasks, upload_concurrency).await;
 
                     // Count all attempted chunks (success or failure)
                     chunks_attempted += task_count;

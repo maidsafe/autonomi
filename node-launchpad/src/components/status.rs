@@ -394,14 +394,11 @@ impl Status<'_> {
             .items
             .as_ref()
             .map(|items| {
-                items
-                    .items
-                    .iter()
-                    .any(|i| {
-                        i.status == NodeStatus::Starting
-                            || i.status == NodeStatus::Stopping
-                            || i.status == NodeStatus::Updating
-                    })
+                items.items.iter().any(|i| {
+                    i.status == NodeStatus::Starting
+                        || i.status == NodeStatus::Stopping
+                        || i.status == NodeStatus::Updating
+                })
             })
             .unwrap_or(false);
         let interval = if has_transitioning_nodes {
@@ -409,8 +406,7 @@ impl Status<'_> {
         } else {
             NODE_REGISTRY_UPDATE_INTERVAL
         };
-        if self.node_registry_last_update.elapsed() > interval || force_update
-        {
+        if self.node_registry_last_update.elapsed() > interval || force_update {
             self.node_registry_last_update = Instant::now();
             let action_sender = self.get_actions_sender()?;
 
@@ -870,9 +866,7 @@ impl Component for Status<'_> {
                     let all_moved_past_starting = services.iter().all(|service_name| {
                         self.items
                             .as_ref()
-                            .and_then(|items| {
-                                items.items.iter().find(|i| i.name == *service_name)
-                            })
+                            .and_then(|items| items.items.iter().find(|i| i.name == *service_name))
                             .map(|item| item.status != NodeStatus::Starting)
                             .unwrap_or(false)
                     });

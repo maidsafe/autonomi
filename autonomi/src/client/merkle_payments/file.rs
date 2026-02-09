@@ -439,9 +439,7 @@ impl Client {
 
         // Only check network for unknown chunks
         if need_check.is_empty() {
-            crate::loud_info!(
-                "All {total} chunks accounted for (no network check needed)"
-            );
+            crate::loud_info!("All {total} chunks accounted for (no network check needed)");
             // Return known_existing and chunks that need upload (already_paid)
             // Note: already_paid chunks still need to be uploaded, so they go in the "new" list
             let new_chunks: Vec<XorName> = unique_ordered
