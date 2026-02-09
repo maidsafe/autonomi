@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770649960888,
+  "lastUpdate": 1770649964015,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -19349,6 +19349,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Average memory usage w/ upload",
             "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e4b1fa1878a60a16c6b01c1344d2a8b6aa828c1f",
+          "message": "Merge pull request #3453 from maqi/more_merkel_upload_progress_visibility\n\nclient(feature): merkle upload progress every 10th chunk (loud_info)",
+          "timestamp": "2026-02-09T13:46:42Z",
+          "tree_id": "4d7e7164a2f2a846670a8d68bd7d0125ad4af52b",
+          "url": "https://github.com/maidsafe/autonomi/commit/e4b1fa1878a60a16c6b01c1344d2a8b6aa828c1f"
+        },
+        "date": 1770649962603,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 13,
             "unit": "MB"
           }
         ]
