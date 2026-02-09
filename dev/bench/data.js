@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770654424521,
+  "lastUpdate": 1770654427684,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -26892,6 +26892,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 39162,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b27e4cefbc478939bc56ba9672cdeabc746a4892",
+          "message": "Merge pull request #3454 from maqi/retry-failed_not_effective_with_merkle_upload\n\nnode(fix): honour --retry-failed for merkle uploads",
+          "timestamp": "2026-02-09T14:59:06Z",
+          "tree_id": "7b1fe53f3cf9b0e9f23f4c3d593170a3d1b721b7",
+          "url": "https://github.com/maidsafe/autonomi/commit/b27e4cefbc478939bc56ba9672cdeabc746a4892"
+        },
+        "date": 1770654426341,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 15135,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 32860,
             "unit": "ms"
           },
           {
