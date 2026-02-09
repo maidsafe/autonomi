@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770639020642,
+  "lastUpdate": 1770639023379,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -26469,6 +26469,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 28020,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chris.oneil@gmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4597e0b0d68046ed73efe8e854f368075606c1a4",
+          "message": "Merge pull request #3449 from maqi/take_close_range_popular_peers_as_candidates\n\nfeat(networking): verify popular close-range peers via get_version",
+          "timestamp": "2026-02-09T10:41:22Z",
+          "tree_id": "6b94c744fedfce34c09c7c77cdfcfcb14eca6571",
+          "url": "https://github.com/maidsafe/autonomi/commit/4597e0b0d68046ed73efe8e854f368075606c1a4"
+        },
+        "date": 1770639022265,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10628,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 23684,
             "unit": "ms"
           },
           {
