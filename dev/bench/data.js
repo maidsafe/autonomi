@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770673633233,
+  "lastUpdate": 1770673635145,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -27174,6 +27174,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 31194,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "212c6466d59ace2d6cfa6339f260f443caa05741",
+          "message": "Merge pull request #3457 from jacderida/chore-format_fixup\n\nchore: apply rustfmt formatting fixes",
+          "timestamp": "2026-02-09T20:20:20Z",
+          "tree_id": "5aa9622326586fe1b033267dd97c70a38231cce9",
+          "url": "https://github.com/maidsafe/autonomi/commit/212c6466d59ace2d6cfa6339f260f443caa05741"
+        },
+        "date": 1770673634489,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 13431,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 28147,
             "unit": "ms"
           },
           {
