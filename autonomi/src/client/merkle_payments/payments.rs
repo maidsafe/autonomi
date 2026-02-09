@@ -39,6 +39,10 @@ pub struct MerklePaymentReceipt {
     /// This is persisted to avoid re-querying the network on resume
     #[serde(default)]
     pub already_existed: std::collections::HashSet<XorName>,
+    /// Chunks that we successfully uploaded in a previous batch (paid and stored).
+    /// Persisted so on resume we skip them instead of re-uploading.
+    #[serde(default)]
+    pub uploaded: std::collections::HashSet<XorName>,
 }
 
 impl Default for MerklePaymentReceipt {
@@ -48,6 +52,7 @@ impl Default for MerklePaymentReceipt {
             file_chunk_counts: HashMap::new(),
             amount_paid: AttoTokens::zero(),
             already_existed: std::collections::HashSet::new(),
+            uploaded: std::collections::HashSet::new(),
         }
     }
 }
@@ -63,11 +68,17 @@ impl MerklePaymentReceipt {
                 .saturating_add(other.amount_paid.as_atto()),
         );
         self.already_existed.extend(other.already_existed);
+        self.uploaded.extend(other.uploaded);
     }
 
     /// Add chunks that were found to already exist on the network
     pub fn add_already_existed(&mut self, chunks: impl IntoIterator<Item = XorName>) {
         self.already_existed.extend(chunks);
+    }
+
+    /// Add chunks that were successfully uploaded (so resume can skip them)
+    pub fn add_uploaded(&mut self, chunks: impl IntoIterator<Item = XorName>) {
+        self.uploaded.extend(chunks);
     }
 }
 
@@ -449,6 +460,7 @@ impl Client {
             file_chunk_counts: HashMap::new(),
             amount_paid: amount,
             already_existed: std::collections::HashSet::new(),
+            uploaded: std::collections::HashSet::new(),
         };
 
         info!(
