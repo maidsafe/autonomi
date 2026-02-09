@@ -215,14 +215,19 @@ impl Client {
             streams = upload_result.streams;
             results.extend(upload_result.completed_files);
 
-            // Retry failed chunks if any
+            // Retry failed chunks if any (use client retry_failed when set, else default)
             if !upload_result.failed_chunks.is_empty() {
+                let max_retries = if self.retry_failed == 0 {
+                    UPLOAD_MAX_RETRIES
+                } else {
+                    self.retry_failed as usize
+                };
                 let remaining_failures = self
                     .retry_failed_merkle_chunks(
                         upload_result.failed_chunks,
                         &receipt,
                         &mut already_exist,
-                        UPLOAD_MAX_RETRIES,
+                        max_retries,
                         UPLOAD_RETRY_PAUSE_SECS,
                     )
                     .await
@@ -230,7 +235,7 @@ impl Client {
 
                 if !remaining_failures.is_empty() {
                     let failed_count = remaining_failures.len();
-                    error!("{failed_count} chunks failed after {UPLOAD_MAX_RETRIES} retries");
+                    error!("{failed_count} chunks failed after {max_retries} retries");
                     return Err(MerkleUploadErrorWithReceipt::upload(
                         receipt,
                         MerklePutError::Batch(super::upload::MerkleBatchUploadState {
