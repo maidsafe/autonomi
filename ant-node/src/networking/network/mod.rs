@@ -492,10 +492,7 @@ impl Network {
                         trace!("  Reported peer: {peer_id:?}, distance: {distance:?}");
 
                         *peer_counts.entry(peer_id).or_insert(0) += 1;
-                        peer_addrs
-                            .entry(peer_id)
-                            .or_default()
-                            .extend(addrs);
+                        peer_addrs.entry(peer_id).or_default().extend(addrs);
                     }
                 }
             } else {
@@ -614,9 +611,8 @@ impl Network {
                     .map(|(peer_id, addrs)| {
                         let network = self.clone();
                         async move {
-                            let req = Request::Query(Query::GetVersion(NetworkAddress::from(
-                                peer_id,
-                            )));
+                            let req =
+                                Request::Query(Query::GetVersion(NetworkAddress::from(peer_id)));
                             let result = network.send_request(req, peer_id, addrs.clone()).await;
                             match result {
                                 Ok((

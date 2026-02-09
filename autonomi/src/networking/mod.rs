@@ -725,8 +725,7 @@ impl Network {
                     })
                     .collect();
                 let version_results =
-                    crate::utils::process_tasks_with_max_concurrency(version_tasks, n.get())
-                        .await;
+                    crate::utils::process_tasks_with_max_concurrency(version_tasks, n.get()).await;
 
                 let mut tier2_verified: Vec<PeerInfo> = version_results
                     .into_iter()
