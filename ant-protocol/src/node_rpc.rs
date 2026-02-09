@@ -30,5 +30,8 @@ pub enum NodeCtrl {
 #[derive(Debug)]
 pub enum StopResult {
     Success(String),
+    /// Node is stopping after a successful upgrade. The service manager should
+    /// restart the process so it picks up the new binary.
+    UpgradeSuccess(String),
     Error(Error),
 }

@@ -29,6 +29,9 @@ pub enum UpgradeError {
     #[error("Binary replacement failed: {0}")]
     BinaryReplacementFailed(String),
 
+    #[error("Binary replacement failed after {attempts} attempts: {message}")]
+    BinaryReplacementRetryExhausted { attempts: u32, message: String },
+
     #[error("Failed to manage upgrade lock: {0}")]
     LockError(String),
 
