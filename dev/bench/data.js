@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770673359194,
+  "lastUpdate": 1770673631374,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -13096,6 +13096,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 200,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "212c6466d59ace2d6cfa6339f260f443caa05741",
+          "message": "Merge pull request #3457 from jacderida/chore-format_fixup\n\nchore: apply rustfmt formatting fixes",
+          "timestamp": "2026-02-09T20:20:20Z",
+          "tree_id": "5aa9622326586fe1b033267dd97c70a38231cce9",
+          "url": "https://github.com/maidsafe/autonomi/commit/212c6466d59ace2d6cfa6339f260f443caa05741"
+        },
+        "date": 1770673630698,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 211,
             "unit": "MB"
           }
         ]
