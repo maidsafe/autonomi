@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770328546839,
+  "lastUpdate": 1770638748872,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7292,6 +7292,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.620255462794369,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chris.oneil@gmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4597e0b0d68046ed73efe8e854f368075606c1a4",
+          "message": "Merge pull request #3449 from maqi/take_close_range_popular_peers_as_candidates\n\nfeat(networking): verify popular close-range peers via get_version",
+          "timestamp": "2026-02-09T10:41:22Z",
+          "tree_id": "6b94c744fedfce34c09c7c77cdfcfcb14eca6571",
+          "url": "https://github.com/maidsafe/autonomi/commit/4597e0b0d68046ed73efe8e854f368075606c1a4"
+        },
+        "date": 1770638738809,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0164261962856185,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.344595029999432,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.593444876616359,
             "unit": "MiB/s"
           }
         ]
