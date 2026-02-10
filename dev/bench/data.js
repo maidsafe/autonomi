@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770673635145,
+  "lastUpdate": 1770748738090,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7526,6 +7526,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.592167125185908,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b9b46a353a20223b76b690294135f66b4a96849e",
+          "message": "Merge pull request #3456 from maqi/persist_merkle_uploaded_chunks_in_receipt_for_resume\n\nfix(client): persist merkle uploaded chunks in receipt for resume",
+          "timestamp": "2026-02-10T17:16:44Z",
+          "tree_id": "68972e92876e1cc5301bfc6bf867de6d15d6eb8c",
+          "url": "https://github.com/maidsafe/autonomi/commit/b9b46a353a20223b76b690294135f66b4a96849e"
+        },
+        "date": 1770748728667,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 0.9566487336675212,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.609616966780611,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.583267686569088,
             "unit": "MiB/s"
           }
         ]
