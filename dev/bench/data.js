@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770839751790,
+  "lastUpdate": 1770840032197,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -13300,6 +13300,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 229,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b1ccf3373b1cb414b447d2c85e506ca28912f946",
+          "message": "Merge pull request #3461 from jacderida/chore-update_min_node_version\n\nchore: bump MIN_NODE_VERSION to 0.4.15",
+          "timestamp": "2026-02-11T19:32:13Z",
+          "tree_id": "62be0e943b12aaa5a62b58eb8e2e9c808444593b",
+          "url": "https://github.com/maidsafe/autonomi/commit/b1ccf3373b1cb414b447d2c85e506ca28912f946"
+        },
+        "date": 1770840031649,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 186,
             "unit": "MB"
           }
         ]
