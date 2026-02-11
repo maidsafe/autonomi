@@ -14,6 +14,7 @@ There are 9 phases:
 * Analyzing changes and determining crate bumps
 * Bumping Rust crates
 * Bumping NodeJS packages
+* Creating the release candidate project on Linear
 * Generating the changelog
 * Creating the release candidate commit
 * Pushing the release candidate branch
@@ -143,7 +144,26 @@ This should run from the corresponding crate directory.
 Present me with the commands you intend to run and wait for my confirmation before executing. If no
 bumps are required, let me know that too. In any case, wait for input from me before continuing.
 
-## Phase 6: Generating the Changelog
+## Phase 6: Creating the release candidate project
+
+Create a release candidate using the package version number you obtained from me in phase 1.
+
+It needs to have a list of PR numbers, which is the list you obtained in phase 2.
+
+It also needs to have the versions of these binaries:
+* antnode
+* antctl
+* antctld
+* ant
+* evm-testnet
+* nat-detection
+* node-launchpad
+
+You should read the values from the crates, since it needs to be the versions they were bumped to.
+
+Wait for me to verify the release candidate project has been successfully created until proceeding to the next phase
+
+## Phase 7: Generating the Changelog
 
 Use the `/new-changelog-entry` skill to generate an initial changelog entry for this release
 candidate. The entry should cover all changes since the last stable release. The last stable release
@@ -156,7 +176,7 @@ Present me with the generated changelog entry for review. I will likely want to 
 and improvements to the wording. Wait for my approval before proceeding. Once approved, post the
 changelog to Slack.
 
-## Phase 7: Creating the Release Candidate Commit
+## Phase 8: Creating the Release Candidate Commit
 
 Stage all the current changes then commit them. For the title of the commit, use:
 `chore(release): release candidate <release-year>.<release-month>.<release-cycle>.<release-cycle-counter>`
@@ -167,7 +187,7 @@ and use its output.
 Show me the commit message you intend to use and wait for my confirmation before creating the
 commit.
 
-## Phase 8: Pushing the Release Candidate Branch
+## Phase 9: Pushing the Release Candidate Branch
 
 Push the release candidate branch to the `origin` repository.
 
@@ -176,7 +196,7 @@ let me inspect what is going on.
 
 Post a message to Slack indicating the release candidate branch has been pushed.
 
-## Phase 9: Running the Release Workflow
+## Phase 10: Running the Release Workflow
 
 Now I want you to run the `release` workflow on this repository. The workflow has inputs for which
 binaries to release (they are all `false` by default).
