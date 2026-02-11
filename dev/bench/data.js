@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770818704534,
+  "lastUpdate": 1770818706451,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -27456,6 +27456,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 22759,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b9d25dec18b97be7c8d5e6df1dca7a054a039900",
+          "message": "Merge pull request #3458 from maqi/avoid_lack_of_candidates_during_merkle_pay\n\nfeat(client): avoid lack of candidates during merkle pay with KAD fallbacks",
+          "timestamp": "2026-02-11T12:38:06Z",
+          "tree_id": "e51564d7bb6bdebf1bd1d490326d2ca8f699c56f",
+          "url": "https://github.com/maidsafe/autonomi/commit/b9d25dec18b97be7c8d5e6df1dca7a054a039900"
+        },
+        "date": 1770818705872,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 13985,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 29296,
             "unit": "ms"
           },
           {
