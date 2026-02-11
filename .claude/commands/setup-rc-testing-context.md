@@ -10,7 +10,6 @@ There are several phases:
 * Start the clients for both testnets
 * Client-side smoke test for the `STG-01` testnet
 * Client-side smoke test for the `STG-02` testnet
-* Create a release candidate project in Linear
 * Create a comparison in the Testnet Registry database
 * Create a Linear issue for the comparison in the release candidate project
 * Create a Slack post for the comparison
@@ -105,13 +104,7 @@ Whether they pass or fail, inform me of the results and wait for my input before
 
 Post the results to Slack.
 
-## Phase 8: Create a release candidate project in Linear
-
-For now this is a step I need to perform manually.
-
-Wait for my input here before proceeding to the next phase.
-
-## Phase 9: Create a comparison in the Testnet Registry database
+## Phase 8: Create a comparison in the Testnet Registry database
 
 Create a comparison between `STG-01` and `STG-02`, where the former is the test environment and the
 latter is the reference.
@@ -124,7 +117,7 @@ Prompt me to confirm the label you are going to use before you create the compar
 
 Take note of the ID of the comparison because it will be used in the next phase.
 
-## Phase 10: Create a Linear issue for the comparison in the release candidate project
+## Phase 9: Create a Linear issue for the comparison in the release candidate project
 
 Post comparison `<id>` to Linear with the following details:
   * `Releases` team
@@ -136,13 +129,13 @@ The `<id>` is the ID of the comparison you created in the last phase.
 
 Prompt me to confirm exactly which value you are going to use.
 
-## Phase 11: Create a Slack post for the comparison
+## Phase 10: Create a Slack post for the comparison
 
 Post the `<id>` comparison to Slack.
 
 Again, the ID comes from the comparison created in phase downloads.
 
-## Phase 12: Deploy a `STG-03` client for testing production downloads
+## Phase 11: Deploy a `STG-03` client for testing production downloads
 
 Launch a `STG-03` client deployment with the following details:
 * Use the `production-downloads` preset
@@ -157,7 +150,7 @@ in the status query, inform me and wait till I direct you further before proceed
 
 Post a message to Slack indicating the environment was successfully deployed.
 
-## Phase 13: Deploy a `STG-04` client for testing production uploads
+## Phase 12: Deploy a `STG-04` client for testing production uploads
 
 Launch a `STG-04` client deployment with the following details:
 * Use the `production-uploads` preset
