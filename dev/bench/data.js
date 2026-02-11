@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770840034220,
+  "lastUpdate": 1770840036033,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -27597,6 +27597,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 29296,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b1ccf3373b1cb414b447d2c85e506ca28912f946",
+          "message": "Merge pull request #3461 from jacderida/chore-update_min_node_version\n\nchore: bump MIN_NODE_VERSION to 0.4.15",
+          "timestamp": "2026-02-11T19:32:13Z",
+          "tree_id": "62be0e943b12aaa5a62b58eb8e2e9c808444593b",
+          "url": "https://github.com/maidsafe/autonomi/commit/b1ccf3373b1cb414b447d2c85e506ca28912f946"
+        },
+        "date": 1770840035492,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 15511,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 33196,
             "unit": "ms"
           },
           {
