@@ -35,7 +35,7 @@ use std::fmt;
 /// This can be overridden via the `ANT_MIN_NODE_VERSION` environment variable.
 ///
 /// Format: (major, minor, patch)
-pub const MIN_NODE_VERSION: (u16, u16, u16) = (0, 4, 14);
+pub const MIN_NODE_VERSION: (u16, u16, u16) = (0, 4, 15);
 
 /// Get the minimum node version, checking environment variable override first.
 ///
@@ -403,7 +403,7 @@ mod tests {
         let (major, minor, patch) = MIN_NODE_VERSION;
         assert_eq!(major, 0);
         assert_eq!(minor, 4);
-        assert_eq!(patch, 14);
+        assert_eq!(patch, 15);
     }
 
     // ============ Release Candidate (RC) Version Tests ============
