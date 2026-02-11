@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770818702521,
+  "lastUpdate": 1770818704534,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -19849,6 +19849,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/b9b46a353a20223b76b690294135f66b4a96849e"
         },
         "date": 1770749015054,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b9d25dec18b97be7c8d5e6df1dca7a054a039900",
+          "message": "Merge pull request #3458 from maqi/avoid_lack_of_candidates_during_merkle_pay\n\nfeat(client): avoid lack of candidates during merkle pay with KAD fallbacks",
+          "timestamp": "2026-02-11T12:38:06Z",
+          "tree_id": "e51564d7bb6bdebf1bd1d490326d2ca8f699c56f",
+          "url": "https://github.com/maidsafe/autonomi/commit/b9d25dec18b97be7c8d5e6df1dca7a054a039900"
+        },
+        "date": 1770818703906,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
