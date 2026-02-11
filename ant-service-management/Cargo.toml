@@ -13,7 +13,7 @@ version = "0.5.1"
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.13" }
 ant-evm = { path = "../ant-evm", version = "0.1.21" }
 ant-logging = { path = "../ant-logging", version = "0.3.0" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.13", features = ["rpc"] }
+ant-protocol = { path = "../ant-protocol", version = "1.0.14-rc.1", features = ["rpc"] }
 async-trait = "0.1"
 dirs-next = "2.0.0"
 libp2p = { version = "0.56.0", features = ["kad"] }

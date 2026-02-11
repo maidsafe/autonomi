@@ -3,7 +3,7 @@ authors = ["MaidSafe Developers <dev@maidsafe.net>"]
 description = "Autonomi client API"
 name = "autonomi"
 license = "GPL-3.0"
-version = "0.10.1"
+version = "0.10.2-rc.1"
 edition = "2024"
 homepage = "https://maidsafe.net"
 readme = "README.md"
@@ -29,7 +29,7 @@ loud = []
 [dependencies]
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.13" }
 ant-evm = { path = "../ant-evm", version = "0.1.21" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.13" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.14-rc.1" }
 bip39 = "2.0.0"
 blst = "0.3.13"
 blstrs = "0.7.1"

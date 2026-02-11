@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2026-02-11
+
+### Network
+
+#### Changed
+
+- The minimum required node version has been updated to `0.4.15`.
+- Peer candidate selection now includes an additional verification tier that checks popular
+  close-range peers via `get_version` queries before selecting them. This improves peer selection
+  quality by confirming peer responsiveness.
+
+### API
+
+#### Added
+
+- `MerklePaymentReceipt::add_uploaded` method to record chunks that were successfully uploaded,
+  enabling more efficient upload resume by skipping re-upload of known chunks.
+- `uploaded` field on `MerklePaymentReceipt` to persist the set of successfully uploaded chunks
+  across upload resume attempts.
+
+#### Changed
+
+- Merkle payment candidate selection now falls back to KAD-only peer discovery when initial
+  Kademlia queries do not return enough candidates, improving upload reliability during network
+  churn.
+- Merkle upload resume now skips network existence checks for chunks that were successfully uploaded
+  in previous batches, in addition to chunks that already existed on the network.
+- Merkle uploads now display progress at info level every 10 chunks, providing better visibility
+  into upload status.
+
+#### Fixed
+
+- The `--retry-failed` flag is now honoured for merkle uploads. Previously, the flag only affected
+  regular uploads and merkle uploads would always use the default retry count.
+
+### Launchpad
+
+#### Fixed
+
+- Node status transitions are now reflected in the UI in real-time. The status panel polls more
+  frequently during transitional states (starting, stopping) and updates the display as soon as the
+  node registry confirms the new state.
+- Stale error messages from node start operations are no longer shown when the underlying services
+  have already transitioned successfully.
+
 ## 2026-02-04
 
 ### Network
