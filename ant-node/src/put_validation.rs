@@ -1158,6 +1158,8 @@ impl Node {
         let record_key = target_address.to_record_key();
         let pretty_key = PrettyPrintRecordKey::from(&record_key);
 
+        tokio::time::sleep(Duration::from_secs(80)).await;
+
         // Verify proof address matches target address
         if proof.address.0.to_vec() != target_address.as_bytes() {
             let error_msg = format!(
