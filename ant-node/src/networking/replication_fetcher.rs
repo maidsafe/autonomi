@@ -449,18 +449,15 @@ impl ReplicationFetcher {
                     .collect();
 
                 // Also accumulate for majority - this maintains parallel operation of both approaches
-                let majority_results =
-                    self.initial_majority_replicates(holder, new_incoming_keys);
+                let majority_results = self.initial_majority_replicates(holder, new_incoming_keys);
 
                 // Dedup on (addr, val_type) only, ignoring PeerId.
                 // This prevents queuing the same key for fetch from multiple peers,
                 // which would waste the limited fetch slots.
                 for (peer, addr, val_type) in majority_results {
-                    let already_present = result
-                        .iter()
-                        .any(|(_, existing_addr, existing_type)| {
-                            existing_addr == &addr && existing_type == &val_type
-                        });
+                    let already_present = result.iter().any(|(_, existing_addr, existing_type)| {
+                        existing_addr == &addr && existing_type == &val_type
+                    });
                     if !already_present {
                         result.push((peer, addr, val_type));
                     }
@@ -474,9 +471,7 @@ impl ReplicationFetcher {
                 vec![]
             }
             None => {
-                debug!(
-                    "No scoring history for {holder:?}, using majority scheme for validation."
-                );
+                debug!("No scoring history for {holder:?}, using majority scheme for validation.");
                 // Unknown peer: use majority approach only
                 // Keys will be accepted once enough different peers report the same keys
                 self.initial_majority_replicates(holder, new_incoming_keys)

@@ -55,6 +55,10 @@ use tokio::sync::mpsc::UnboundedSender;
 
 pub const NODE_STAT_UPDATE_INTERVAL: Duration = Duration::from_secs(5);
 pub const NODE_REGISTRY_UPDATE_INTERVAL: Duration = Duration::from_secs(180); // 3 minutes
+/// Faster registry polling when nodes are in transitional states (Starting/Stopping/Updating).
+/// refresh_node_registry(full_refresh=false) skips the peer connection check, so this is
+/// lightweight enough for frequent polling.
+const NODE_REGISTRY_TRANSITION_UPDATE_INTERVAL: Duration = Duration::from_secs(5);
 /// If nat detection fails for more than 3 times, we don't want to waste time running during every node start.
 const MAX_ERRORS_WHILE_RUNNING_NAT_DETECTION: usize = 3;
 
@@ -238,7 +242,30 @@ impl Status<'_> {
                         || item.status == NodeStatus::Starting
                     {
                         item.spinner_state.calc_next();
-                    } else if new_status != Some(NodeStatus::Updating) {
+                        // Only transition if the registry confirms the node is now running.
+                        // Other states (Stopped, Added) are likely stale from before the
+                        // operation was initiated, so we keep spinning until either the
+                        // registry shows Running or a completion action arrives.
+                        if node_item.status == ServiceStatus::Running {
+                            debug!(
+                                "Node {} transitioning from {:?} to Running (registry confirmed)",
+                                item.name, item.status
+                            );
+                            item.status = NodeStatus::Running;
+                            item.locked = false;
+                        }
+                    } else if item.status == NodeStatus::Stopping {
+                        item.spinner_state.calc_next();
+                        // Only transition if the registry confirms the node has stopped.
+                        if node_item.status == ServiceStatus::Stopped {
+                            debug!(
+                                "Node {} transitioning from Stopping to Stopped (registry confirmed)",
+                                item.name
+                            );
+                            item.status = NodeStatus::Stopped;
+                            item.locked = false;
+                        }
+                    } else {
                         // Update status based on current node status
                         item.status = match node_item.status {
                             ServiceStatus::Running => {
@@ -358,9 +385,28 @@ impl Status<'_> {
     /// Tries to trigger a periodic refresh of the node registry if the last update was more than
     /// `NODE_REGISTRY_UPDATE_INTERVAL` ago. This detects version changes from auto-upgraded
     /// antnode processes. The result is sent via the StatusActions::RegistryRefreshed action.
+    ///
+    /// When nodes are in transitional states (Starting/Updating), uses a shorter polling interval
+    /// to detect status changes faster. The refresh uses `full_refresh=false` which skips the
+    /// peer connection check, making it lightweight enough for frequent polling.
     fn try_update_node_registry(&mut self, force_update: bool) -> Result<()> {
-        if self.node_registry_last_update.elapsed() > NODE_REGISTRY_UPDATE_INTERVAL || force_update
-        {
+        let has_transitioning_nodes = self
+            .items
+            .as_ref()
+            .map(|items| {
+                items.items.iter().any(|i| {
+                    i.status == NodeStatus::Starting
+                        || i.status == NodeStatus::Stopping
+                        || i.status == NodeStatus::Updating
+                })
+            })
+            .unwrap_or(false);
+        let interval = if has_transitioning_nodes {
+            NODE_REGISTRY_TRANSITION_UPDATE_INTERVAL
+        } else {
+            NODE_REGISTRY_UPDATE_INTERVAL
+        };
+        if self.node_registry_last_update.elapsed() > interval || force_update {
             self.node_registry_last_update = Instant::now();
             let action_sender = self.get_actions_sender()?;
 
@@ -812,19 +858,40 @@ impl Component for Status<'_> {
                     services,
                     raw_error,
                 } => {
-                    for service_name in services {
+                    // Check if the services have already moved past the Starting state
+                    // (e.g., transitioned to Running via registry refresh, or the user has
+                    // already stopped the node). If so, this error is from a stale start
+                    // operation (typically the peer connection check timing out) and should
+                    // be suppressed.
+                    let all_moved_past_starting = services.iter().all(|service_name| {
+                        self.items
+                            .as_ref()
+                            .and_then(|items| items.items.iter().find(|i| i.name == *service_name))
+                            .map(|item| item.status != NodeStatus::Starting)
+                            .unwrap_or(false)
+                    });
+
+                    for service_name in &services {
                         self.unlock_service(service_name.as_str());
                     }
-                    self.error_popup = Some(ErrorPopup::new(
-                        "Error".to_string(),
-                        "Error starting node. Please try again.".to_string(),
-                        raw_error,
-                    ));
-                    if let Some(error_popup) = &mut self.error_popup {
-                        error_popup.show();
+
+                    if all_moved_past_starting {
+                        debug!(
+                            "Ignoring start error for {:?}: nodes already moved past Starting state",
+                            services
+                        );
+                    } else {
+                        self.error_popup = Some(ErrorPopup::new(
+                            "Error".to_string(),
+                            "Error starting node. Please try again.".to_string(),
+                            raw_error,
+                        ));
+                        if let Some(error_popup) = &mut self.error_popup {
+                            error_popup.show();
+                        }
+                        // Switch back to entry mode so we can handle key events
+                        return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
                     }
-                    // Switch back to entry mode so we can handle key events
-                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
                 }
                 StatusActions::TriggerManageNodes => {
                     let mut amount_of_nodes = 0;
@@ -902,6 +969,7 @@ impl Component for Status<'_> {
                                         services: service_name,
                                         action_sender,
                                     })?;
+                                node.status = NodeStatus::Stopping;
                             }
                             _ => {
                                 debug!("Cannot Start/Stop node. Node status is {:?}", node.status);
@@ -1637,6 +1705,7 @@ enum NodeStatus {
     Running,
     Starting,
     Stopped,
+    Stopping,
     Removed,
     Updating,
 }
@@ -1648,6 +1717,7 @@ impl fmt::Display for NodeStatus {
             NodeStatus::Running => write!(f, "Running"),
             NodeStatus::Starting => write!(f, "Starting"),
             NodeStatus::Stopped => write!(f, "Stopped"),
+            NodeStatus::Stopping => write!(f, "Stopping"),
             NodeStatus::Removed => write!(f, "Removed"),
             NodeStatus::Updating => write!(f, "Updating"),
         }
@@ -1701,6 +1771,14 @@ impl NodeItem<'_> {
                 };
             }
             NodeStatus::Starting => {
+                self.spinner = self
+                    .spinner
+                    .clone()
+                    .throbber_style(Style::default().fg(EUCALYPTUS).add_modifier(Modifier::BOLD))
+                    .throbber_set(throbber_widgets_tui::BOX_DRAWING)
+                    .use_type(throbber_widgets_tui::WhichUse::Spin);
+            }
+            NodeStatus::Stopping => {
                 self.spinner = self
                     .spinner
                     .clone()

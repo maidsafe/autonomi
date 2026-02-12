@@ -21,8 +21,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // build dependency when the host is Windows.
     #[cfg(windows)]
     {
-        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
-            .expect("CARGO_MANIFEST_DIR should be set by cargo");
+        let manifest_dir =
+            std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR should be set by cargo");
         let icon_path = std::path::Path::new(&manifest_dir)
             .join("../resources/icons/windows/node-launchpad/node-launchpad.ico");
 

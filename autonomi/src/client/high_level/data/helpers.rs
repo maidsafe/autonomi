@@ -9,10 +9,10 @@
 use crate::Client;
 use crate::chunk::DataMapChunk;
 use crate::client::config::{UPLOAD_FLOW_BATCH_SIZE, upload_retry_pause};
+use crate::client::merkle_payments::MerklePaymentReceipt;
 use crate::client::payment::PayError::EvmWalletError;
 use crate::client::payment::PaymentOption;
 use crate::client::payment::Receipt;
-use crate::client::merkle_payments::MerklePaymentReceipt;
 use crate::client::{ClientEvent, PutError, UploadSummary};
 use crate::self_encryption::EncryptionStream;
 use crate::utils::format_upload_error;

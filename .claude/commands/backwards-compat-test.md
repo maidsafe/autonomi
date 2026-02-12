@@ -67,9 +67,9 @@ Post the results to Slack.
 
 Bootstrap a `STG-06` network from the `STG-05` network using the following configuration:
 * 5 generic VMs with 10 nodes per VM
-* `antnode` version 0.4.9
-* `antctl` version 0.13.3
-* peer: <from STG-01>
+* `antnode` <prompt for version>
+* `antctl` <prompt for version>
+* peer: <from STG-05>
 * network-id: 23
 * I need to use a custom evm network with the following:
   - rpc-url: https://sepolia-rollup.arbitrum.io/rpc
@@ -77,7 +77,7 @@ Bootstrap a `STG-06` network from the `STG-05` network using the following confi
   - data-payments-address: 0xfE875D65021A7497a5DC7762c59719c8531f7146
   - merkle-payments-address: 0x393F6825C248a29295A7f9Bfa03e475decb44dc0
 
-You need to prompt me for the peer address from the `STG-05` network.
+You need to prompt me for the peer address from the `STG-05` network and the previous versions of `antnode` and `antctl`.
 
 Post a message to Slack to indicate the second staging environment is now being deployed.
 
@@ -145,7 +145,7 @@ I want to upgrade testnet `STG-06` with the following configuration:
 
 Post a message to Slack to say the upgrade to the RC version is beginning for `STG-06` hosts.
 
-Wait for 30 minutes then prompt for my approval to proceed to the next phase.
+Wait for 15 minutes then prompt for my approval to proceed to the next phase.
 
 Post a message to Slack to say the upgrade has completed for `STG-06` hosts.
 
@@ -157,7 +157,7 @@ I want to upgrade testnet `STG-05` with the following configuration:
 
 Post a message to Slack to say the upgrade to the RC version is beginning for `STG-05` hosts.
 
-Wait for 30 minutes then prompt for my approval to proceed to the next phase.
+Wait for 15 minutes then prompt for my approval to proceed to the next phase.
 
 Post a message to Slack to say the upgrade has completed for `STG-05` hosts.
 

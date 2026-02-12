@@ -6,6 +6,12 @@
 /packaged_architectures/
 /packaged_bins/
 
+# Terraform
+**/.terraform/
+**/.terraform.lock.hcl
+**/*.tfstate
+**/*.tfstate.*
+
 .claude/plugins
 # Planning files (local session artifacts)
 task_plan.md

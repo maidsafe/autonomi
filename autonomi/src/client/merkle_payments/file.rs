@@ -206,6 +206,9 @@ impl Client {
                 "🌳 Merkle Tree {batch_num}/{num_batches}: Uploading {batch_size} chunks..."
             );
 
+            let already_exist_before_batch: HashSet<XorName> =
+                already_exist.iter().copied().collect();
+
             // Upload this batch's chunks (skip chunks that already exist)
             let upload_result = self
                 .upload_batch_with_merkle(streams, &receipt, &mut already_exist, batch_size)
@@ -215,14 +218,19 @@ impl Client {
             streams = upload_result.streams;
             results.extend(upload_result.completed_files);
 
-            // Retry failed chunks if any
+            // Retry failed chunks if any (use client retry_failed when set, else default)
             if !upload_result.failed_chunks.is_empty() {
+                let max_retries = if self.retry_failed == 0 {
+                    UPLOAD_MAX_RETRIES
+                } else {
+                    self.retry_failed as usize
+                };
                 let remaining_failures = self
                     .retry_failed_merkle_chunks(
                         upload_result.failed_chunks,
                         &receipt,
                         &mut already_exist,
-                        UPLOAD_MAX_RETRIES,
+                        max_retries,
                         UPLOAD_RETRY_PAUSE_SECS,
                     )
                     .await
@@ -230,7 +238,7 @@ impl Client {
 
                 if !remaining_failures.is_empty() {
                     let failed_count = remaining_failures.len();
-                    error!("{failed_count} chunks failed after {UPLOAD_MAX_RETRIES} retries");
+                    error!("{failed_count} chunks failed after {max_retries} retries");
                     return Err(MerkleUploadErrorWithReceipt::upload(
                         receipt,
                         MerklePutError::Batch(super::upload::MerkleBatchUploadState {
@@ -238,6 +246,16 @@ impl Client {
                         }),
                     ));
                 }
+            }
+
+            // Persist which chunks we uploaded so resume can skip them
+            let newly_uploaded = already_exist
+                .difference(&already_exist_before_batch)
+                .copied()
+                .collect::<Vec<_>>();
+            if !newly_uploaded.is_empty() {
+                receipt.add_uploaded(newly_uploaded);
+                self.send_merkle_batch_payment_complete(&receipt).await;
             }
 
             info!(
@@ -388,6 +406,7 @@ impl Client {
     ///
     /// When resuming with a cached receipt, chunks that are:
     /// - In `receipt.already_existed` - skip network check (known to exist)
+    /// - In `receipt.uploaded` - skip network check (already uploaded in a previous batch)
     /// - In `receipt.proofs` - skip network check (already paid, will be uploaded)
     ///
     /// This avoids unnecessary network queries on resume.
@@ -405,7 +424,7 @@ impl Client {
         let total = unique_ordered.len();
 
         // Separate chunks into:
-        // 1. Known to exist (from receipt.already_existed) - no network check needed
+        // 1. Known to exist (receipt.already_existed or receipt.uploaded) - no network check needed
         // 2. Already paid (from receipt.proofs) - no network check needed, will upload
         // 3. Unknown - need network existence check
         let mut known_existing: HashSet<XorName> = HashSet::new();
@@ -413,7 +432,7 @@ impl Client {
         let mut need_check: Vec<XorName> = Vec::new();
 
         for xn in &unique_ordered {
-            if receipt.already_existed.contains(xn) {
+            if receipt.already_existed.contains(xn) || receipt.uploaded.contains(xn) {
                 known_existing.insert(*xn);
             } else if receipt.proofs.contains_key(xn) {
                 already_paid.insert(*xn);
@@ -428,15 +447,13 @@ impl Client {
 
         if known_count > 0 || paid_count > 0 {
             crate::loud_info!(
-                "Resuming: {known_count} chunks known to exist, {paid_count} already paid, {check_count} need checking"
+                "Resuming: {known_count} chunks known to exist (incl. previously uploaded), {paid_count} already paid, {check_count} need checking"
             );
         }
 
         // Only check network for unknown chunks
         if need_check.is_empty() {
-            crate::loud_info!(
-                "All {total} chunks accounted for (no network check needed)"
-            );
+            crate::loud_info!("All {total} chunks accounted for (no network check needed)");
             // Return known_existing and chunks that need upload (already_paid)
             // Note: already_paid chunks still need to be uploaded, so they go in the "new" list
             let new_chunks: Vec<XorName> = unique_ordered

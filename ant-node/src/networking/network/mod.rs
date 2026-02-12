@@ -476,6 +476,7 @@ impl Network {
         let mut tasks: FuturesUnordered<_> = query_tasks.into_iter().collect();
 
         let mut peer_counts: HashMap<PeerId, usize> = HashMap::new();
+        let mut peer_addrs: HashMap<PeerId, Vec<Multiaddr>> = HashMap::new();
 
         while let Some((responder_peer_id, result)) = tasks.next().await {
             if let Ok(peers_list) = result {
@@ -484,13 +485,14 @@ impl Network {
 
                 *peer_counts.entry(responder_peer_id).or_insert(0) += 1;
 
-                // Count appearances in the response
-                for (peer_addr, _addrs) in peers_list {
+                // Count appearances in the response and collect addresses for reported peers
+                for (peer_addr, addrs) in peers_list {
                     if let Some(peer_id) = peer_addr.as_peer_id() {
                         let distance = key.distance(&peer_addr);
                         trace!("  Reported peer: {peer_id:?}, distance: {distance:?}");
 
                         *peer_counts.entry(peer_id).or_insert(0) += 1;
+                        peer_addrs.entry(peer_id).or_default().extend(addrs);
                     }
                 }
             } else {
@@ -511,11 +513,16 @@ impl Network {
         //    - Select peers that appear in BOTH the original Kad `candidates` AND `popular_peer_ids`
         //    - These are the most reliable: both Kad and peer consensus agree
         //
-        // 3. TIER 2 - CANDIDATES BEYOND POPULAR RANGE:
-        //    - If Tier 1 doesn't fill N slots, add peers from `candidates` that are farther than the farthest popular peer
+        // 3. TIER 2 - POPULAR NOT IN CANDIDATES (get_version verification):
+        //    - If Tier 1 doesn't fill N slots, consider peers in `popular_peer_ids` that are NOT in the original Kad `candidates`
+        //    - For each such peer (with known addresses from responses), run get_version in parallel
+        //    - Those that respond successfully are added as verified candidates (closest first)
+        //
+        // 4. TIER 3 - CANDIDATES BEYOND POPULAR RANGE:
+        //    - If still not enough, add peers from `candidates` that are farther than the farthest popular peer
         //    - These extend coverage beyond the popular consensus zone
         //
-        // 4. TIER 3 - REMAINING CANDIDATES:
+        // 5. TIER 4 - REMAINING CANDIDATES:
         //    - If still not enough, fill remaining slots with unselected `candidates`
         //    - Pick closest first (sorted by distance to target)
         //
@@ -578,46 +585,91 @@ impl Network {
             n
         );
 
-        // Step 3: Tier 2 - Pick candidates farther than the farthest popular peer
+        // Step 3: Tier 2 - Popular peers NOT in original candidates: verify via get_version, add successes
+        if verified_candidates.len() < n {
+            use ant_protocol::messages::{Query, QueryResponse};
+
+            let candidate_peer_ids: std::collections::HashSet<PeerId> =
+                candidates.iter().map(|(pid, _)| *pid).collect();
+            let popular_not_in_candidates: Vec<(PeerId, Addresses)> = popular_peer_ids
+                .iter()
+                .filter(|id| !candidate_peer_ids.contains(id))
+                .filter_map(|peer_id| {
+                    peer_addrs.get(peer_id).and_then(|addrs| {
+                        if addrs.is_empty() {
+                            None
+                        } else {
+                            Some((*peer_id, Addresses(addrs.clone())))
+                        }
+                    })
+                })
+                .collect();
+
+            if !popular_not_in_candidates.is_empty() {
+                let mut version_tasks: FuturesUnordered<_> = popular_not_in_candidates
+                    .into_iter()
+                    .map(|(peer_id, addrs)| {
+                        let network = self.clone();
+                        async move {
+                            let req =
+                                Request::Query(Query::GetVersion(NetworkAddress::from(peer_id)));
+                            let result = network.send_request(req, peer_id, addrs.clone()).await;
+                            match result {
+                                Ok((
+                                    Response::Query(QueryResponse::GetVersion {
+                                        peer: _,
+                                        version: _,
+                                    }),
+                                    _,
+                                )) => Ok((peer_id, addrs)),
+                                _ => Err(NetworkError::EventChannelFailure(
+                                    "GetVersion failed or unexpected response".to_string(),
+                                )),
+                            }
+                        }
+                    })
+                    .collect();
+
+                let mut tier2_verified: Vec<(PeerId, Addresses)> = Vec::new();
+                while let Some(result) = version_tasks.next().await {
+                    if let Ok((peer_id, addrs)) = result {
+                        tier2_verified.push((peer_id, addrs));
+                    }
+                }
+                tier2_verified.sort_by_key(|(peer_id, _)| get_distance(peer_id));
+
+                for (peer_id, addrs) in tier2_verified {
+                    if verified_candidates.len() >= n {
+                        break;
+                    }
+                    trace!(
+                        "Tier2 (popular not in candidates, get_version ok): {:?}, distance: {:?}",
+                        peer_id,
+                        get_distance(&peer_id)
+                    );
+                    verified_candidates.push((peer_id, addrs));
+                    let _ = selected_peer_ids.insert(peer_id);
+                }
+
+                debug!(
+                    "Tier2 (popular not in candidates): selected {}/{} peers total for {pretty_key:?}",
+                    verified_candidates.len(),
+                    n
+                );
+            }
+        }
+
+        // Step 4: Tier 3 - Pick candidates farther than the farthest popular peer
         if verified_candidates.len() < n
             && let Some(farthest_popular) = farthest_popular_distance
         {
-            let mut tier2_peers: Vec<_> = candidates
+            let mut tier3_peers: Vec<_> = candidates
                 .iter()
                 .filter(|(peer_id, _)| {
                     !selected_peer_ids.contains(peer_id) && get_distance(peer_id) > farthest_popular
                 })
                 .collect();
             // Sort by distance (closest first among those beyond popular range)
-            tier2_peers.sort_by_key(|(peer_id, _)| get_distance(peer_id));
-
-            for (peer_id, addrs) in tier2_peers {
-                if verified_candidates.len() >= n {
-                    break;
-                }
-                trace!(
-                    "Tier2 selected: {:?}, distance: {:?}",
-                    peer_id,
-                    get_distance(peer_id)
-                );
-                verified_candidates.push((*peer_id, addrs.clone()));
-                let _ = selected_peer_ids.insert(*peer_id);
-            }
-
-            debug!(
-                "Tier2 (candidates beyond popular): selected {}/{} peers total for {pretty_key:?}",
-                verified_candidates.len(),
-                n
-            );
-        }
-
-        // Step 4: Tier 3 - Fill remaining slots with unselected candidates (closest first)
-        if verified_candidates.len() < n {
-            let mut tier3_peers: Vec<_> = candidates
-                .iter()
-                .filter(|(peer_id, _)| !selected_peer_ids.contains(peer_id))
-                .collect();
-            // Sort by distance (closest first)
             tier3_peers.sort_by_key(|(peer_id, _)| get_distance(peer_id));
 
             for (peer_id, addrs) in tier3_peers {
@@ -634,7 +686,36 @@ impl Network {
             }
 
             debug!(
-                "Tier3 (remaining candidates): selected {}/{} peers total for {pretty_key:?}",
+                "Tier3 (candidates beyond popular): selected {}/{} peers total for {pretty_key:?}",
+                verified_candidates.len(),
+                n
+            );
+        }
+
+        // Step 5: Tier 4 - Fill remaining slots with unselected candidates (closest first)
+        if verified_candidates.len() < n {
+            let mut tier4_peers: Vec<_> = candidates
+                .iter()
+                .filter(|(peer_id, _)| !selected_peer_ids.contains(peer_id))
+                .collect();
+            // Sort by distance (closest first)
+            tier4_peers.sort_by_key(|(peer_id, _)| get_distance(peer_id));
+
+            for (peer_id, addrs) in tier4_peers {
+                if verified_candidates.len() >= n {
+                    break;
+                }
+                trace!(
+                    "Tier4 selected: {:?}, distance: {:?}",
+                    peer_id,
+                    get_distance(peer_id)
+                );
+                verified_candidates.push((*peer_id, addrs.clone()));
+                let _ = selected_peer_ids.insert(*peer_id);
+            }
+
+            debug!(
+                "Tier4 (remaining candidates): selected {}/{} peers total for {pretty_key:?}",
                 verified_candidates.len(),
                 n
             );

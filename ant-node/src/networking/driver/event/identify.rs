@@ -12,7 +12,9 @@ use crate::networking::{
     relay_manager::{RelayManager, is_a_relayed_peer},
 };
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
-use ant_protocol::version_gate::{PeerType, VersionCheckResult, check_peer_version, get_min_node_version};
+use ant_protocol::version_gate::{
+    PeerType, VersionCheckResult, check_peer_version, get_min_node_version,
+};
 use itertools::Itertools;
 use libp2p::Multiaddr;
 use libp2p::identify::Info;

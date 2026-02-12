@@ -139,7 +139,10 @@ pub fn collect_upload_summary(
                     // Accumulate and progressively save receipt to disk for upload resume
                     if let Some(ref file) = file_name {
                         accumulated_regular_receipt.extend(batch_receipt);
-                        if let Err(e) = cached_payments::save_regular_payment(file, &accumulated_regular_receipt) {
+                        if let Err(e) = cached_payments::save_regular_payment(
+                            file,
+                            &accumulated_regular_receipt,
+                        ) {
                             eprintln!("Warning: Failed to save regular payment receipt: {e}");
                         }
                     }

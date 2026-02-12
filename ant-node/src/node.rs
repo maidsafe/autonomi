@@ -2195,7 +2195,7 @@ fn duration_score_scheme(duration: Duration) -> usize {
         value
     } else {
         info!("Cannot get milli seconds from {duration:?}, using a default value of 1000ms.");
-        HIGHEST_SCORE * TIME_STEP 
+        HIGHEST_SCORE * TIME_STEP
     };
 
     let step = std::cmp::min(HIGHEST_SCORE, in_ms / TIME_STEP);

@@ -146,7 +146,8 @@ impl Client {
                     }
 
                     let task_count = tasks.len();
-                    let results = process_tasks_with_max_concurrency(tasks, upload_concurrency).await;
+                    let results =
+                        process_tasks_with_max_concurrency(tasks, upload_concurrency).await;
 
                     // Count all attempted chunks (success or failure)
                     chunks_attempted += task_count;
@@ -157,6 +158,12 @@ impl Client {
                             Ok(addr) => {
                                 dont_reupload.insert(*addr.xorname());
                                 chunks_uploaded += 1;
+                                // Extra progressing trace at every 10th chunk
+                                if chunks_uploaded == 1 || chunks_uploaded % 10 == 0 {
+                                    crate::loud_info!(
+                                        "Uploaded {chunks_uploaded}/{limit} chunks..."
+                                    );
+                                }
                                 crate::loud_debug!(
                                     "({chunks_uploaded}/{limit}) Chunk stored at: {addr:?}"
                                 );

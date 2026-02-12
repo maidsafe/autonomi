@@ -20,9 +20,9 @@ use ant_protocol::{
 };
 use evmlib::merkle_batch_payment::PoolCommitment;
 use futures::stream::FuturesUnordered;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use xor_name::XorName;
 
 /// Contains the Merkle payment proofs for each XOR address and per-file chunk counts
@@ -39,6 +39,10 @@ pub struct MerklePaymentReceipt {
     /// This is persisted to avoid re-querying the network on resume
     #[serde(default)]
     pub already_existed: std::collections::HashSet<XorName>,
+    /// Chunks that we successfully uploaded in a previous batch (paid and stored).
+    /// Persisted so on resume we skip them instead of re-uploading.
+    #[serde(default)]
+    pub uploaded: std::collections::HashSet<XorName>,
 }
 
 impl Default for MerklePaymentReceipt {
@@ -48,6 +52,7 @@ impl Default for MerklePaymentReceipt {
             file_chunk_counts: HashMap::new(),
             amount_paid: AttoTokens::zero(),
             already_existed: std::collections::HashSet::new(),
+            uploaded: std::collections::HashSet::new(),
         }
     }
 }
@@ -63,11 +68,17 @@ impl MerklePaymentReceipt {
                 .saturating_add(other.amount_paid.as_atto()),
         );
         self.already_existed.extend(other.already_existed);
+        self.uploaded.extend(other.uploaded);
     }
 
     /// Add chunks that were found to already exist on the network
     pub fn add_already_existed(&mut self, chunks: impl IntoIterator<Item = XorName>) {
         self.already_existed.extend(chunks);
+    }
+
+    /// Add chunks that were successfully uploaded (so resume can skip them)
+    pub fn add_uploaded(&mut self, chunks: impl IntoIterator<Item = XorName>) {
+        self.uploaded.extend(chunks);
     }
 }
 
@@ -124,6 +135,7 @@ impl Client {
         // Request from 25% more peers than needed to provide fault tolerance
         // This allows up to 25% of peers to fail without blocking the payment
         const PEERS_TO_QUERY: usize = CANDIDATES_PER_POOL + (CANDIDATES_PER_POOL / 4);
+        const K_VALUE: usize = 20;
 
         let network_addr = NetworkAddress::ChunkAddress(ChunkAddress::new(target_address));
         let closest_peers = self
@@ -131,17 +143,47 @@ impl Client {
             .get_closest_peers_with_retries(network_addr.clone(), Some(PEERS_TO_QUERY))
             .await?;
 
-        // Deduplicate peers by peer_id using HashMap (prevents duplicate candidates)
-        let unique_peers: HashMap<libp2p::PeerId, libp2p::kad::PeerInfo> = closest_peers
+        // Deduplicate peers by peer_id (prevents duplicate candidates)
+        let mut unique_peers: HashMap<libp2p::PeerId, libp2p::kad::PeerInfo> = closest_peers
             .into_iter()
             .map(|peer_info| (peer_info.peer_id, peer_info))
             .collect();
 
+        // If not enough from verified lookup, try KAD-only and insert by target-distance order till fill;
+        // only add as many as needed so existing unique_peers are preferred in the final pick
         if unique_peers.len() < CANDIDATES_PER_POOL {
-            return Err(MerklePaymentError::InsufficientCandidates {
-                got: unique_peers.len(),
-                needed: CANDIDATES_PER_POOL,
-            });
+            let before = unique_peers.len();
+            info!(
+                "KAD-only fallback: only {before} peers from verified lookup for target {target_address:?}, requesting {K_VALUE} via get_closest_peers_kad_only"
+            );
+            if let Ok(kad_peers) = self
+                .network
+                .get_closest_peers_kad_only(network_addr.clone(), Some(K_VALUE))
+                .await
+            {
+                let mut new_peers: Vec<_> = kad_peers
+                    .into_iter()
+                    .filter(|p| !unique_peers.contains_key(&p.peer_id))
+                    .collect();
+                new_peers.sort_by_key(|peer_info| {
+                    let peer_addr = NetworkAddress::from(peer_info.peer_id);
+                    network_addr.distance(&peer_addr)
+                });
+                let need = CANDIDATES_PER_POOL.saturating_sub(unique_peers.len());
+                for peer_info in new_peers.into_iter().take(need) {
+                    unique_peers.entry(peer_info.peer_id).or_insert(peer_info);
+                }
+                info!(
+                    "KAD-only fallback: peer count for target {target_address:?} went from {before} to {}",
+                    unique_peers.len()
+                );
+            }
+            if unique_peers.len() < CANDIDATES_PER_POOL {
+                return Err(MerklePaymentError::InsufficientCandidates {
+                    got: unique_peers.len(),
+                    needed: CANDIDATES_PER_POOL,
+                });
+            }
         }
 
         // Store peer infos with their distance to target for later sorting
@@ -200,35 +242,90 @@ impl Client {
             peer_info_with_distances.len(),
         );
 
-        // Check if we have enough successful responses
+        // If not enough successful quotes, try KAD-only peers that were not queried yet
         if successful_candidates.len() < CANDIDATES_PER_POOL {
-            return Err(MerklePaymentError::InsufficientCandidates {
-                got: successful_candidates.len(),
-                needed: CANDIDATES_PER_POOL,
-            });
+            let got = successful_candidates.len();
+            info!(
+                "KAD-only fallback: only {got} successful quotes for target {target_address:?}, fetching more peers via get_closest_peers_kad_only to query"
+            );
+            let queried_peer_ids: HashSet<libp2p::PeerId> = peer_info_with_distances
+                .iter()
+                .map(|(peer_info, _)| peer_info.peer_id)
+                .collect();
+            if let Ok(kad_peers) = self
+                .network
+                .get_closest_peers_kad_only(network_addr.clone(), Some(K_VALUE))
+                .await
+            {
+                let unqueried: Vec<_> = kad_peers
+                    .into_iter()
+                    .filter(|p| !queried_peer_ids.contains(&p.peer_id))
+                    .collect();
+                if !unqueried.is_empty() {
+                    info!(
+                        "KAD-only fallback: querying {} extra peers for target {target_address:?}",
+                        unqueried.len()
+                    );
+                    let mut extra_tasks = FuturesUnordered::new();
+                    for peer_info in unqueried {
+                        let network = self.network.clone();
+                        let network_addr = network_addr.clone();
+                        let data_type_index = data_type.get_index();
+                        extra_tasks.push(async move {
+                            let result = network
+                                .get_merkle_candidate_quote(
+                                    network_addr,
+                                    peer_info.clone(),
+                                    data_type_index,
+                                    data_size,
+                                    merkle_payment_timestamp,
+                                )
+                                .await;
+                            (peer_info.peer_id, result)
+                        });
+                    }
+                    let mut new_successes: Vec<(libp2p::PeerId, MerklePaymentCandidateNode)> =
+                        Vec::new();
+                    while let Some((peer_id, result)) = extra_tasks.next().await {
+                        if let Ok(candidate) = result {
+                            new_successes.push((peer_id, candidate));
+                        } else if let Err(e) = result {
+                            warn!(
+                                "KAD-only fallback: failed to get quote from peer {peer_id:?} for target {target_address:?}: {e}"
+                            );
+                        }
+                    }
+                    // Insert new successes by target-distance order; only take as many as needed to fill,
+                    // so existing successful_candidates are preferred in the final pick
+                    new_successes.sort_by_key(|(peer_id, _)| {
+                        let peer_addr = NetworkAddress::from(*peer_id);
+                        network_addr.distance(&peer_addr)
+                    });
+                    let need = CANDIDATES_PER_POOL.saturating_sub(successful_candidates.len());
+                    for (peer_id, candidate) in new_successes.into_iter().take(need) {
+                        successful_candidates.push((peer_id, candidate));
+                    }
+                }
+            }
         }
 
-        // Sort successful candidates by distance to target and take the 20 closest
+        // Sort by distance to target, take the CANDIDATES_PER_POOL closest, then convert to array
         successful_candidates.sort_by_key(|(peer_id, _candidate)| {
             let peer_addr = NetworkAddress::from(*peer_id);
             network_addr.distance(&peer_addr)
         });
 
-        // Take the CANDIDATES_PER_POOL closest successful responses
-        let closest_successful: Vec<MerklePaymentCandidateNode> = successful_candidates
-            .into_iter()
-            .take(CANDIDATES_PER_POOL)
-            .map(|(_peer_id, candidate)| candidate)
-            .collect();
-
-        // Convert to exact-sized array
         let candidates_array: [MerklePaymentCandidateNode; CANDIDATES_PER_POOL] =
-            closest_successful.try_into().map_err(|v: Vec<_>| {
-                MerklePaymentError::InsufficientCandidates {
+            successful_candidates
+                .into_iter()
+                .take(CANDIDATES_PER_POOL)
+                .map(|(_peer_id, candidate)| candidate)
+                .collect::<Vec<_>>()
+                .try_into()
+                .map_err(|v: Vec<_>| MerklePaymentError::InsufficientCandidates {
                     got: v.len(),
                     needed: CANDIDATES_PER_POOL,
-                }
-            })?;
+                })?;
 
         Ok(candidates_array)
     }
@@ -449,6 +546,7 @@ impl Client {
             file_chunk_counts: HashMap::new(),
             amount_paid: amount,
             already_existed: std::collections::HashSet::new(),
+            uploaded: std::collections::HashSet::new(),
         };
 
         info!(
