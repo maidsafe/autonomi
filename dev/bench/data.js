@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770912496596,
+  "lastUpdate": 1770912498150,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -27738,6 +27738,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 33196,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "31ed22d9f3f55a8766f1b8f15f161f8d6aaef48b",
+          "message": "Merge pull request #3464 from maqi/avoid_pruning_working_connection\n\nfix(node): reset connection prune deadline on incoming requests",
+          "timestamp": "2026-02-12T15:00:50Z",
+          "tree_id": "15046d2b445df20c8b5f1f418279b6aad03b5083",
+          "url": "https://github.com/maidsafe/autonomi/commit/31ed22d9f3f55a8766f1b8f15f161f8d6aaef48b"
+        },
+        "date": 1770912497806,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 20701,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 43119,
             "unit": "ms"
           },
           {
