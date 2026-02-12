@@ -8,26 +8,26 @@
 
 use super::SwarmDriver;
 use crate::networking::{
-    NetworkEvent, NodeIssue, Result,
     error::{dial_error_to_str, listen_error_to_str},
     interface::TerminateNodeReason,
+    NetworkEvent, NodeIssue, Result,
 };
 use itertools::Itertools;
 #[cfg(feature = "open-metrics")]
 use libp2p::metrics::Recorder;
 use libp2p::{
-    Multiaddr, TransportError,
     core::ConnectedPoint,
     multiaddr::Protocol,
     swarm::{
-        ConnectionId, DialError, SwarmEvent,
         dial_opts::{DialOpts, PeerCondition},
+        ConnectionId, DialError, SwarmEvent,
     },
+    Multiaddr, TransportError,
 };
 use std::time::Instant;
 use tokio::time::Duration;
 
-use super::NodeEvent;
+use super::{CONNECTION_PRUNE_AFTER_SECS, NodeEvent};
 
 impl SwarmDriver {
     /// Handle `SwarmEvents`
@@ -273,7 +273,7 @@ impl SwarmDriver {
                     (
                         peer_id,
                         endpoint.get_remote_address().clone(),
-                        Instant::now() + Duration::from_secs(60),
+                        Instant::now() + Duration::from_secs(CONNECTION_PRUNE_AFTER_SECS),
                     ),
                 );
 
