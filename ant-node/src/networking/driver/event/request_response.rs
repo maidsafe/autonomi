@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::SwarmDriver;
+use super::{CONNECTION_PRUNE_AFTER_SECS, SwarmDriver};
 use crate::networking::driver::event::MsgResponder;
 use crate::networking::interface::NetworkSwarmCmd;
 use crate::networking::network::connection_action_logging;
@@ -19,6 +19,8 @@ use ant_protocol::{
 };
 use libp2p::kad::{KBucketDistance as Distance, U256};
 use libp2p::request_response::{self, Message};
+use std::time::Instant;
+use tokio::time::Duration;
 
 const REPLICATION_SENDER_CLOSE_GROUP_THRESHOLD: usize = 40;
 const REPLICATION_SENDER_EXTENDED_DISTANCE_MULTIPLIER: usize = 10;
@@ -41,6 +43,17 @@ impl SwarmDriver {
                     request_id,
                     ..
                 } => {
+                    // Reset the prune deadline for this connection since we received a new request.
+                    // Without this, a connection established long ago could be pruned by
+                    // remove_outdated_connections() while the node is still processing a request,
+                    // causing ConnectionLost(ApplicationClosed) on the client.
+                    if let Some((_peer_id, _addr, timeout_time)) =
+                        self.live_connected_peers.get_mut(&connection_id)
+                    {
+                        *timeout_time =
+                            Instant::now() + Duration::from_secs(CONNECTION_PRUNE_AFTER_SECS);
+                    }
+
                     // ELK logging. Do not update without proper testing.
                     let action_string = match &request {
                         Request::Cmd(cmd) => match cmd {

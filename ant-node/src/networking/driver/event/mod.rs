@@ -15,6 +15,12 @@ use crate::networking::NetworkEvent;
 use crate::networking::{
     Addresses, driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer,
 };
+
+/// Time after which a connection to a peer not in our routing table (e.g. a client) may be pruned.
+/// Must be at least as long as the request-response timeout (120s) so that put_record and other
+/// long-running requests are not cut off by the node closing the connection (ApplicationClosed).
+/// This deadline is reset each time a new request is received on the connection.
+const CONNECTION_PRUNE_AFTER_SECS: u64 = 120;
 use ant_protocol::messages::ConnectionInfo;
 use custom_debug::Debug as CustomDebug;
 use libp2p::kad::K_VALUE;
