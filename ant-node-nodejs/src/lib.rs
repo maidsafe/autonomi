@@ -286,9 +286,25 @@ pub struct NetworkSpawner(ant_node::spawn::network_spawner::NetworkSpawner);
 #[napi]
 impl NetworkSpawner {
     #[napi(constructor)]
-    pub fn new(args: Option<NetworkSpawnerFields>) -> Result<Self> {
+    pub fn new(args: Option<NetworkSpawnerFields>, network: Option<&Network>) -> Result<Self> {
         let mut spawner = ant_node::spawn::network_spawner::NetworkSpawner::new();
+
+        if let Some(evm_network) = network {
+            spawner = spawner.with_evm_network(evm_network.0.clone());
+        }
+
         if let Some(args) = args {
+            if let Some(rewards_address) = args.rewards_address {
+                spawner = spawner.with_rewards_address(
+                    ant_node::spawn::node_spawner::RewardsAddress::from_str(&rewards_address)
+                        .map_err(|e| {
+                            napi::Error::new(
+                                Status::InvalidArg,
+                                format!("Invalid rewards address format: {e:?}"),
+                            )
+                        })?,
+                );
+            }
             if let Some(bootstrap_config) = args.bootstrap_config {
                 let config = convert_bootstrap_config(bootstrap_config)?;
                 spawner = spawner.with_bootstrap_config(config);
@@ -341,8 +357,11 @@ pub struct BootstrapConfigFields {
 
 #[napi(object)]
 pub struct NetworkSpawnerFields {
-    // pub evm_network: Option<ant_node::spawn::node_spawner::EvmNetwork>,
-    // pub rewards_address: Option<RewardsAddress>,
+    /// NOTE: Currently dead code - not read by constructor.
+    /// The EVM network is passed via a separate `network` parameter.
+    /// TODO: Future cleanup should read this field instead for consistency.
+    pub evm_network: Option<String>,
+    pub rewards_address: Option<String>,
     pub no_upnp: Option<bool>,
     pub root_dir: Option<Option<String>>,
     pub size: Option<u32>,
@@ -351,6 +370,9 @@ pub struct NetworkSpawnerFields {
 
 #[napi(object)]
 pub struct NodeSpawnerFields {
+    /// NOTE: Currently dead code - not read by constructor.
+    /// The EVM network is passed via a separate `network` parameter.
+    /// TODO: Future cleanup should read this field instead for consistency.
     pub evm_network: Option<String>,
     pub socket_addr: Option<String>,
     pub rewards_address: Option<String>,
@@ -435,5 +457,47 @@ impl Network {
             napi::Error::new(Status::InvalidArg, format!("Invalid network name '{name}'"))
         })?;
         Ok(Self(network))
+    }
+}
+
+/// A local EVM testnet for development and testing.
+///
+/// Starts an Anvil node and deploys the required smart contracts.
+/// Requires Anvil to be installed (via Foundry).
+#[napi]
+pub struct Testnet(evmlib::testnet::Testnet);
+
+#[napi]
+impl Testnet {
+    /// Creates and starts a new local EVM testnet.
+    ///
+    /// This starts an Anvil node and deploys:
+    /// - Network token contract
+    /// - Data payments contract
+    /// - Merkle payments contract
+    #[napi(factory, js_name = "new")]
+    pub async fn new_testnet() -> Result<Self> {
+        let testnet = evmlib::testnet::Testnet::new().await;
+        Ok(Self(testnet))
+    }
+
+    /// Returns the Network configuration for this testnet.
+    /// Use this with NetworkSpawner to spawn nodes connected to this EVM.
+    #[napi]
+    pub fn to_network(&self) -> Network {
+        Network(self.0.to_network())
+    }
+
+    /// Returns the default wallet private key (from Anvil's first account).
+    /// This wallet has pre-funded ETH for testing.
+    #[napi]
+    pub fn default_wallet_private_key(&self) -> String {
+        self.0.default_wallet_private_key()
+    }
+
+    /// Returns the RPC URL of the local Anvil node.
+    #[napi]
+    pub fn rpc_url(&self) -> String {
+        self.0.to_network().rpc_url().to_string()
     }
 }
