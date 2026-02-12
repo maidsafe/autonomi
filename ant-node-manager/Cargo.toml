@@ -34,7 +34,7 @@ ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.13" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.29" }
 ant-evm = { path = "../ant-evm", version = "0.1.21" }
 ant-logging = { path = "../ant-logging", version = "0.3.0" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.13" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.14" }
 ant-releases = "0.4.3"
 ant-service-management = { path = "../ant-service-management", version = "0.5.1" }
 evmlib = { path = "../evmlib", version = "0.4.9" }

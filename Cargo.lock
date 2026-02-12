@@ -867,7 +867,7 @@ dependencies = [
 
 [[package]]
 name = "ant-cli"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "ant-build-info",
  "ant-logging",
@@ -972,7 +972,7 @@ dependencies = [
 
 [[package]]
 name = "ant-node"
-version = "0.4.15"
+version = "0.4.16"
 dependencies = [
  "aes-gcm-siv",
  "ant-bootstrap",
@@ -1121,7 +1121,7 @@ dependencies = [
 
 [[package]]
 name = "ant-protocol"
-version = "1.0.13"
+version = "1.0.14"
 dependencies = [
  "ant-build-info",
  "ant-evm",
@@ -1684,7 +1684,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "autonomi"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "alloy",
  "ant-bootstrap",
@@ -6695,7 +6695,7 @@ dependencies = [
 
 [[package]]
 name = "node-launchpad"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "ant-bootstrap",
  "ant-build-info",
