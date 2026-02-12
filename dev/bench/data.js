@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770912495092,
+  "lastUpdate": 1770912496596,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -20053,6 +20053,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/b1ccf3373b1cb414b447d2c85e506ca28912f946"
         },
         "date": 1770840033593,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "31ed22d9f3f55a8766f1b8f15f161f8d6aaef48b",
+          "message": "Merge pull request #3464 from maqi/avoid_pruning_working_connection\n\nfix(node): reset connection prune deadline on incoming requests",
+          "timestamp": "2026-02-12T15:00:50Z",
+          "tree_id": "15046d2b445df20c8b5f1f418279b6aad03b5083",
+          "url": "https://github.com/maidsafe/autonomi/commit/31ed22d9f3f55a8766f1b8f15f161f8d6aaef48b"
+        },
+        "date": 1770912496248,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
