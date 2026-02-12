@@ -28,6 +28,9 @@ pub struct NodeSpawner {
     no_upnp: bool,
     /// A boolean indicating whether relay client mode should be enabled.
     /// Enable this for nodes behind NAT that cannot use UPnP.
+    ///
+    /// Deprecated: Relay nodes are being removed from the network.
+    /// This feature will no longer be supported in a future release.
     relay_client: bool,
     /// An optional `PathBuf` representing the root directory for the node.
     root_dir: Option<PathBuf>,
@@ -111,6 +114,9 @@ impl NodeSpawner {
     ///
     /// When enabled, the node will connect to the network via relay servers.
     /// This is necessary for nodes behind NAT that cannot use UPnP.
+    ///
+    /// Deprecated: Relay nodes are being removed from the network.
+    /// This feature will no longer be supported in a future release.
     ///
     /// # Arguments
     ///

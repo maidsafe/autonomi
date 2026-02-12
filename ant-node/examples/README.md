@@ -47,7 +47,7 @@ let node = NodeSpawner::new()
 | `.with_rewards_address(addr)` | `0x0...0` | **Your wallet address for rewards.** Default burns rewards! |
 | `.with_bootstrap_config(cfg)` | `None` | How to find peers. See [BootstrapConfig](#bootstrapconfig-options) |
 | `.with_no_upnp(bool)` | `false` | `true` = disable UPnP port forwarding. See [NAT & Connectivity](#nat--connectivity) |
-| `.with_relay_client(bool)` | `false` | `true` = use relay servers for NAT traversal. See [NAT & Connectivity](#nat--connectivity) |
+| `.with_relay_client(bool)` | `false` | **Deprecated**: Relay nodes are being removed. `true` = use relay servers for NAT traversal. See [NAT & Connectivity](#nat--connectivity) |
 | `.with_root_dir(path)` | System default | Directory to store node data and keys |
 
 ---
@@ -189,6 +189,9 @@ BootstrapConfig::new(true)
 
 ## NAT & Connectivity
 
+> **Deprecation notice**: Relay nodes are being removed from the network.
+> The `relay_client` feature will no longer be supported in a future release.
+
 Most home internet connections are behind NAT (Network Address Translation), which blocks incoming connections.
 
 ### The Problem
@@ -204,7 +207,7 @@ Without NAT traversal:
 | Flag | What it does | When to use |
 |------|--------------|-------------|
 | `no_upnp = false` (default) | Try UPnP to open router ports automatically | Router supports UPnP |
-| `relay_client = true` | Connect via relay servers | Behind NAT, UPnP doesn't work |
+| `relay_client = true` | **Deprecated**. Connect via relay servers | Behind NAT, UPnP doesn't work |
 
 ### How they work together
 
@@ -235,6 +238,7 @@ Without NAT traversal:
 
 ```rust
 // Home connection (most users)
+// Deprecated: relay nodes are being removed from the network.
 .with_relay_client(true)  // Safe fallback, only used if needed
 
 // Data center / public IP

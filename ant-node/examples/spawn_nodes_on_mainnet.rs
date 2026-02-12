@@ -70,6 +70,8 @@ async fn main() {
 
         // For home connections behind NAT:
         // - relay_client: true (connect via relay servers)
+        // Deprecated: relay nodes are being removed from the network.
+        // This feature will no longer be supported in a future release.
         let node = NodeSpawner::new()
             .with_socket_addr(socket_addr)
             .with_evm_network(EvmNetwork::ArbitrumOne)
