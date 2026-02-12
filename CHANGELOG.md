@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `uploaded` field on `MerklePaymentReceipt` to persist the set of successfully uploaded chunks
   across upload resume attempts.
 
+### Ant Client
+
 #### Changed
 
 - Merkle payment candidate selection now falls back to KAD-only peer discovery when initial
