@@ -99,11 +99,19 @@ pub fn get_config_dir() -> Result<PathBuf> {
     Ok(config_dir)
 }
 
+/// Download and configure WinSW for Windows service management.
+///
+/// WinSW is placed at `C:\ProgramData\antctl\winsw.exe` (via `get_node_manager_path`) rather than
+/// the launchpad's own data directory. This is necessary because when the launchpad is installed via
+/// MSIX, Windows virtualizes `%APPDATA%` paths, redirecting file writes to an MSIX-specific
+/// location. The service management code then cannot find `winsw.exe` at the expected standard
+/// path. Using `C:\ProgramData\antctl` avoids this problem since it is not subject to MSIX
+/// filesystem virtualization.
 #[cfg(windows)]
 pub async fn configure_winsw() -> Result<()> {
-    let data_dir_path = get_launchpad_data_dir_path()?;
+    let winsw_path = ant_node_manager::config::get_node_manager_path()?.join("winsw.exe");
     ant_node_manager::helpers::configure_winsw(
-        &data_dir_path.join("winsw.exe"),
+        &winsw_path,
         ant_node_manager::VerbosityLevel::Minimal,
     )
     .await?;
