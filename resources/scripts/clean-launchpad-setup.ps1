@@ -36,6 +36,8 @@ $registryPath = "C:\ProgramData\antctl\node_registry.json"
 $antctlDir = "C:\ProgramData\antctl"
 $antnodeLogsDir = "C:\ProgramData\antnode"
 $launchpadExe = "C:\Users\Chris\AppData\Local\Microsoft\WindowsApps\node-launchpad.exe"
+$antnodeExe = "C:\Users\Chris\AppData\Local\Microsoft\WindowsApps\antnode.exe"
+$antctlExe = "C:\Users\Chris\AppData\Local\Microsoft\WindowsApps\antctl.exe"
 $autonomiDir = "C:\Users\Chris\AppData\Roaming\autonomi"
 
 # Read node registry and stop/remove services
@@ -152,6 +154,22 @@ if (Test-Path $launchpadExe) {
     Write-Host "Deleted $launchpadExe."
 } else {
     Write-Host "$launchpadExe does not exist. Skipping."
+}
+
+if (Test-Path $antnodeExe) {
+    Write-Host "Deleting $antnodeExe..."
+    Remove-Item -Path $antnodeExe -Force
+    Write-Host "Deleted $antnodeExe."
+} else {
+    Write-Host "$antnodeExe does not exist. Skipping."
+}
+
+if (Test-Path $antctlExe) {
+    Write-Host "Deleting $antctlExe..."
+    Remove-Item -Path $antctlExe -Force
+    Write-Host "Deleted $antctlExe."
+} else {
+    Write-Host "$antctlExe does not exist. Skipping."
 }
 
 if (Test-Path $autonomiDir) {
