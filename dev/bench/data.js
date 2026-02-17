@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1771345040661,
+  "lastUpdate": 1771345043022,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -28020,6 +28020,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 35586,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "92fc410518d465815066b005eb4fc2212dd65c5e",
+          "message": "Merge pull request #3459 from jacderida/feat-auto_upgrades_for_windows\n\nfeat(node): enable automatic upgrades on Windows",
+          "timestamp": "2026-02-17T15:58:57Z",
+          "tree_id": "bbc7568ddd3c391fe7ce8947c489beb92c6b1b80",
+          "url": "https://github.com/maidsafe/autonomi/commit/92fc410518d465815066b005eb4fc2212dd65c5e"
+        },
+        "date": 1771345042116,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 16021,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 33260,
             "unit": "ms"
           },
           {
