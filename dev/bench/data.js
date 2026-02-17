@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1771345038307,
+  "lastUpdate": 1771345040661,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -20257,6 +20257,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/e9b87b36a40a2382fc34ab617de6f14d8b7fbfec"
         },
         "date": 1770933505532,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "92fc410518d465815066b005eb4fc2212dd65c5e",
+          "message": "Merge pull request #3459 from jacderida/feat-auto_upgrades_for_windows\n\nfeat(node): enable automatic upgrades on Windows",
+          "timestamp": "2026-02-17T15:58:57Z",
+          "tree_id": "bbc7568ddd3c391fe7ce8947c489beb92c6b1b80",
+          "url": "https://github.com/maidsafe/autonomi/commit/92fc410518d465815066b005eb4fc2212dd65c5e"
+        },
+        "date": 1771345039710,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
