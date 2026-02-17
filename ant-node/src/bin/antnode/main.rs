@@ -16,7 +16,6 @@ extern crate tracing;
 mod log;
 mod rpc_service;
 mod subcommands;
-#[cfg(unix)]
 mod upgrade;
 
 use crate::log::{reset_critical_failure, set_critical_failure};
@@ -37,13 +36,12 @@ use clap::Parser;
 use color_eyre::{Result, eyre::eyre};
 use const_hex::traits::FromHex;
 use libp2p::PeerId;
-#[cfg(unix)]
 use rand::Rng;
 use std::{
     env,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, ExitCode},
     time::Duration,
 };
 use tokio::{
@@ -236,12 +234,21 @@ struct Opt {
     stop_on_upgrade: bool,
 }
 
-fn main() -> Result<()> {
+fn main() -> ExitCode {
+    match run() {
+        Ok(code) => code,
+        Err(e) => {
+            eprintln!("Error: {e:?}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<ExitCode> {
     color_eyre::install()?;
 
     // Cache the running binary's hash early, before any other node could replace the shared binary.
     // This ensures the hash reflects the actual binary we're running, not a newer version.
-    #[cfg(unix)]
     if let Err(e) = upgrade::get_running_binary_hash() {
         eprintln!("Warning: Failed to cache running binary hash: {e}");
     }
@@ -269,7 +276,7 @@ fn main() -> Result<()> {
                 Some(&identify_protocol_str)
             )
         );
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     let rewards_address = RewardsAddress::from_hex(opt.rewards_address.as_ref().expect(
@@ -278,18 +285,18 @@ fn main() -> Result<()> {
 
     if opt.crate_version {
         println!("Crate version: {}", env!("CARGO_PKG_VERSION"));
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     if opt.protocol_version {
         println!("Network version: {identify_protocol_str}");
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     #[cfg(not(feature = "nightly"))]
     if opt.package_version {
         println!("Package version: {}", ant_build_info::package_version());
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     let evm_network: EvmNetwork = match opt.evm_network.as_ref() {
@@ -335,7 +342,7 @@ fn main() -> Result<()> {
     if opt.peers.local {
         rt.spawn(init_metrics(std::process::id()));
     }
-    let restart_options = rt.block_on(async move {
+    let outcome = rt.block_on(async move {
         let mut node_builder = NodeBuilder::new(
             keypair,
             bootstrap,
@@ -358,7 +365,7 @@ fn main() -> Result<()> {
         };
         #[cfg(feature = "open-metrics")]
         node_builder.metrics_server_port(metrics_server_port);
-        let restart_options = run_node(
+        let outcome = run_node(
             node_builder,
             opt.rpc,
             &log_output_dest,
@@ -367,35 +374,58 @@ fn main() -> Result<()> {
         )
         .await?;
 
-        Ok::<_, eyre::Report>(restart_options)
+        Ok::<_, eyre::Report>(outcome)
     })?;
 
     // actively shut down the runtime
     rt.shutdown_timeout(Duration::from_secs(2));
 
-    // Restart only if we received a restart command.
-    if let Some((root_dir, port)) = restart_options {
-        start_new_node_process(root_dir, port);
-        println!("A new node process has been started successfully.");
-    } else {
-        println!("The node process has been stopped.");
+    match outcome {
+        RunNodeOutcome::Restart(root_dir, port) => {
+            start_new_node_process(root_dir, port);
+            println!("A new node process has been started successfully.");
+        }
+        RunNodeOutcome::UpgradeStop => {
+            // On Windows, return exit code 100 to signal WinSW (configured with
+            // RestartPolicy::OnFailure) to restart the service with the new binary.
+            // On Unix/macOS, exit 0 so that systemd's Restart=on-success triggers the restart.
+            #[cfg(windows)]
+            {
+                println!("Node stopped after upgrade. Exiting with code 100 for service restart.");
+                return Ok(ExitCode::from(100));
+            }
+            #[cfg(not(windows))]
+            {
+                println!("Node stopped after upgrade. Service manager will handle restart.");
+            }
+        }
+        RunNodeOutcome::Stop => {
+            println!("The node process has been stopped.");
+        }
     }
 
-    Ok(())
+    Ok(ExitCode::SUCCESS)
+}
+
+/// The outcome of running a node, used to determine the process exit behavior.
+enum RunNodeOutcome {
+    /// The node should restart by spawning a new process with the given root dir and port.
+    Restart(PathBuf, u16),
+    /// The node should stop normally (exit code 0).
+    Stop,
+    /// The node completed an upgrade and should exit so the service manager
+    /// can restart it with the new binary.
+    UpgradeStop,
 }
 
 /// Start a node with the given configuration.
-/// Returns:
-/// - `Ok(Some((root_dir, port)))` if we receive a restart request.
-/// - `Ok(None)` if we want to shutdown the node.
-/// - `Err(_)` if we want to shutdown the node with an error.
 async fn run_node(
     node_builder: NodeBuilder,
     rpc: Option<SocketAddr>,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
-    #[cfg_attr(not(unix), allow(unused_variables))] stop_on_upgrade: bool,
-) -> Result<Option<(PathBuf, u16)>> {
+    stop_on_upgrade: bool,
+) -> Result<RunNodeOutcome> {
     let started_instant = std::time::Instant::now();
 
     reset_critical_failure(log_output_dest);
@@ -458,7 +488,6 @@ You can check your reward balance by running:
         );
     }
 
-    #[cfg(unix)]
     {
         let ctrl_tx_restart = ctrl_tx.clone();
         let running_node_clone = running_node.clone();
@@ -487,7 +516,7 @@ You can check your reward balance by running:
                         let node_ctrl = if stop_on_upgrade {
                             NodeCtrl::Stop {
                                 delay: Duration::from_secs(0),
-                                result: StopResult::Success(
+                                result: StopResult::UpgradeSuccess(
                                     "Upgrade completed successfully".to_string(),
                                 ),
                             }
@@ -530,7 +559,7 @@ You can check your reward balance by running:
                 println!("{msg} Node path: {log_output_dest}");
                 sleep(delay).await;
 
-                return Ok(Some((root_dir, node_port)));
+                return Ok(RunNodeOutcome::Restart(root_dir, node_port));
             }
             Some(NodeCtrl::Stop { delay, result }) => {
                 let msg = format!("Node is stopping in {delay:?}...");
@@ -540,7 +569,11 @@ You can check your reward balance by running:
                 match result {
                     StopResult::Success(message) => {
                         info!("Node stopped successfully: {}", message);
-                        return Ok(None);
+                        return Ok(RunNodeOutcome::Stop);
+                    }
+                    StopResult::UpgradeSuccess(message) => {
+                        info!("Node stopping for upgrade: {}", message);
+                        return Ok(RunNodeOutcome::UpgradeStop);
                     }
                     StopResult::Error(cause) => {
                         error!("Node stopped with error: {}", cause);

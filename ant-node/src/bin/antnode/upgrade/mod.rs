@@ -48,12 +48,7 @@ static RUNNING_BINARY_HASH: OnceCell<String> = OnceCell::new();
 pub fn get_running_binary_hash() -> Result<&'static str> {
     RUNNING_BINARY_HASH
         .get_or_try_init(|| {
-            let mut current_exe_path = std::env::current_exe()?;
-            let current_exe_str = current_exe_path.to_string_lossy();
-            if current_exe_str.ends_with(" (deleted)") {
-                let cleaned = current_exe_str.trim_end_matches(" (deleted)");
-                current_exe_path = PathBuf::from(cleaned);
-            }
+            let current_exe_path = get_current_exe_path()?;
             debug!(
                 "Calculating and caching hash for running binary: {}",
                 current_exe_path.display()
@@ -395,32 +390,27 @@ pub async fn download_and_extract_upgrade_binary(
 }
 
 pub fn replace_current_binary(new_binary_path: &Path, expected_hash: &str) -> Result<()> {
+    info!("Starting in-place binary replacement");
+
+    if !verify_binary_hash(new_binary_path, expected_hash)? {
+        return Err(UpgradeError::HashVerificationFailed);
+    }
+
+    let current_exe_path = get_current_exe_path()?;
+    info!("Current executable: {}", current_exe_path.display());
+
+    // In this case another process has already upgraded the binary, so the replacement that
+    // occurs below doesn't need to happen again.
+    if current_exe_path.exists()
+        && let Ok(current_hash) = calculate_sha256(&current_exe_path)
+        && current_hash == expected_hash
+    {
+        info!("Current binary already matches upgrade hash");
+        return Ok(());
+    }
+
     #[cfg(unix)]
     {
-        info!("Starting in-place binary replacement");
-
-        if !verify_binary_hash(new_binary_path, expected_hash)? {
-            return Err(UpgradeError::HashVerificationFailed);
-        }
-
-        let mut current_exe_path = std::env::current_exe()?;
-        let current_exe_str = current_exe_path.to_string_lossy();
-        if current_exe_str.ends_with(" (deleted)") {
-            let cleaned = current_exe_str.trim_end_matches(" (deleted)");
-            current_exe_path = PathBuf::from(cleaned);
-        }
-        info!("Current executable: {}", current_exe_path.display());
-
-        // In this case another process has already upgraded the binary, so the rename that occurs
-        // below doesn't need to happen again.
-        if current_exe_path.exists()
-            && let Ok(current_hash) = calculate_sha256(&current_exe_path)
-            && current_hash == expected_hash
-        {
-            info!("Current binary already matches upgrade hash");
-            return Ok(());
-        }
-
         // The reason for this copy is because you cannot *copy* over a running binary, only
         // rename/move. If we didn't do the copy, it would move the cached binary and other
         // processes would need to download it again.
@@ -434,15 +424,89 @@ pub fn replace_current_binary(new_binary_path: &Path, expected_hash: &str) -> Re
         fs::rename(&temp_path, &current_exe_path)?;
 
         info!("Replaced binary at {}", current_exe_path.display());
-        Ok(())
     }
 
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     {
-        Err(UpgradeError::BinaryReplacementFailed(
-            "Automatic upgrade is only supported on Unix platforms (Linux/macOS)".to_string(),
-        ))
+        // On Windows, a running executable cannot be overwritten or deleted, but it CAN be
+        // renamed. The `self-replace` crate handles this pattern:
+        // 1. Renames the running exe to a temp location
+        // 2. Copies the new binary to a temp file, then atomically renames it to the original path
+        // 3. Schedules cleanup of the old binary via FILE_FLAG_DELETE_ON_CLOSE
+        //
+        // We copy the new binary to a temp file first (like Unix) so we don't move the cached
+        // binary that other node processes may also need.
+        let temp_path = current_exe_path.with_extension(format!("tmp-{}", std::process::id()));
+        fs::copy(new_binary_path, &temp_path)?;
+
+        // Retry up to 3 times to handle transient antivirus file locks.
+        // Even with code-signed binaries, AV software may briefly lock files during scanning.
+        const MAX_RETRIES: u32 = 4;
+        const RETRY_DELAYS_MS: [u64; 3] = [100, 500, 2000];
+
+        let mut last_error = None;
+        for attempt in 1..=MAX_RETRIES {
+            match self_replace::self_replace(&temp_path) {
+                Ok(()) => {
+                    info!(
+                        "Replaced binary at {} (attempt {attempt})",
+                        current_exe_path.display()
+                    );
+                    // Clean up the temp file; self-replace already placed the new binary
+                    let _ = fs::remove_file(&temp_path);
+                    last_error = None;
+                    break;
+                }
+                Err(e) => {
+                    warn!(
+                        "self-replace attempt {attempt}/{MAX_RETRIES} failed: {e}. {}",
+                        if attempt < MAX_RETRIES {
+                            "Retrying..."
+                        } else {
+                            "Giving up."
+                        }
+                    );
+                    last_error = Some(e);
+                    if attempt < MAX_RETRIES {
+                        let delay = RETRY_DELAYS_MS[(attempt - 1) as usize];
+                        warn!("Waiting {delay}ms before retry...");
+                        std::thread::sleep(Duration::from_millis(delay));
+                    }
+                }
+            }
+        }
+
+        // Clean up temp file on failure too
+        let _ = fs::remove_file(&temp_path);
+
+        if let Some(e) = last_error {
+            return Err(UpgradeError::BinaryReplacementRetryExhausted {
+                attempts: MAX_RETRIES,
+                message: e.to_string(),
+            });
+        }
     }
+
+    Ok(())
+}
+
+/// Get the path of the currently running executable, handling platform-specific suffixes.
+///
+/// On Linux, `/proc/self/exe` may have a " (deleted)" suffix when the binary has been replaced.
+/// On Windows, the path is returned as-is from `std::env::current_exe()`.
+fn get_current_exe_path() -> Result<PathBuf> {
+    let current_exe_path = std::env::current_exe()?;
+
+    #[cfg(unix)]
+    {
+        let current_exe_str = current_exe_path.to_string_lossy();
+        if current_exe_str.ends_with(" (deleted)") {
+            let cleaned = current_exe_str.trim_end_matches(" (deleted)");
+            return Ok(PathBuf::from(cleaned));
+        }
+    }
+
+    Ok(current_exe_path)
 }
 
 pub async fn perform_upgrade() -> Result<()> {
