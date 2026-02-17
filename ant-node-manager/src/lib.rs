@@ -775,7 +775,11 @@ mod tests {
 
     fn expected_restart_policy() -> RestartPolicy {
         if cfg!(windows) {
-            RestartPolicy::OnFailure { delay_secs: None }
+            RestartPolicy::OnFailure {
+                delay_secs: None,
+                max_retries: None,
+                reset_after_secs: None,
+            }
         } else {
             RestartPolicy::OnSuccess { delay_secs: None }
         }

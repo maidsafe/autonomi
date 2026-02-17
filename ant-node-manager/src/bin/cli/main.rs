@@ -1086,7 +1086,11 @@ fn get_restart_policy() -> RestartPolicy {
 fn get_restart_policy() -> RestartPolicy {
     // Use OnFailure so that WinSW restarts the service when the node exits with a non-zero
     // code (e.g., exit code 100 after an auto-upgrade).
-    RestartPolicy::OnFailure { delay_secs: None }
+    RestartPolicy::OnFailure {
+        delay_secs: None,
+        max_retries: None,
+        reset_after_secs: None,
+    }
 }
 
 fn get_log_builder(level: Level) -> Result<LogBuilder> {
