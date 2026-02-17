@@ -1514,22 +1514,41 @@ impl Component for Status<'_> {
                 ])
                 .style(Style::default().add_modifier(Modifier::BOLD));
 
-                let mut items: Vec<Row> = Vec::new();
                 if let Some(ref mut items_table) = self.items {
+                    let mut items: Vec<Row> = Vec::new();
+                    let item_count = items_table.items.len();
+                    let selected_index = items_table.state.selected().unwrap_or(0);
                     for (i, node_item) in items_table.items.iter_mut().enumerate() {
                         let is_selected = items_table.state.selected() == Some(i);
                         items.push(node_item.render_as_row(i, layout[2], f, is_selected));
                     }
+
+                    let table = Table::new(items, node_widths)
+                        .header(header_row)
+                        .column_spacing(1)
+                        .row_highlight_style(Style::default().bg(INDIGO))
+                        .highlight_spacing(HighlightSpacing::Always);
+
+                    f.render_stateful_widget(table, inner_area, &mut items_table.state);
+
+                    // Scrollbar
+                    let mut scrollbar_state = ScrollbarState::default()
+                        .content_length(item_count)
+                        .position(selected_index);
+                    f.render_stateful_widget(
+                        Scrollbar::default()
+                            .orientation(ScrollbarOrientation::VerticalRight)
+                            .begin_symbol(None)
+                            .end_symbol(None),
+                        inner_area,
+                        &mut scrollbar_state,
+                    );
+                } else {
+                    let table = Table::new(Vec::<Row>::new(), node_widths)
+                        .header(header_row)
+                        .column_spacing(1);
+                    f.render_widget(table, inner_area);
                 }
-
-                // Table items
-                let table = Table::new(items, node_widths)
-                    .header(header_row)
-                    .column_spacing(1)
-                    .row_highlight_style(Style::default().bg(INDIGO))
-                    .highlight_spacing(HighlightSpacing::Always);
-
-                f.render_widget(table, inner_area);
 
                 f.render_widget(block_nodes, layout[2]);
             }
