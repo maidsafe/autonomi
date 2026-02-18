@@ -150,7 +150,11 @@ impl ServiceStateActions for NodeService {
             // with a non-zero code (e.g., exit code 100 after auto-upgrade).
             // On Unix, use OnSuccess so systemd restarts the service on a clean exit (code 0).
             restart_policy: if cfg!(windows) {
-                service_manager::RestartPolicy::OnFailure { delay_secs: None }
+                service_manager::RestartPolicy::OnFailure {
+                    delay_secs: None,
+                    max_retries: None,
+                    reset_after_secs: None,
+                }
             } else {
                 service_manager::RestartPolicy::OnSuccess { delay_secs: None }
             },
