@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1771443349198,
+  "lastUpdate": 1771452539701,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7799,6 +7799,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.59507126219378,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0935d57a2aa8b0f519e2416695209d12ddf69119",
+          "message": "Merge pull request #3469 from jacderida/feat-update_service_manager\n\nfeat: update service-manager to published 0.11.0 crate",
+          "timestamp": "2026-02-18T21:46:10Z",
+          "tree_id": "d09e5d7ad8a77418f959c64c24f0ce635aae6162",
+          "url": "https://github.com/maidsafe/autonomi/commit/0935d57a2aa8b0f519e2416695209d12ddf69119"
+        },
+        "date": 1771452531020,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.04024800012058,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.515997946315086,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.529028173429304,
             "unit": "MiB/s"
           }
         ]
