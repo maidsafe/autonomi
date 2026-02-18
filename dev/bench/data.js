@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1771345043022,
+  "lastUpdate": 1771443250651,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7760,6 +7760,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.494945313408679,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b4b59f77b41a4f52aa707772f3aa82a710d8f7cd",
+          "message": "Merge pull request #3468 from jacderida/feat-various_launchpad_fixes\n\nVarious Launchpad Enhancements",
+          "timestamp": "2026-02-18T19:19:09Z",
+          "tree_id": "e6c77da12dde9858b0f459f87bf0a4c17ed2b3a8",
+          "url": "https://github.com/maidsafe/autonomi/commit/b4b59f77b41a4f52aa707772f3aa82a710d8f7cd"
+        },
+        "date": 1771443242155,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0222378095065174,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.716224669452683,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.59507126219378,
             "unit": "MiB/s"
           }
         ]
