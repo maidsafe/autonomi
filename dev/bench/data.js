@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1771443346757,
+  "lastUpdate": 1771443349198,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -28166,6 +28166,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver average long handling time",
             "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b4b59f77b41a4f52aa707772f3aa82a710d8f7cd",
+          "message": "Merge pull request #3468 from jacderida/feat-various_launchpad_fixes\n\nVarious Launchpad Enhancements",
+          "timestamp": "2026-02-18T19:19:09Z",
+          "tree_id": "e6c77da12dde9858b0f459f87bf0a4c17ed2b3a8",
+          "url": "https://github.com/maidsafe/autonomi/commit/b4b59f77b41a4f52aa707772f3aa82a710d8f7cd"
+        },
+        "date": 1771443348308,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 15562,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 29038,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
             "unit": "ms"
           }
         ]
