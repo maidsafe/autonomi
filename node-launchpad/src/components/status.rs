@@ -168,20 +168,10 @@ impl Status<'_> {
             node_registry_last_update: Instant::now(),
         };
 
-        // Nodes registry
-        let now = Instant::now();
-        debug!("Refreshing node registry states on startup");
-
-        ant_node_manager::refresh_node_registry(
-            node_registry.clone(),
-            &ServiceController {},
-            false,
-            true,
-            ant_node_manager::VerbosityLevel::Minimal,
-        )
-        .await?;
-        node_registry.save().await?;
-        debug!("Node registry states refreshed in {:?}", now.elapsed());
+        // Populate initial state from disk-cached registry data so the TUI can render
+        // immediately. A background refresh will be triggered once the action handler is
+        // registered (see register_action_handler), which will update nodes to their live
+        // status without blocking startup.
         status.update_node_state(
             node_registry.get_node_service_data().await,
             node_registry.nat_status.read().await.is_some(),
@@ -532,6 +522,12 @@ impl Component for Status<'_> {
 
         // Update the stats to be shown as soon as the app is run
         self.try_update_node_stats(true)?;
+
+        // Trigger a background registry refresh now that we have an action sender.
+        // Status::new() no longer blocks on refresh_node_registry() so the TUI can render
+        // immediately with disk-cached state. This background refresh will update nodes to
+        // their live status and send a RegistryRefreshed action when complete.
+        self.try_update_node_registry(true)?;
 
         Ok(())
     }
@@ -1518,22 +1514,45 @@ impl Component for Status<'_> {
                 ])
                 .style(Style::default().add_modifier(Modifier::BOLD));
 
-                let mut items: Vec<Row> = Vec::new();
                 if let Some(ref mut items_table) = self.items {
+                    let mut items: Vec<Row> = Vec::new();
+                    let item_count = items_table.items.len();
+                    let selected_index = items_table.state.selected().unwrap_or(0);
                     for (i, node_item) in items_table.items.iter_mut().enumerate() {
                         let is_selected = items_table.state.selected() == Some(i);
                         items.push(node_item.render_as_row(i, layout[2], f, is_selected));
                     }
+
+                    let table = Table::new(items, node_widths)
+                        .header(header_row)
+                        .column_spacing(1)
+                        .row_highlight_style(Style::default().bg(INDIGO))
+                        .highlight_spacing(HighlightSpacing::Always);
+
+                    f.render_stateful_widget(table, inner_area, &mut items_table.state);
+
+                    // Only show scrollbar when content overflows the visible area.
+                    // Subtract 1 from height to account for the header row.
+                    let visible_rows = inner_area.height.saturating_sub(1) as usize;
+                    if item_count > visible_rows {
+                        let mut scrollbar_state = ScrollbarState::default()
+                            .content_length(item_count)
+                            .position(selected_index);
+                        f.render_stateful_widget(
+                            Scrollbar::default()
+                                .orientation(ScrollbarOrientation::VerticalRight)
+                                .begin_symbol(None)
+                                .end_symbol(None),
+                            inner_area,
+                            &mut scrollbar_state,
+                        );
+                    }
+                } else {
+                    let table = Table::new(Vec::<Row>::new(), node_widths)
+                        .header(header_row)
+                        .column_spacing(1);
+                    f.render_widget(table, inner_area);
                 }
-
-                // Table items
-                let table = Table::new(items, node_widths)
-                    .header(header_row)
-                    .column_spacing(1)
-                    .row_highlight_style(Style::default().bg(INDIGO))
-                    .highlight_spacing(HighlightSpacing::Always);
-
-                f.render_widget(table, inner_area);
 
                 f.render_widget(block_nodes, layout[2]);
             }

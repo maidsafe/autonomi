@@ -13,6 +13,7 @@
 **/*.tfstate.*
 
 .claude/plugins
+.claude/settings.local.json
 # Planning files (local session artifacts)
 task_plan.md
 findings.md
