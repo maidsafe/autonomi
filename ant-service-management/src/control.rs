@@ -17,19 +17,74 @@ use std::{
 };
 use sysinfo::{Pid, ProcessRefreshKind, System, UpdateKind};
 
-/// Normalizes a path by stripping common upgrade-related suffixes.
+/// Normalizes a path by stripping common upgrade-related suffixes and patterns.
 ///
-/// During in-place binary upgrades on Unix systems, the running process may show patterns like:
-/// - " (deleted)": appears when the binary has been replaced while still running
+/// During in-place binary upgrades, the running process may show modified paths:
+/// - " (deleted)": appears on Linux when the binary has been replaced while still running
 /// - ".bak", ".old": common backup file suffixes
+/// - `.__relocated__` pattern: on Windows, the `self-replace` crate renames a running binary to
+///   `.<stem>.<random_chars>.__relocated__.exe` before placing the new binary at the original path
 ///
-/// This function strips these suffixes to allow matching between the expected path and the actual
+/// This function strips these patterns to allow matching between the expected path and the actual
 /// running process path.
 fn normalize_path_for_comparison(path: &str) -> String {
-    path.trim_end_matches(" (deleted)")
+    let normalized = path
+        .trim_end_matches(" (deleted)")
         .trim_end_matches(".bak")
-        .trim_end_matches(".old")
-        .to_string()
+        .trim_end_matches(".old");
+
+    // Handle Windows self-replace .__relocated__ pattern.
+    // Example: .antnode.abcdef1234567890abcdef1234567890.__relocated__.exe → antnode.exe
+    if normalized.contains(".__relocated__") {
+        return normalize_relocated_path(normalized);
+    }
+
+    normalized.to_string()
+}
+
+/// Normalizes a path containing the `self-replace` crate's `.__relocated__` pattern.
+///
+/// On Windows, the `self-replace` crate renames a running executable to:
+///   `.<original_stem>.<32_random_chars>.__relocated__.exe`
+/// This function reverses that transformation, handling both full paths and bare filenames.
+///
+/// Example full path:
+///   `C:\path\to\.antnode.abcdef1234567890abcdef1234567890.__relocated__.exe`
+///   → `C:\path\to\antnode.exe`
+///
+/// Example filename only:
+///   `.antnode.abcdef1234567890abcdef1234567890.__relocated__.exe`
+///   → `antnode.exe`
+fn normalize_relocated_path(path: &str) -> String {
+    // Find where the filename starts (after the last directory separator)
+    let filename_start = path
+        .rfind(|c: char| c == '/' || c == '\\')
+        .map(|pos| pos + 1)
+        .unwrap_or(0);
+
+    let dir = &path[..filename_start];
+    let filename = &path[filename_start..];
+
+    // Expected filename pattern: .<stem>.<random>.__relocated__<ext>
+    let without_dot = match filename.strip_prefix('.') {
+        Some(s) => s,
+        None => return path.to_string(),
+    };
+
+    // Split at .__relocated__ to separate the stem+random from the extension
+    let Some((before_relocated, after_relocated)) = without_dot.split_once(".__relocated__") else {
+        return path.to_string();
+    };
+
+    // The original stem is everything before the last dot in the before_relocated portion
+    // (the last dot separates the original stem from the random chars)
+    match before_relocated.rfind('.') {
+        Some(dot_pos) => {
+            let stem = &before_relocated[..dot_pos];
+            format!("{}{}{}", dir, stem, after_relocated)
+        }
+        None => path.to_string(),
+    }
 }
 
 /// Parse version string from `antnode --version` output.
@@ -268,6 +323,35 @@ impl ServiceControl for ServiceController {
                 }
             }
         }
+        // Log processes whose name contains the expected binary name to aid diagnosis.
+        let expected_name = bin_path
+            .file_stem()
+            .and_then(|n| n.to_str())
+            .unwrap_or("antnode");
+        for (pid, process) in system.processes() {
+            if let Some(name) = process.exe().and_then(|p| p.file_name()).and_then(|n| n.to_str())
+            {
+                if name.to_lowercase().contains(&expected_name.to_lowercase()) {
+                    let exe_display = process
+                        .exe()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "<no exe path>".to_string());
+                    debug!(
+                        "Near-match process: PID {pid}, exe: {exe_display}",
+                    );
+                }
+            } else if process
+                .name()
+                .to_lowercase()
+                .contains(&expected_name.to_lowercase())
+            {
+                debug!(
+                    "Near-match process (no exe path): PID {pid}, name: {}",
+                    process.name()
+                );
+            }
+        }
+
         error!(
             "No process was located with a path at {}",
             bin_path.to_string_lossy()
@@ -291,21 +375,32 @@ impl ServiceControl for ServiceController {
             return Ok(false);
         }
 
-        if let Some(process) = system.process(pid)
-            && let Some(exe_path) = process.exe()
-        {
-            let process_name = exe_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if let Some(process) = system.process(pid) {
+            if let Some(exe_path) = process.exe() {
+                let process_name =
+                    exe_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-            // Handle " (deleted)" suffix that appears during binary replacement
-            let normalized_name = normalize_path_for_comparison(process_name);
-            let is_match =
-                normalized_name == expected_name || normalized_name.starts_with(expected_name);
+                // Handle upgrade-related path patterns (" (deleted)", ".__relocated__", etc.)
+                let normalized_name = normalize_path_for_comparison(process_name);
+                let is_match = normalized_name == expected_name
+                    || normalized_name.starts_with(expected_name);
 
+                debug!(
+                    "Process {pid} exe path: '{}', filename: '{}' (normalized: '{}'), \
+                    expected: '{}', match: {}",
+                    exe_path.display(),
+                    process_name,
+                    normalized_name,
+                    expected_name,
+                    is_match
+                );
+                return Ok(is_match);
+            }
             debug!(
-                "Process {pid} name: '{}' (normalized: '{}'), expected: '{}', match: {}",
-                process_name, normalized_name, expected_name, is_match
+                "Process {pid} exists but exe path is unavailable (name: '{}')",
+                process.name()
             );
-            return Ok(is_match);
+            return Ok(false);
         }
 
         Ok(false)
@@ -512,5 +607,88 @@ mod tests {
     fn test_parse_version_no_version_prefix() {
         let output = "Autonomi Node 0.4.9";
         assert_eq!(parse_version_from_output(output), None);
+    }
+
+    // Tests for normalize_path_for_comparison
+
+    #[test]
+    fn test_normalize_path_unchanged_for_normal_path() {
+        assert_eq!(
+            normalize_path_for_comparison("/usr/local/bin/antnode"),
+            "/usr/local/bin/antnode"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_strips_deleted_suffix() {
+        assert_eq!(
+            normalize_path_for_comparison("/usr/local/bin/antnode (deleted)"),
+            "/usr/local/bin/antnode"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_strips_bak_suffix() {
+        assert_eq!(
+            normalize_path_for_comparison("/usr/local/bin/antnode.bak"),
+            "/usr/local/bin/antnode"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_strips_old_suffix() {
+        assert_eq!(
+            normalize_path_for_comparison("/usr/local/bin/antnode.old"),
+            "/usr/local/bin/antnode"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_handles_windows_relocated_full_path() {
+        let relocated = r"C:\Program Files\autonomi\node\antnode1\.antnode.abcdef1234567890abcdef1234567890.__relocated__.exe";
+        assert_eq!(
+            normalize_path_for_comparison(relocated),
+            r"C:\Program Files\autonomi\node\antnode1\antnode.exe"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_handles_windows_relocated_filename_only() {
+        let relocated = ".antnode.abcdef1234567890abcdef1234567890.__relocated__.exe";
+        assert_eq!(
+            normalize_path_for_comparison(relocated),
+            "antnode.exe"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_handles_relocated_with_forward_slashes() {
+        let relocated = "C:/autonomi/node/.antnode.abcdef1234567890abcdef1234567890.__relocated__.exe";
+        assert_eq!(
+            normalize_path_for_comparison(relocated),
+            "C:/autonomi/node/antnode.exe"
+        );
+    }
+
+    #[test]
+    fn test_normalize_path_returns_unchanged_for_partial_relocated_pattern() {
+        // Missing leading dot on filename — doesn't match the self-replace pattern
+        let path = r"C:\path\antnode.abcdef.__relocated__.exe";
+        assert_eq!(normalize_path_for_comparison(path), path);
+    }
+
+    #[test]
+    fn test_normalize_path_returns_unchanged_when_no_random_suffix() {
+        // No dot between stem and __relocated__ — doesn't match expected pattern
+        let path = ".antnode.__relocated__.exe";
+        assert_eq!(normalize_path_for_comparison(path), path);
+    }
+
+    #[test]
+    fn test_normalize_relocated_preserves_exe_extension() {
+        let relocated = ".antnode.abc123def456abc123def456abc123de.__relocated__.exe";
+        let result = normalize_path_for_comparison(relocated);
+        assert!(result.ends_with(".exe"), "Expected .exe extension, got: {result}");
+        assert_eq!(result, "antnode.exe");
     }
 }

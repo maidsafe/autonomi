@@ -519,6 +519,11 @@ pub async fn status_report(
 ///
 /// It uses the `get_process_pid` method which handles upgrade-related path patterns like "
 /// (deleted)", ".bak", and ".old" suffixes.
+///
+/// If path-based detection fails, a final fallback reads the `antnode.pid` file from the node's
+/// data directory and verifies the PID is still a running antnode process. This handles the case
+/// on Windows where the `self-replace` crate moves the running binary to the system temp directory
+/// during auto-upgrade, making path-based detection impossible.
 async fn detect_pid_using_path<'a>(
     service_control: &'a dyn ServiceControl,
     service: &'a NodeService,
@@ -535,21 +540,65 @@ async fn detect_pid_using_path<'a>(
                 .await?;
         }
         Err(_) => {
-            match service.status().await {
-                ServiceStatus::Added => {
-                    // If the service is still at `Added` status, there hasn't been an attempt
-                    // to start it since it was installed. It's useful to keep this status
-                    // rather than setting it to `STOPPED`, so that the user can differentiate.
-                    debug!("{service_name} has not been started since it was installed");
+            // Tier 3: read PID from the antnode.pid file in the node's data directory.
+            //
+            // On Windows, the self-replace crate moves the running binary to the system temp
+            // directory during auto-upgrade, so path-based detection cannot find it. The node
+            // writes its PID to antnode.pid at startup, which persists through the upgrade.
+            let pid_file = service.data_dir_path().await.join("antnode.pid");
+            let mut found_via_pid_file = false;
+            if let Ok(pid_str) = tokio::fs::read_to_string(&pid_file).await {
+                if let Ok(file_pid) = pid_str.trim().parse::<u32>() {
+                    debug!(
+                        "Tier 3: read PID {file_pid} from {} for {service_name}",
+                        pid_file.display()
+                    );
+                    match service_control.verify_process_by_pid(file_pid, "antnode") {
+                        Ok(true) => {
+                            debug!(
+                                "{service_name} verified via PID file with PID {file_pid}"
+                            );
+                            service
+                                .on_start(Some(file_pid), full_refresh, service_control)
+                                .await?;
+                            found_via_pid_file = true;
+                        }
+                        Ok(false) => {
+                            debug!(
+                                "PID {file_pid} from file is not a running antnode process \
+                                for {service_name}"
+                            );
+                        }
+                        Err(e) => {
+                            debug!(
+                                "Error verifying PID {file_pid} from file for \
+                                {service_name}: {e:?}"
+                            );
+                        }
+                    }
                 }
-                ServiceStatus::Removed => {
-                    // In the case of the service being removed, we want to retain that state
-                    // and not have it marked `STOPPED`.
-                    debug!("{service_name} has been removed");
-                }
-                _ => {
-                    debug!("Failed to detect process for {service_name}; marking it stopped.");
-                    service.on_stop().await?;
+            }
+
+            if !found_via_pid_file {
+                match service.status().await {
+                    ServiceStatus::Added => {
+                        // If the service is still at `Added` status, there hasn't been an
+                        // attempt to start it since it was installed. It's useful to keep this
+                        // status rather than setting it to `STOPPED`, so that the user can
+                        // differentiate.
+                        debug!("{service_name} has not been started since it was installed");
+                    }
+                    ServiceStatus::Removed => {
+                        // In the case of the service being removed, we want to retain that
+                        // state and not have it marked `STOPPED`.
+                        debug!("{service_name} has been removed");
+                    }
+                    _ => {
+                        debug!(
+                            "Failed to detect process for {service_name}; marking it stopped."
+                        );
+                        service.on_stop().await?;
+                    }
                 }
             }
         }
