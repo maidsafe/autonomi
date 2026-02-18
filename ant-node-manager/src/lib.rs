@@ -547,34 +547,34 @@ async fn detect_pid_using_path<'a>(
             // writes its PID to antnode.pid at startup, which persists through the upgrade.
             let pid_file = service.data_dir_path().await.join("antnode.pid");
             let mut found_via_pid_file = false;
-            if let Ok(pid_str) = tokio::fs::read_to_string(&pid_file).await {
-                if let Ok(file_pid) = pid_str.trim().parse::<u32>() {
-                    debug!(
-                        "Tier 3: read PID {file_pid} from {} for {service_name}",
-                        pid_file.display()
-                    );
-                    match service_control.verify_process_by_pid(file_pid, "antnode") {
-                        Ok(true) => {
-                            debug!(
-                                "{service_name} verified via PID file with PID {file_pid}"
-                            );
-                            service
-                                .on_start(Some(file_pid), full_refresh, service_control)
-                                .await?;
-                            found_via_pid_file = true;
-                        }
-                        Ok(false) => {
-                            debug!(
-                                "PID {file_pid} from file is not a running antnode process \
-                                for {service_name}"
-                            );
-                        }
-                        Err(e) => {
-                            debug!(
-                                "Error verifying PID {file_pid} from file for \
-                                {service_name}: {e:?}"
-                            );
-                        }
+            if let Ok(pid_str) = tokio::fs::read_to_string(&pid_file).await
+                && let Ok(file_pid) = pid_str.trim().parse::<u32>()
+            {
+                debug!(
+                    "Tier 3: read PID {file_pid} from {} for {service_name}",
+                    pid_file.display()
+                );
+                match service_control.verify_process_by_pid(file_pid, "antnode") {
+                    Ok(true) => {
+                        debug!(
+                            "{service_name} verified via PID file with PID {file_pid}"
+                        );
+                        service
+                            .on_start(Some(file_pid), full_refresh, service_control)
+                            .await?;
+                        found_via_pid_file = true;
+                    }
+                    Ok(false) => {
+                        debug!(
+                            "PID {file_pid} from file is not a running antnode process \
+                            for {service_name}"
+                        );
+                    }
+                    Err(e) => {
+                        debug!(
+                            "Error verifying PID {file_pid} from file for \
+                            {service_name}: {e:?}"
+                        );
                     }
                 }
             }

@@ -58,7 +58,7 @@ fn normalize_path_for_comparison(path: &str) -> String {
 fn normalize_relocated_path(path: &str) -> String {
     // Find where the filename starts (after the last directory separator)
     let filename_start = path
-        .rfind(|c: char| c == '/' || c == '\\')
+        .rfind(['/', '\\'])
         .map(|pos| pos + 1)
         .unwrap_or(0);
 
@@ -81,7 +81,7 @@ fn normalize_relocated_path(path: &str) -> String {
     match before_relocated.rfind('.') {
         Some(dot_pos) => {
             let stem = &before_relocated[..dot_pos];
-            format!("{}{}{}", dir, stem, after_relocated)
+            format!("{dir}{stem}{after_relocated}")
         }
         None => path.to_string(),
     }
