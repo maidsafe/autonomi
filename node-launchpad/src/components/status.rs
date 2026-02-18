@@ -1531,18 +1531,22 @@ impl Component for Status<'_> {
 
                     f.render_stateful_widget(table, inner_area, &mut items_table.state);
 
-                    // Scrollbar
-                    let mut scrollbar_state = ScrollbarState::default()
-                        .content_length(item_count)
-                        .position(selected_index);
-                    f.render_stateful_widget(
-                        Scrollbar::default()
-                            .orientation(ScrollbarOrientation::VerticalRight)
-                            .begin_symbol(None)
-                            .end_symbol(None),
-                        inner_area,
-                        &mut scrollbar_state,
-                    );
+                    // Only show scrollbar when content overflows the visible area.
+                    // Subtract 1 from height to account for the header row.
+                    let visible_rows = inner_area.height.saturating_sub(1) as usize;
+                    if item_count > visible_rows {
+                        let mut scrollbar_state = ScrollbarState::default()
+                            .content_length(item_count)
+                            .position(selected_index);
+                        f.render_stateful_widget(
+                            Scrollbar::default()
+                                .orientation(ScrollbarOrientation::VerticalRight)
+                                .begin_symbol(None)
+                                .end_symbol(None),
+                            inner_area,
+                            &mut scrollbar_state,
+                        );
+                    }
                 } else {
                     let table = Table::new(Vec::<Row>::new(), node_widths)
                         .header(header_row)
