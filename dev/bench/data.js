@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1771452826090,
+  "lastUpdate": 1771452828749,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -20461,6 +20461,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/b4b59f77b41a4f52aa707772f3aa82a710d8f7cd"
         },
         "date": 1771443345796,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0935d57a2aa8b0f519e2416695209d12ddf69119",
+          "message": "Merge pull request #3469 from jacderida/feat-update_service_manager\n\nfeat: update service-manager to published 0.11.0 crate",
+          "timestamp": "2026-02-18T21:46:10Z",
+          "tree_id": "d09e5d7ad8a77418f959c64c24f0ce635aae6162",
+          "url": "https://github.com/maidsafe/autonomi/commit/0935d57a2aa8b0f519e2416695209d12ddf69119"
+        },
+        "date": 1771452827634,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
