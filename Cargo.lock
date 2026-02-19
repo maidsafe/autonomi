@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "ant-node-manager"
-version = "0.14.2-rc.1"
+version = "0.14.2-rc.2"
 dependencies = [
  "ant-bootstrap",
  "ant-build-info",
@@ -1190,7 +1190,7 @@ dependencies = [
 
 [[package]]
 name = "ant-service-management"
-version = "0.5.2-rc.1"
+version = "0.5.3-rc.1"
 dependencies = [
  "ant-bootstrap",
  "ant-evm",
@@ -6789,7 +6789,7 @@ dependencies = [
 
 [[package]]
 name = "node-launchpad"
-version = "0.6.4-rc.1"
+version = "0.6.4-rc.2"
 dependencies = [
  "ant-bootstrap",
  "ant-build-info",

@@ -30,7 +30,7 @@ ant-evm = { path = "../ant-evm", version = "0.1.21" }
 ant-logging = { path = "../ant-logging", version = "0.3.0", features = ["process-metrics"] }
 ant-protocol = { path = "../ant-protocol", version = "1.0.15-rc.1" }
 ant-releases = "0.4.3"
-ant-service-management = { path = "../ant-service-management", version = "0.5.2-rc.1" }
+ant-service-management = { path = "../ant-service-management", version = "0.5.3-rc.1" }
 async-trait = "0.1"
 bls = { package = "blsttc", version = "8.0.1" }
 bytes = { version = "1.11.1", features = ["serde"] }

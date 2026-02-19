@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   policy for Windows services, handling the `self-replace` crate's `.__relocated__` filename pattern
   for process identification, and updating the `service-manager` dependency to `0.11.0`.
 
+#### Fixed
+
+- The `merkle_payments_address` setting is now retained when upgrading a node service via `antctl`.
+  Previously, `build_upgrade_install_context()` was not passing this argument when reinstalling,
+  causing the setting to be lost.
+
 ### Launchpad
 
 #### Added
@@ -48,6 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On Windows, WinSW is now placed at `C:\ProgramData\antctl\winsw.exe` instead of the launchpad's
   own data directory. This avoids MSIX filesystem virtualisation redirecting the path and preventing
   the service management code from finding the executable.
+- On Windows, the launchpad now uses `C:\ProgramData\antctl\data` for the node data directory
+  instead of `dirs_next::data_dir()`. The MSIX filesystem virtualises the `%APPDATA%` path, causing
+  the antnode binary to be written to a virtualised location that the service manager cannot find.
 
 ## 2026-02-11
 
