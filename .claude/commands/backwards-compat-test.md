@@ -35,6 +35,8 @@ After you have that, use the `gh` tool to get the releases for this repository a
 with title matching the package version I provided. From the description for that release you can
 obtain the version numbers for `ant`, `antnode` and `antctl`.
 
+Before you proceed, let me review the versions you have obtained.
+
 Now deploy a `STG-05` testnet with the following details:
 
 * 5 generic node VMs with 20 nodes per VM
@@ -49,19 +51,18 @@ Now deploy a `STG-05` testnet with the following details:
 
 Post a message to Slack to indicate the first staging environment is now being deployed.
 
-Wait for the deployment to complete by polling every 2 minutes.
+Wait for the deployment to complete by polling every 2 minutes. If there is a failure, inform me and
+wait for my input.
 
-Once complete, wait for my approval to advance to the next phase.
-
-Post a message to Slack indicating the environment was successfully deployed.
+When we have a successful deployment, post a message to Slack indicating the environment was
+deployed and move to the next phase.
 
 ## Phase 2: Node-side smoke test for the `STG-05` testnet
 
-Run the node smoke tests for `STG-05`.
+Run the node-side smoke tests for `STG-05`.
 
-Whether they pass or fail, inform me of the results and wait for my input before proceeding.
-
-Post the results to Slack.
+If there is a failure, inform me and wait for my input before proceeding. Otherwise, post the
+results to Slack and proceed to the next phase.
 
 ## Phase 3: Bootstrap a `STG-06` testnet from `STG-05` using an older version
 
@@ -77,51 +78,55 @@ Bootstrap a `STG-06` network from the `STG-05` network using the following confi
   - data-payments-address: 0xfE875D65021A7497a5DC7762c59719c8531f7146
   - merkle-payments-address: 0x393F6825C248a29295A7f9Bfa03e475decb44dc0
 
-You need to prompt me for the peer address from the `STG-05` network and the previous versions of `antnode` and `antctl`.
+You need to prompt me for the peer address for the `STG-05` network and the previous versions of
+`antnode` and `antctl`.
+
+Before you proceed, let me review the versions and peer address you are going to use.
 
 Post a message to Slack to indicate the second staging environment is now being deployed.
 
-After you have dispatched the workflow, wait for it to complete by polling every 2 minutes.
+Wait for the deployment to complete by polling every 2 minutes. If there is a failure, inform me and
+wait for my input.
 
-Then wait for me to give you the OK to proceed to the next phase.
-
-Post a message to Slack indicating the environment was successfully deployed.
+When we have a successful deployment, post a message to Slack indicating the environment was
+deployed and move to the next phase.
 
 ## Phase 4: Node-side smoke test for the `STG-06` testnet
 
-Run the node smoke tests for `STG-06`.
+Run the node-side smoke tests for `STG-06`.
 
-Whether they pass or fail, inform me of the results and wait for my input before proceeding.
-
-Post the results to Slack.
+If there is a failure, inform me and wait for my input before proceeding. Otherwise, post the
+results to Slack and proceed to the next phase.
 
 ## Phase 5: Run uploads and downloads using the `ant` client from the previous release
 
 Start the uploaders and downloaders for the `STG-05` environment.
 
-Post a message to Slack to say the workflows for starting clients have been dispatched.
+Post a message to Slack to say the workflows for starting clients have been dispatched and we will
+wait for 10 minutes for some uploads to accumulate.
 
-Now wait for my input before proceeding to the next phase.
+Now wait for those 10 minutes. After that, proceed to the next phase.
 
 ## Phase 6: Client-side smoke test for the `STG-05` testnet
 
-Run the client smoke tests for `STG-01`.
+Run the client-side smoke tests for `STG-05`.
 
-Whether they pass or fail, inform me of the results and wait for my input before proceeding.
-
-Post the results to Slack.
+If there is a failure, inform me and wait for my input before proceeding. Otherwise, post the
+results to Slack and proceed to the next phase.
 
 ## Phase 7: Let uploads and downloads run using the `ant` client from the previous release
 
-Wait for 10 minutes to allow some uploads and downloads to accumulate using the previous client
-version.
+Post a message to Slack to say we are going to allow uploads and downloads to accumulate for 10
+minutes using the previous client version.
 
-Now stop both the uploaders and downloaders for `STG-05`.
+Now wait for those 10 minutes.
+
+After that, stop both the uploaders and downloaders for `STG-05`.
 
 Post a message to Slack to say the workflows for stopping clients have been dispatched.
 
-Wait for my signal before proceeding to the next phase. I need to verify that both networks have
-received payments. For now this is done manually.
+Stop here and remind me to verify we have had no upload or download failures. Then proceed to the
+next phase when I signal.
 
 ## Phase 8: Upgrade the `ant` client to the RC version
 
@@ -135,7 +140,8 @@ Post a message to Slack to `ant` has been upgraded to the RC version.
 
 Start the uploaders and downloaders for the `STG-05` environment.
 
-Wait for my signal to proceed to the next phase.
+Wait for 10 minutes for some uploads and downloads to accumulate again, then proceed to the next
+phase.
 
 ## Phase 10: Upgrade hosts on the `STG-06` bootstrap network
 
@@ -145,9 +151,10 @@ I want to upgrade testnet `STG-06` with the following configuration:
 
 Post a message to Slack to say the upgrade to the RC version is beginning for `STG-06` hosts.
 
-Wait for 15 minutes then prompt for my approval to proceed to the next phase.
+Wait for 20 minutes, then remind me to check the upgrade workflow to make sure there were no errors
+during the upgrade. I will then signal when you can proceed to the next phase.
 
-Post a message to Slack to say the upgrade has completed for `STG-06` hosts.
+Before we move on, post a message to Slack to say the upgrade has completed for `STG-06` hosts.
 
 ## Phase 11: Upgrade hosts on the `STG-05` bootstrap network
 
@@ -157,9 +164,10 @@ I want to upgrade testnet `STG-05` with the following configuration:
 
 Post a message to Slack to say the upgrade to the RC version is beginning for `STG-05` hosts.
 
-Wait for 15 minutes then prompt for my approval to proceed to the next phase.
+Wait for 15 minutes, then remind me to check the upgrade workflow to make sure there were no errors
+during the upgrade. I will then signal when you can proceed to the next phase.
 
-Post a message to Slack to say the upgrade has completed for `STG-05` hosts.
+Before we move on, post a message to Slack to say the upgrade has completed for `STG-05` hosts.
 
 ## Phase 12: Verify there have been no upload or download failures
 
@@ -167,4 +175,4 @@ For now this is manual step.
 
 Wait for my input to inform you of the result.
 
-Post a message to slack to say the backwards compatibility test has completed successfully.
+Post a message to Slack to say the backwards compatibility test has completed successfully.
