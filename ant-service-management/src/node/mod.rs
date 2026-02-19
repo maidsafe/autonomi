@@ -114,6 +114,10 @@ impl ServiceStateActions for NodeService {
             args.push(OsString::from(max_log_files.to_string()));
         }
 
+        // Always pass --stop-on-upgrade for service-managed nodes so the node exits
+        // (letting the service manager handle restart) instead of spawning a child process.
+        args.push(OsString::from("--stop-on-upgrade"));
+
         args.push(OsString::from("--rewards-address"));
         args.push(OsString::from(service_data.rewards_address.to_string()));
 
@@ -133,6 +137,10 @@ impl ServiceStateActions for NodeService {
             args.push(OsString::from(
                 custom_network.data_payments_address.to_string(),
             ));
+            if let Some(merkle_payments_address) = custom_network.merkle_payments_address {
+                args.push(OsString::from("--merkle-payments-address"));
+                args.push(OsString::from(merkle_payments_address.to_string()));
+            }
         }
 
         Ok(ServiceInstallCtx {
@@ -142,7 +150,18 @@ impl ServiceStateActions for NodeService {
             environment: options.env_variables,
             label: label.clone(),
             program: service_data.antnode_path.to_path_buf(),
-            restart_policy: service_manager::RestartPolicy::OnSuccess { delay_secs: None },
+            // On Windows, use OnFailure so WinSW restarts the service when the node exits
+            // with a non-zero code (e.g., exit code 100 after auto-upgrade).
+            // On Unix, use OnSuccess so systemd restarts the service on a clean exit (code 0).
+            restart_policy: if cfg!(windows) {
+                service_manager::RestartPolicy::OnFailure {
+                    delay_secs: None,
+                    max_retries: None,
+                    reset_after_secs: None,
+                }
+            } else {
+                service_manager::RestartPolicy::OnSuccess { delay_secs: None }
+            },
             username: service_data.user.clone(),
             working_directory: None,
         })

@@ -261,7 +261,11 @@ mod tests {
             init_peers_config: InitialPeersConfig::default(),
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
-            restart_policy: RestartPolicy::OnFailure { delay_secs: None },
+            restart_policy: RestartPolicy::OnFailure {
+                delay_secs: None,
+                max_retries: None,
+                reset_after_secs: None,
+            },
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             service_user: None,
             stop_on_upgrade: true,

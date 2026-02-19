@@ -519,6 +519,11 @@ pub async fn status_report(
 ///
 /// It uses the `get_process_pid` method which handles upgrade-related path patterns like "
 /// (deleted)", ".bak", and ".old" suffixes.
+///
+/// If path-based detection fails, a final fallback reads the `antnode.pid` file from the node's
+/// data directory and verifies the PID is still a running antnode process. This handles the case
+/// on Windows where the `self-replace` crate moves the running binary to the system temp directory
+/// during auto-upgrade, making path-based detection impossible.
 async fn detect_pid_using_path<'a>(
     service_control: &'a dyn ServiceControl,
     service: &'a NodeService,
@@ -535,21 +540,65 @@ async fn detect_pid_using_path<'a>(
                 .await?;
         }
         Err(_) => {
-            match service.status().await {
-                ServiceStatus::Added => {
-                    // If the service is still at `Added` status, there hasn't been an attempt
-                    // to start it since it was installed. It's useful to keep this status
-                    // rather than setting it to `STOPPED`, so that the user can differentiate.
-                    debug!("{service_name} has not been started since it was installed");
+            // Tier 3: read PID from the antnode.pid file in the node's data directory.
+            //
+            // On Windows, the self-replace crate moves the running binary to the system temp
+            // directory during auto-upgrade, so path-based detection cannot find it. The node
+            // writes its PID to antnode.pid at startup, which persists through the upgrade.
+            let pid_file = service.data_dir_path().await.join("antnode.pid");
+            let mut found_via_pid_file = false;
+            if let Ok(pid_str) = tokio::fs::read_to_string(&pid_file).await
+                && let Ok(file_pid) = pid_str.trim().parse::<u32>()
+            {
+                debug!(
+                    "Tier 3: read PID {file_pid} from {} for {service_name}",
+                    pid_file.display()
+                );
+                match service_control.verify_process_by_pid(file_pid, "antnode") {
+                    Ok(true) => {
+                        debug!(
+                            "{service_name} verified via PID file with PID {file_pid}"
+                        );
+                        service
+                            .on_start(Some(file_pid), full_refresh, service_control)
+                            .await?;
+                        found_via_pid_file = true;
+                    }
+                    Ok(false) => {
+                        debug!(
+                            "PID {file_pid} from file is not a running antnode process \
+                            for {service_name}"
+                        );
+                    }
+                    Err(e) => {
+                        debug!(
+                            "Error verifying PID {file_pid} from file for \
+                            {service_name}: {e:?}"
+                        );
+                    }
                 }
-                ServiceStatus::Removed => {
-                    // In the case of the service being removed, we want to retain that state
-                    // and not have it marked `STOPPED`.
-                    debug!("{service_name} has been removed");
-                }
-                _ => {
-                    debug!("Failed to detect process for {service_name}; marking it stopped.");
-                    service.on_stop().await?;
+            }
+
+            if !found_via_pid_file {
+                match service.status().await {
+                    ServiceStatus::Added => {
+                        // If the service is still at `Added` status, there hasn't been an
+                        // attempt to start it since it was installed. It's useful to keep this
+                        // status rather than setting it to `STOPPED`, so that the user can
+                        // differentiate.
+                        debug!("{service_name} has not been started since it was installed");
+                    }
+                    ServiceStatus::Removed => {
+                        // In the case of the service being removed, we want to retain that
+                        // state and not have it marked `STOPPED`.
+                        debug!("{service_name} has been removed");
+                    }
+                    _ => {
+                        debug!(
+                            "Failed to detect process for {service_name}; marking it stopped."
+                        );
+                        service.on_stop().await?;
+                    }
                 }
             }
         }
@@ -770,6 +819,18 @@ mod tests {
             fn uninstall(&self, service_name: &str, user_mode: bool) -> ServiceControlResult<()>;
             fn verify_process_by_pid(&self, pid: u32, expected_name: &str) -> ServiceControlResult<bool>;
             fn wait(&self, delay: u64);
+        }
+    }
+
+    fn expected_restart_policy() -> RestartPolicy {
+        if cfg!(windows) {
+            RestartPolicy::OnFailure {
+                delay_secs: None,
+                max_retries: None,
+                reset_after_secs: None,
+            }
+        } else {
+            RestartPolicy::OnSuccess { delay_secs: None }
         }
     }
 
@@ -2830,6 +2891,7 @@ mod tests {
                         OsString::from("--log-output-dest"),
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--first"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -2839,7 +2901,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3011,6 +3073,7 @@ mod tests {
                         OsString::from(
                             "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
                         ),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -3020,7 +3083,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3192,6 +3255,7 @@ mod tests {
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--network-id"),
                         OsString::from("5"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -3201,7 +3265,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3363,6 +3427,7 @@ mod tests {
                         OsString::from("--log-output-dest"),
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--local"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -3372,7 +3437,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3542,6 +3607,7 @@ mod tests {
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--network-contacts-url"),
                         OsString::from("http://localhost:8080/contacts.json,http://localhost:8081/contacts.json"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -3551,7 +3617,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3726,6 +3792,7 @@ mod tests {
                         OsString::from("--log-output-dest"),
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--ignore-cache"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -3735,7 +3802,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3905,6 +3972,7 @@ mod tests {
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--bootstrap-cache-dir"),
                         OsString::from("/var/antctl/services/antnode1/bootstrap_cache"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -3914,7 +3982,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4090,6 +4158,7 @@ mod tests {
                         OsString::from("--log-output-dest"),
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--no-upnp"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -4099,7 +4168,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4262,6 +4331,7 @@ mod tests {
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--log-format"),
                         OsString::from("json"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -4271,7 +4341,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4434,6 +4504,7 @@ mod tests {
                         OsString::from("--log-output-dest"),
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--relay"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -4443,7 +4514,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4606,6 +4677,7 @@ mod tests {
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--ip"),
                         OsString::from("192.168.1.1"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -4615,7 +4687,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4778,6 +4850,7 @@ mod tests {
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--port"),
                         OsString::from("12000"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -4787,7 +4860,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4950,6 +5023,7 @@ mod tests {
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--max-archived-log-files"),
                         OsString::from("20"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -4959,7 +5033,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -5122,6 +5196,7 @@ mod tests {
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--max-log-files"),
                         OsString::from("20"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -5131,7 +5206,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -5294,6 +5369,7 @@ mod tests {
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--metrics-server-port"),
                         OsString::from("12000"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -5303,7 +5379,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -5466,6 +5542,7 @@ mod tests {
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--metrics-server-port"),
                         OsString::from("12000"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -5475,7 +5552,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -5639,6 +5716,7 @@ mod tests {
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
                         OsString::from("/var/log/antnode/antnode1"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -5648,7 +5726,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -5809,6 +5887,7 @@ mod tests {
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
                         OsString::from("/var/log/antnode/antnode1"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-custom"),
@@ -5818,13 +5897,15 @@ mod tests {
                         OsString::from("0x5FbDB2315678afecb367f032d93F642f64180aa3"),
                         OsString::from("--data-payments-address"),
                         OsString::from("0x8464135c8F25Da09e49BC8782676a84730C318bC"),
+                        OsString::from("--merkle-payments-address"),
+                        OsString::from("0x1234567890AbcdEF1234567890aBcdef12345678"),
                     ],
                     autostart: true,
                     contents: None,
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -5889,7 +5970,9 @@ mod tests {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
-                merkle_payments_address: None,
+                merkle_payments_address: Some(RewardsAddress::from_str(
+                    "0x1234567890abcdef1234567890abcdef12345678",
+                )?),
             }),
             relay: false,
             initial_peers_config: Default::default(),
@@ -5995,6 +6078,7 @@ mod tests {
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
                         OsString::from("/var/log/antnode/antnode1"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-custom"),
@@ -6010,7 +6094,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -6181,6 +6265,7 @@ mod tests {
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
                         OsString::from("/var/log/antnode/antnode1"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -6190,7 +6275,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -6356,6 +6441,7 @@ mod tests {
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--metrics-server-port"),
                         OsString::from("12000"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("--write-older-cache-files"),
@@ -6366,7 +6452,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -6928,6 +7014,7 @@ mod tests {
                         OsString::from("--log-output-dest"),
                         OsString::from("/var/log/antnode/antnode1"),
                         OsString::from("--alpha"),
+                        OsString::from("--stop-on-upgrade"),
                         OsString::from("--rewards-address"),
                         OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                         OsString::from("evm-arbitrum-one"),
@@ -6937,7 +7024,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
+                    restart_policy: expected_restart_policy(),
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),

@@ -7,13 +7,13 @@ license = "GPL-3.0"
 name = "ant-service-management"
 readme = "README.md"
 repository = "https://github.com/maidsafe/autonomi"
-version = "0.5.1"
+version = "0.5.3"
 
 [dependencies]
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.13" }
 ant-evm = { path = "../ant-evm", version = "0.1.21" }
 ant-logging = { path = "../ant-logging", version = "0.3.0" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.14", features = ["rpc"] }
+ant-protocol = { path = "../ant-protocol", version = "1.0.15", features = ["rpc"] }
 async-trait = "0.1"
 dirs-next = "2.0.0"
 libp2p = { version = "0.56.0", features = ["kad"] }
@@ -22,7 +22,7 @@ prost = { version = "0.9" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 semver = "1.0.20"
-service-manager = "0.10.0"
+service-manager = "0.11.0"
 sysinfo = "0.30.12"
 thiserror = "1.0.23"
 tokio = { version = "1.43.1", features = ["time"] }
