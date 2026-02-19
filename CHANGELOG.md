@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2026-02-18
+
+### Network
+
+#### Added
+
+- The `antnode` binary now supports automatic upgrades on Windows. The same periodic upgrade check
+  that was previously available on macOS and Linux will now also run on Windows. The `self-replace`
+  crate is used to handle binary replacement while the process is running. Retries with backoff are
+  used to handle transient antivirus file locks.
+
+#### Changed
+
+- The connection prune deadline for non-routing-table peers (e.g. clients) has been increased from
+  60 seconds to 120 seconds and is now reset each time a new request is received on the connection.
+  This prevents premature connection closure during long-running operations such as `put_record`.
+
+### Antctl
+
+#### Changed
+
+- Updated to accommodate automatic upgrades on Windows. This includes using an `OnFailure` restart
+  policy for Windows services, handling the `self-replace` crate's `.__relocated__` filename pattern
+  for process identification, and updating the `service-manager` dependency to `0.11.0`.
+
+#### Fixed
+
+- The `merkle_payments_address` setting is now retained when upgrading a node service via `antctl`.
+  Previously, `build_upgrade_install_context()` was not passing this argument when reinstalling,
+  causing the setting to be lost.
+
+### Launchpad
+
+#### Added
+
+- A scrollbar on the node grid that appears when the content overflows the visible area.
+
+#### Fixed
+
+- The connection mode display now correctly maps `no_upnp` and default flags to their respective
+  modes. Previously, UPnP and Manual modes were swapped.
+- The TUI no longer blocks on a full node registry refresh at startup. Instead, it renders
+  immediately using disk-cached state and triggers a background refresh once the action handler is
+  registered.
+- On Windows, WinSW is now placed at `C:\ProgramData\antctl\winsw.exe` instead of the launchpad's
+  own data directory. This avoids MSIX filesystem virtualisation redirecting the path and preventing
+  the service management code from finding the executable.
+- On Windows, the launchpad now uses `C:\ProgramData\antctl\data` for the node data directory
+  instead of `dirs_next::data_dir()`. The MSIX filesystem virtualises the `%APPDATA%` path, causing
+  the antnode binary to be written to a virtualised location that the service manager cannot find.
+
 ## 2026-02-11
 
 ### Network

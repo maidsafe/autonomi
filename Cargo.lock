@@ -987,7 +987,7 @@ dependencies = [
 
 [[package]]
 name = "ant-node"
-version = "0.4.16"
+version = "0.4.17"
 dependencies = [
  "aes-gcm-siv",
  "ant-bootstrap",
@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "ant-node-manager"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "ant-bootstrap",
  "ant-build-info",
@@ -1137,7 +1137,7 @@ dependencies = [
 
 [[package]]
 name = "ant-protocol"
-version = "1.0.14"
+version = "1.0.15"
 dependencies = [
  "ant-build-info",
  "ant-evm",
@@ -1190,7 +1190,7 @@ dependencies = [
 
 [[package]]
 name = "ant-service-management"
-version = "0.5.1"
+version = "0.5.3"
 dependencies = [
  "ant-bootstrap",
  "ant-evm",
@@ -6789,7 +6789,7 @@ dependencies = [
 
 [[package]]
 name = "node-launchpad"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "ant-bootstrap",
  "ant-build-info",

@@ -29,7 +29,7 @@ loud = []
 [dependencies]
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.13" }
 ant-evm = { path = "../ant-evm", version = "0.1.21" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.14" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.15" }
 bip39 = "2.0.0"
 blst = "0.3.13"
 blstrs = "0.7.1"

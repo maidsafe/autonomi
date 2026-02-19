@@ -5897,6 +5897,8 @@ mod tests {
                         OsString::from("0x5FbDB2315678afecb367f032d93F642f64180aa3"),
                         OsString::from("--data-payments-address"),
                         OsString::from("0x8464135c8F25Da09e49BC8782676a84730C318bC"),
+                        OsString::from("--merkle-payments-address"),
+                        OsString::from("0x1234567890AbcdEF1234567890aBcdef12345678"),
                     ],
                     autostart: true,
                     contents: None,
@@ -5968,7 +5970,9 @@ mod tests {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
-                merkle_payments_address: None,
+                merkle_payments_address: Some(RewardsAddress::from_str(
+                    "0x1234567890abcdef1234567890abcdef12345678",
+                )?),
             }),
             relay: false,
             initial_peers_config: Default::default(),
