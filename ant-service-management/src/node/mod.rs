@@ -137,6 +137,10 @@ impl ServiceStateActions for NodeService {
             args.push(OsString::from(
                 custom_network.data_payments_address.to_string(),
             ));
+            if let Some(merkle_payments_address) = custom_network.merkle_payments_address {
+                args.push(OsString::from("--merkle-payments-address"));
+                args.push(OsString::from(merkle_payments_address.to_string()));
+            }
         }
 
         Ok(ServiceInstallCtx {
