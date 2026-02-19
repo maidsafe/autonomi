@@ -9,6 +9,7 @@
 use crate::connection_mode::ConnectionMode;
 use crate::system::get_primary_mount_point;
 use crate::{action::Action, mode::Scene};
+#[cfg(not(windows))]
 use ant_node_manager::config::is_running_as_root;
 use color_eyre::eyre::{Result, eyre};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -32,23 +33,30 @@ pub fn get_launchpad_nodes_data_dir_path(
     should_create: bool,
 ) -> Result<PathBuf> {
     let mut mount_point = PathBuf::new();
-    let is_root = is_running_as_root();
 
     let data_directory: PathBuf = if *base_dir == get_primary_mount_point() {
-        if is_root {
+        // On Windows, always use C:\ProgramData\antctl\data regardless of root status.
+        // This path is not subject to MSIX filesystem virtualization, which redirects
+        // %APPDATA% paths to a package-specific location. Using dirs_next::data_dir()
+        // would cause the antnode binary to be written to the virtualized path, but the
+        // node registry would store the non-virtualized path, preventing the service
+        // manager from finding the binary.
+        #[cfg(windows)]
+        {
+            let path = PathBuf::from("C:\\ProgramData\\antctl\\data");
+            debug!("Using non-virtualized path for nodes data directory: {path:?}");
+            path
+        }
+        #[cfg(not(windows))]
+        if is_running_as_root() {
             // The root's data directory isn't accessible to the user `ant`, so we are using an
             // alternative default path that `ant` can access.
-            #[cfg(unix)]
-            {
-                let default_data_dir_path = PathBuf::from("/var/antctl/services");
-                debug!(
-                    "Running as root; using default path {:?} for nodes data directory instead of primary mount point",
-                    default_data_dir_path
-                );
+            let default_data_dir_path = PathBuf::from("/var/antctl/services");
+            debug!(
+                "Running as root; using default path {:?} for nodes data directory instead of primary mount point",
                 default_data_dir_path
-            }
-            #[cfg(windows)]
-            get_user_data_dir()?
+            );
+            default_data_dir_path
         } else {
             get_user_data_dir()?
         }
@@ -77,6 +85,7 @@ pub fn get_launchpad_nodes_data_dir_path(
     Ok(mount_point)
 }
 
+#[cfg(not(windows))]
 fn get_user_data_dir() -> Result<PathBuf> {
     dirs_next::data_dir().ok_or_else(|| eyre!("User data directory is not obtainable",))
 }
