@@ -19,9 +19,9 @@ nightly = []
 [dependencies]
 ant-build-info = { path = "../ant-build-info", version = "0.1.29" }
 ant-logging = { path = "../ant-logging", version = "0.3.0" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.15-rc.1", features=["rpc"] }
-ant-node = { path = "../ant-node", version = "0.4.17-rc.1" }
-ant-service-management = { path = "../ant-service-management", version = "0.5.3-rc.1" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.15", features=["rpc"] }
+ant-node = { path = "../ant-node", version = "0.4.17" }
+ant-service-management = { path = "../ant-service-management", version = "0.5.3" }
 async-trait = "0.1"
 bls = { package = "blsttc", version = "8.0.1" }
 clap = { version = "4.2.1", features = ["derive"] }

@@ -26,7 +26,7 @@ harness = false
 [dependencies]
 ant-build-info = { path = "../ant-build-info", version = "0.1.29" }
 ant-logging = { path = "../ant-logging", version = "0.3.0" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.15-rc.1" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.15" }
 autonomi = { path = "../autonomi", version = "0.10.2", features = ["loud"] }
 chrono = "0.4"
 clap = { version = "4.2.1", features = ["derive"] }
