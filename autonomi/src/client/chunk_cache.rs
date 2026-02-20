@@ -24,7 +24,7 @@ pub enum ChunkCacheError {
 
 /// Get the default chunk cache directory for the Autonomi client
 pub fn default_cache_dir() -> Result<PathBuf, ChunkCacheError> {
-    let mut cache_dir = dirs_next::data_dir().ok_or_else(|| {
+    let mut cache_dir = dirs_next::data_local_dir().ok_or_else(|| {
         ChunkCacheError::DirectoryCreation(
             "Failed to obtain data dir, your OS might not be supported.".to_string(),
         )

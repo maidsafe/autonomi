@@ -185,7 +185,7 @@ pub fn verify_binary_hash(path: &Path, expected_hash: &str) -> Result<bool> {
 
 /// Get the upgrade directory path in the user's data directory.
 pub fn get_upgrade_dir_path() -> Result<PathBuf> {
-    let upgrade_dir_path = dirs_next::data_dir()
+    let upgrade_dir_path = dirs_next::data_local_dir()
         .ok_or_else(|| {
             UpgradeError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,

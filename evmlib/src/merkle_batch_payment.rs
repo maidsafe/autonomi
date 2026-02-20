@@ -271,7 +271,7 @@ impl DiskMerklePaymentContract {
     /// Create a new contract with the default storage path
     /// Uses: DATA_DIR/autonomi/merkle_payments/
     pub fn new() -> Result<Self, SmartContractError> {
-        let storage_path = if let Some(data_dir) = dirs_next::data_dir() {
+        let storage_path = if let Some(data_dir) = dirs_next::data_local_dir() {
             data_dir.join("autonomi").join("merkle_payments")
         } else {
             // Fallback to current directory if data_dir is not available
