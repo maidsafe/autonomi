@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1771864337268,
+  "lastUpdate": 1771864338752,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -20675,6 +20675,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Average memory usage w/ upload",
             "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "243783a67e58c1e8d102f9de421030a4bec9a55a",
+          "message": "Merge pull request #3472 from maqi/venv_failure\n\nchore(ci): fix python-bindings venv already exists on cache restore",
+          "timestamp": "2026-02-23T15:02:19Z",
+          "tree_id": "19eb2dd8e35edcb8b849cc40039de97b8fe7db73",
+          "url": "https://github.com/maidsafe/autonomi/commit/243783a67e58c1e8d102f9de421030a4bec9a55a"
+        },
+        "date": 1771864338343,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 13,
             "unit": "MB"
           }
         ]
