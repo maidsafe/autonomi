@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1771538256269,
+  "lastUpdate": 1771864065108,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7877,6 +7877,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.649746658797907,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "243783a67e58c1e8d102f9de421030a4bec9a55a",
+          "message": "Merge pull request #3472 from maqi/venv_failure\n\nchore(ci): fix python-bindings venv already exists on cache restore",
+          "timestamp": "2026-02-23T15:02:19Z",
+          "tree_id": "19eb2dd8e35edcb8b849cc40039de97b8fe7db73",
+          "url": "https://github.com/maidsafe/autonomi/commit/243783a67e58c1e8d102f9de421030a4bec9a55a"
+        },
+        "date": 1771864057257,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0727949728759771,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.231219540102785,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.522137267748614,
             "unit": "MiB/s"
           }
         ]
