@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1771872673570,
+  "lastUpdate": 1771872676272,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -28725,6 +28725,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 33344,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0d7798af491edc2d06ab4a5aa1e671e37925f23b",
+          "message": "Merge pull request #3466 from maidsafe/dependabot/npm_and_yarn/autonomi/tests-js/qs-6.14.2\n\nchore(deps-dev): bump qs from 6.14.1 to 6.14.2 in /autonomi/tests-js",
+          "timestamp": "2026-02-23T17:23:09Z",
+          "tree_id": "b2d9dfb92360b81bbe3ddc87fdb92b4dc1b4fb8d",
+          "url": "https://github.com/maidsafe/autonomi/commit/0d7798af491edc2d06ab4a5aa1e671e37925f23b"
+        },
+        "date": 1771872675103,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 13695,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 27960,
             "unit": "ms"
           },
           {
