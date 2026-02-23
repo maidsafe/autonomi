@@ -70,7 +70,8 @@ jobs:
         shell: bash
         working-directory: autonomi
         run: |
-          uv venv
+          # --clear replaces existing .venv (e.g. from cache restore) to avoid "virtual environment already exists" errors
+          uv venv --clear
           # create lockfile if absent
           test -f uv.lock || uv lock
           uv sync --locked
