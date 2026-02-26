@@ -285,7 +285,7 @@ jobs:
           echo "Running twine check..."
           find dist -name "*.whl" -o -name "*.tar.gz" | xargs twine check
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: 'dist/**/*.whl'
       - name: Publish to PyPI
