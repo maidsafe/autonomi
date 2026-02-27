@@ -715,35 +715,35 @@ jobs:
         with:
           name: node-launchpad-msix-x86_64-pc-windows-msvc
           path: msix-artifacts
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: autonomi-deb-x86_64-unknown-linux-musl
           path: deb-artifacts
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: autonomi-deb-aarch64-unknown-linux-musl
           path: deb-artifacts
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: autonomi-deb-armv7-unknown-linux-musleabihf
           path: deb-artifacts
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: autonomi-deb-arm-unknown-linux-musleabi
           path: deb-artifacts
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: autonomi-rpm-x86_64-unknown-linux-musl
           path: rpm-artifacts
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: autonomi-rpm-aarch64-unknown-linux-musl
           path: rpm-artifacts
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: autonomi-rpm-armv7-unknown-linux-musleabihf
           path: rpm-artifacts
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: autonomi-rpm-arm-unknown-linux-musleabi
           path: rpm-artifacts
