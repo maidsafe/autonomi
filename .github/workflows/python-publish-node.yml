@@ -30,7 +30,7 @@ jobs:
           sccache: 'true'
           working-directory: ./ant-node
       - name: Upload wheels
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-macos-${{ matrix.target }}-py${{ matrix.python-version }}
           path: ./ant-node/dist/*.whl
@@ -58,7 +58,7 @@ jobs:
           sccache: 'true'
           working-directory: ./ant-node
       - name: Upload wheels
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-windows-${{ matrix.target }}-py${{ matrix.python-version }}
           path: ./ant-node/dist/*.whl
@@ -93,7 +93,7 @@ jobs:
           sccache: false
           working-directory: ./ant-node
       - name: Upload wheels
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-linux-${{ matrix.target }}-py${{ matrix.python-version }}
           path: ./ant-node/dist/*.whl
@@ -133,7 +133,7 @@ jobs:
           sccache: false
           working-directory: ./ant-node
       - name: Upload wheels
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-musllinux-${{ matrix.target }}-py${{ matrix.python-version }}
           path: ./ant-node/dist/*.whl
@@ -164,7 +164,7 @@ jobs:
           args: --out dist
           working-directory: ./ant-node
       - name: Upload sdist
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: ant-node/dist/*.tar.gz

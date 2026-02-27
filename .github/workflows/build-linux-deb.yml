@@ -162,7 +162,7 @@ jobs:
           gpg --verify "$output_deb.asc" "$output_deb"
 
       - name: Upload deb artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: autonomi-deb-${{ matrix.target }}
           path: |

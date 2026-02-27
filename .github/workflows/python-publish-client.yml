@@ -43,7 +43,7 @@ jobs:
           done
           twine check ./autonomi/dist/*
       - name: Upload wheels
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-macos-${{ matrix.platform.target }}
           path: ./autonomi/dist/*.whl
@@ -79,7 +79,7 @@ jobs:
           twine check ./autonomi/dist/*
         shell: pwsh
       - name: Upload wheels
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-windows-${{ matrix.platform.target }}
           path: ./autonomi/dist/*.whl
@@ -118,7 +118,7 @@ jobs:
           done
           twine check ./autonomi/dist/*
       - name: Upload wheels
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-linux-${{ matrix.platform.target }}
           path: ./autonomi/dist/*.whl
@@ -159,7 +159,7 @@ jobs:
           done
           twine check ./autonomi/dist/*
       - name: Upload wheels
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-musllinux-${{ matrix.platform.target }}
           path: ./autonomi/dist/*.whl
@@ -250,7 +250,7 @@ jobs:
           args: --out dist
           working-directory: build/autonomi
       - name: Upload sdist
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-sdist
           path: build/autonomi/dist/*.tar.gz
