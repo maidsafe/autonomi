@@ -342,7 +342,7 @@ jobs:
           Get-Content $appInstallerFileName
 
       - name: Upload MSIX artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: node-launchpad-msix-x86_64-pc-windows-msvc
           path: |
