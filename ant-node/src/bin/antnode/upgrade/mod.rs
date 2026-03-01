@@ -545,8 +545,11 @@ pub async fn perform_upgrade() -> Result<()> {
             ))
         })?;
 
-    let current_hash = get_running_binary_hash()?;
-    if current_hash.eq_ignore_ascii_case(&antnode_binary.sha256) {
+    let expected_release_hash = antnode_binary.sha256.clone();
+    let current_hash = tokio::task::spawn_blocking(get_running_binary_hash)
+        .await
+        .map_err(|e| UpgradeError::BinaryReplacementFailed(format!("spawn_blocking join failed: {e}")))??;
+    if current_hash.eq_ignore_ascii_case(&expected_release_hash) {
         info!("Current antnode binary hash matches latest release. No upgrade needed.");
         return Err(UpgradeError::AlreadyLatest);
     }
@@ -554,13 +557,19 @@ pub async fn perform_upgrade() -> Result<()> {
     info!(
         "New antnode binary available (current: {}; latest: {}). Proceeding with upgrade...",
         &current_hash[..8],
-        &antnode_binary.sha256[..8]
+        &expected_release_hash[..8]
     );
 
     let release_repo = <dyn AntReleaseRepoActions>::default_config();
     let (new_binary_path, expected_hash) =
         download_and_extract_upgrade_binary(&release_info, release_repo.as_ref()).await?;
-    replace_current_binary(&new_binary_path, &expected_hash)?;
+    let new_binary_path_clone = new_binary_path.clone();
+    let expected_hash_clone = expected_hash.clone();
+    tokio::task::spawn_blocking(move || {
+        replace_current_binary(&new_binary_path_clone, &expected_hash_clone)
+    })
+    .await
+    .map_err(|e| UpgradeError::BinaryReplacementFailed(format!("spawn_blocking join failed: {e}")))??;
 
     Ok(())
 }
