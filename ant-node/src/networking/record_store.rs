@@ -147,6 +147,17 @@ impl RecordCache {
     }
 }
 
+/// File name of the persisted record metadata index.
+const RECORD_INDEX_FILENAME: &str = "record_index";
+
+#[derive(Serialize, Deserialize)]
+struct PersistedRecordIndex {
+    /// Encryption seed when index was built — mismatch invalidates the index
+    encryption_seed: [u8; 16],
+    /// Entries: (key_bytes, ValidationType, DataTypes)
+    entries: Vec<(Vec<u8>, ValidationType, DataTypes)>,
+}
+
 /// A `RecordStore` that stores records on disk.
 pub(crate) struct NodeRecordStore {
     /// The address of the peer owning the store
@@ -179,6 +190,8 @@ pub(crate) struct NodeRecordStore {
     timestamp: SystemTime,
     /// Farthest record to self
     farthest_record: Option<(Key, Distance)>,
+    /// Whether the in-memory index has changed since last flush
+    index_dirty: bool,
 }
 
 /// Configuration for a `DiskBackedRecordStore`.
@@ -320,13 +333,18 @@ impl NodeRecordStore {
         };
 
         info!("Attempting to repopulate records from existing store...");
-        WalkDir::new(&config.storage_dir)
+        let entries: Vec<_> = WalkDir::new(&config.storage_dir)
             .into_iter()
             .filter_map(|e| e.ok())
-            .collect_vec()
-            .par_iter()
-            .filter_map(process_entry)
-            .collect()
+            .collect_vec();
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(
+                std::thread::available_parallelism()
+                    .map_or(1, |n| n.get().saturating_sub(1).max(1)),
+            )
+            .build()
+            .expect("Failed to build rayon pool");
+        pool.install(|| entries.par_iter().filter_map(process_entry).collect())
     }
 
     /// If quote_metrics file already exists, using the existing parameters.
@@ -353,13 +371,88 @@ impl NodeRecordStore {
             timestamp: self.timestamp,
         };
 
-        #[allow(clippy::let_underscore_future)]
-        let _ = spawn(async move {
+        drop(tokio::task::spawn_blocking(move || {
             if let Ok(mut file) = fs::File::create(file_path) {
                 let mut serialiser = rmp_serde::encode::Serializer::new(&mut file);
                 let _ = historic_quoting_metrics.serialize(&mut serialiser);
             }
-        });
+        }));
+    }
+
+    fn load_record_index(
+        config: &NodeRecordStoreConfig,
+    ) -> Option<PersistedRecordIndex> {
+        let file_path = config.historic_quote_dir.join(RECORD_INDEX_FILENAME);
+        let file = fs::File::open(file_path).ok()?;
+        rmp_serde::from_read(&file).ok()
+    }
+
+    fn flush_record_index(&mut self) {
+        if !self.index_dirty {
+            return;
+        }
+        self.index_dirty = false;
+
+        let file_path = self
+            .config
+            .historic_quote_dir
+            .join(RECORD_INDEX_FILENAME);
+        let entries: Vec<(Vec<u8>, ValidationType, DataTypes)> = self
+            .records
+            .iter()
+            .map(|(key, (_addr, vtype, dtype))| (key.as_ref().to_vec(), vtype.clone(), *dtype))
+            .collect();
+        let index = PersistedRecordIndex {
+            encryption_seed: self.config.encryption_seed,
+            entries,
+        };
+
+        drop(tokio::task::spawn_blocking(move || {
+            if let Ok(mut file) = fs::File::create(file_path) {
+                let mut serialiser = rmp_serde::encode::Serializer::new(&mut file);
+                let _ = index.serialize(&mut serialiser);
+            }
+        }));
+    }
+
+    fn try_load_cached_index(
+        config: &NodeRecordStoreConfig,
+    ) -> Option<HashMap<Key, (NetworkAddress, ValidationType, DataTypes)>> {
+        let index = Self::load_record_index(config)?;
+
+        // Seed mismatch = different peer or encryption changed -> invalid
+        if index.encryption_seed != config.encryption_seed {
+            info!("Record index encryption seed mismatch, will do full scan");
+            return None;
+        }
+
+        // Reconstruct HashMap
+        let records: HashMap<Key, (NetworkAddress, ValidationType, DataTypes)> = index
+            .entries
+            .into_iter()
+            .map(|(key_bytes, vtype, dtype)| {
+                let key = Key::from(key_bytes);
+                let addr = NetworkAddress::from(&key);
+                (key, (addr, vtype, dtype))
+            })
+            .collect();
+
+        // Spot-check: verify a sample of entries have files on disk
+        let sample_size = records.len().min(10);
+        for key in records.keys().take(sample_size) {
+            let filename = Self::generate_filename(key);
+            let file_path = config.storage_dir.join(&filename);
+            if !file_path.exists() {
+                warn!("Record index spot-check failed: missing file {filename}");
+                return None;
+            }
+        }
+
+        info!(
+            "Loaded {} records from cached index (skipped full decrypt scan)",
+            records.len()
+        );
+        Some(records)
     }
 
     /// Creates a new `DiskBackedStore` with the given configuration.
@@ -386,7 +479,15 @@ impl NodeRecordStore {
             (0, SystemTime::now())
         };
 
-        let records = Self::update_records_from_an_existing_store(&config, &encryption_details);
+        let (records, index_dirty) =
+            if let Some(cached) = Self::try_load_cached_index(&config) {
+                (cached, false)
+            } else {
+                (
+                    Self::update_records_from_an_existing_store(&config, &encryption_details),
+                    true,
+                )
+            };
         let local_address = NetworkAddress::from(local_id);
 
         // Initialize records_by_distance
@@ -412,11 +513,13 @@ impl NodeRecordStore {
             encryption_details,
             timestamp,
             farthest_record: None,
+            index_dirty,
         };
 
         record_store.farthest_record = record_store.calculate_farthest();
 
         record_store.flush_historic_quoting_metrics();
+        record_store.flush_record_index();
 
         #[cfg(feature = "open-metrics")]
         if let Some(metric) = &record_store.record_count_metric {
@@ -634,6 +737,7 @@ impl NodeRecordStore {
         if let Some((addr, _, _)) = self.records.remove(k) {
             let distance = self.local_address.distance(&addr);
             let _ = self.records_by_distance.remove(&distance);
+            self.index_dirty = true;
         }
     }
 
@@ -692,6 +796,8 @@ impl NodeRecordStore {
         } else {
             self.farthest_record = Some((key, distance));
         }
+
+        self.index_dirty = true;
     }
 
     /// Prepare record bytes for storage
@@ -850,6 +956,7 @@ impl NodeRecordStore {
         self.received_payment_count = self.received_payment_count.saturating_add(1);
 
         self.flush_historic_quoting_metrics();
+        self.flush_record_index();
     }
 
     /// Calculate how many records are stored within a distance range
@@ -876,6 +983,33 @@ impl NodeRecordStore {
             *map.entry(data_type.get_index()).or_insert(0) += 1;
         }
         map.into_iter().collect()
+    }
+}
+
+impl Drop for NodeRecordStore {
+    fn drop(&mut self) {
+        if self.index_dirty {
+            self.index_dirty = false;
+            let file_path = self
+                .config
+                .historic_quote_dir
+                .join(RECORD_INDEX_FILENAME);
+            let entries: Vec<(Vec<u8>, ValidationType, DataTypes)> = self
+                .records
+                .iter()
+                .map(|(key, (_addr, vtype, dtype))| {
+                    (key.as_ref().to_vec(), vtype.clone(), *dtype)
+                })
+                .collect();
+            let index = PersistedRecordIndex {
+                encryption_seed: self.config.encryption_seed,
+                entries,
+            };
+            if let Ok(mut file) = fs::File::create(file_path) {
+                let mut serialiser = rmp_serde::encode::Serializer::new(&mut file);
+                let _ = index.serialize(&mut serialiser);
+            }
+        }
     }
 }
 
@@ -1005,6 +1139,7 @@ impl RecordStore for NodeRecordStore {
             let _ = self.records_by_distance.remove(&distance);
         }
 
+        self.index_dirty = true;
         let _ = self.records_cache.remove(k);
 
         #[cfg(feature = "open-metrics")]
