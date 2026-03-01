@@ -164,11 +164,26 @@ impl Network {
             .collect()
             .await;
 
-        // Collect all successful records
-        let records: Vec<Record> = results
+        // Partition results to log failures before filtering
+        let (successes, failures): (Vec<_>, Vec<_>) = results
             .into_iter()
-            .filter_map(|result| match result {
-                Ok(Some(record)) => Some(record),
+            .partition(|r| matches!(r, Ok(Some(_))));
+
+        if !failures.is_empty() {
+            warn!(
+                "Fallback for {addr:?}: {}/{} peers failed to return records",
+                failures.len(),
+                failures.len() + successes.len()
+            );
+            for failure in &failures {
+                debug!("  Peer failure: {failure:?}");
+            }
+        }
+
+        let records: Vec<Record> = successes
+            .into_iter()
+            .filter_map(|r| match r {
+                Ok(Some(rec)) => Some(rec),
                 _ => None,
             })
             .collect();

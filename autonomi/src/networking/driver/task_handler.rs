@@ -496,9 +496,11 @@ impl TaskHandler {
                     .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
             }
             Err(e) => {
-                trace!("OutboundRequestId({id}): failed to get record from peer: {e:?}");
+                warn!("OutboundRequestId({id}): failed to get record from peer: {e:?}");
                 responder
-                    .send(Ok(None))
+                    .send(Err(NetworkError::GetRecordError(format!(
+                        "Peer failed to return record: {e}"
+                    ))))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
             }
         }
@@ -637,11 +639,13 @@ impl TaskHandler {
             }
         // Get record from peer case
         } else if let Some(responder) = self.get_record_from_peer.remove(&id) {
-            trace!(
+            warn!(
                 "OutboundRequestId({id}): get record from peer got fatal error from peer {peer:?}: {error:?}"
             );
             responder
-                .send(Ok(None))
+                .send(Err(NetworkError::GetRecordError(format!(
+                    "Fatal error from peer {peer:?}: {error}"
+                ))))
                 .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
         // Get storage proofs from peer case
         } else if let Some(responder) = self.get_storage_proofs_from_peer.remove(&id) {
