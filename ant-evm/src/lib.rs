@@ -11,9 +11,11 @@
 #![allow(clippy::panic)]
 // Allow the to_bytes_le method name
 #![allow(clippy::wrong_self_convention)]
+// In release builds, logging macros compile to nothing, so variables only
+// used in log statements become unused.
+#![cfg_attr(not(debug_assertions), allow(unused_variables))]
 
-#[macro_use]
-extern crate tracing;
+pub mod logging;
 
 pub use evmlib::CustomNetwork;
 pub use evmlib::GasInfo;

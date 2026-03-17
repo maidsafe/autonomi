@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::{debug, error, info, warn};
 use crate::EvmError;
 use evmlib::{
     common::{Address as RewardsAddress, QuoteHash},
