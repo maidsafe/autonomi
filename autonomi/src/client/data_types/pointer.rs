@@ -16,8 +16,12 @@ use crate::{
     },
     networking::{NetworkError, PeerInfo, QUOTING_CANDIDATES, Record},
 };
+use futures::StreamExt;
 
-use ant_evm::{Amount, AttoTokens, EvmWalletError};
+/// How many peers to query when looking for the latest pointer version
+const FALLBACK_PEERS_COUNT: usize = 20;
+
+use ant_evm::{AttoTokens, EvmWalletError};
 use ant_protocol::{
     NetworkAddress,
     storage::{DataTypes, RecordHeader, RecordKind, try_deserialize_record, try_serialize_record},
@@ -28,7 +32,6 @@ use tracing::{debug, error, info, trace, warn};
 pub use ant_protocol::storage::{Pointer, PointerAddress, PointerTarget};
 pub use bls::{PublicKey, SecretKey};
 
-/// Errors that can occur when dealing with Pointers
 #[derive(Debug, thiserror::Error)]
 pub enum PointerError {
     #[error("Failed to put pointer: {0}")]
@@ -45,106 +48,144 @@ pub enum PointerError {
     Pay(#[from] PayError),
     #[error("Failed to retrieve wallet payment")]
     Wallet(#[from] EvmWalletError),
-    #[error(
-        "Received invalid quote from node, this node is possibly malfunctioning, try another node by trying another pointer name"
-    )]
+    #[error("Received invalid quote from node")]
     InvalidQuote,
     #[error("Pointer already exists at this address: {0:?}")]
     PointerAlreadyExists(PointerAddress),
-    #[error(
-        "Pointer cannot be updated as it does not exist, please create it first or wait for it to be created"
-    )]
+    #[error("Pointer cannot be updated as it does not exist")]
     CannotUpdateNewPointer,
     #[error("Got multiple conflicting pointers with the latest version")]
     Fork(Vec<Pointer>),
 }
 
 impl Client {
-    /// Fetches a Pointer from the network.
-    ///
-    /// This function uses the standard DHT fetch with retries and automatic fallback
-    /// to direct peer queries (handled by get_record_with_retries). If a SplitRecord
-    /// error is returned, it resolves the split using counter-based resolution.
-    ///
-    /// For Pointer (CRDT type with counter), the record with the highest counter is selected,
-    /// and conflicts are resolved through the standard split resolution process.
-    ///
-    /// # Arguments
-    /// * `address` - The pointer address to fetch
-    ///
-    /// # Returns
-    /// * `Ok(Pointer)` - The successfully retrieved and validated pointer
-    /// * `Err(PointerError)` - If the pointer cannot be found, is invalid, or forked
+    /// Get a pointer from the network.
+    /// Always queries multiple nodes and picks the one with highest counter.
     pub async fn pointer_get(&self, address: &PointerAddress) -> Result<Pointer, PointerError> {
         let key = NetworkAddress::from(*address);
-        debug!("Fetching pointer from network at: {key:?}");
+        debug!("Fetching pointer at: {key:?}");
 
-        let pointer = match self
+        let records = self.fetch_all_pointer_records(&key).await?;
+        if records.is_empty() {
+            return Err(PointerError::GetError(GetError::RecordNotFound));
+        }
+
+        debug!("Got {} record(s) for pointer", records.len());
+
+        // Pick the one with highest counter
+        let pointer = resolve_records_from_peers(
+            records,
+            key.clone(),
+            pointer_from_record,
+            |p: &Pointer| p.counter(),
+            |a: &Pointer, b: &Pointer| a == b,
+            |multiples: HashSet<Pointer>| PointerError::Fork(multiples.into_iter().collect()),
+            || PointerError::Corrupt(format!("Invalid pointer records at {key:?}")),
+        )?;
+
+        info!("Got pointer: {pointer:?}");
+        Self::pointer_verify(&pointer)?;
+        Ok(pointer)
+    }
+
+    /// Fetch pointer records from multiple nodes to find the latest version.
+    async fn fetch_all_pointer_records(
+        &self,
+        key: &NetworkAddress,
+    ) -> Result<Vec<Record>, PointerError> {
+        // Start with normal DHT query
+        let initial = match self
             .network
             .get_record_with_retries(key.clone(), &self.config.pointer)
             .await
         {
-            Ok(Some(records)) => {
-                debug!("Got {} record(s) for pointer at {key:?}", records.len());
-                // Resolve multiple records using counter-based resolution
-                resolve_records_from_peers(
-                    records,
-                    key.clone(),
-                    pointer_from_record,
-                    |p: &Pointer| p.counter(),
-                    |a: &Pointer, b: &Pointer| a == b,
-                    |multiples: HashSet<Pointer>| {
-                        PointerError::Fork(multiples.into_iter().collect())
-                    },
-                    || {
-                        PointerError::Corrupt(format!(
-                            "Found multiple conflicting invalid pointers at {key:?}"
-                        ))
-                    },
-                )?
-            }
-            Ok(None) => {
-                return Err(PointerError::GetError(GetError::RecordNotFound));
-            }
-            Err(NetworkError::SplitRecord(result_map)) => {
-                warn!("Pointer at {key:?} is split, trying resolution");
-                resolve_records_from_peers(
-                    result_map.into_values().collect(),
-                    key.clone(),
-                    pointer_from_record,
-                    |p: &Pointer| p.counter(),
-                    |a: &Pointer, b: &Pointer| a == b,
-                    |multiples: HashSet<Pointer>| {
-                        PointerError::Fork(multiples.into_iter().collect())
-                    },
-                    || {
-                        PointerError::Corrupt(format!(
-                            "Found multiple conflicting invalid pointers at {key:?}"
-                        ))
-                    },
-                )?
-            }
+            Ok(Some(records)) => records,
+            Ok(None) => return Err(PointerError::GetError(GetError::RecordNotFound)),
+            Err(NetworkError::SplitRecord(map)) => map.into_values().collect(),
             Err(err) => {
                 error!("Error fetching pointer: {err:?}");
                 return Err(PointerError::GetError(err.into()));
             }
         };
 
-        info!("Got pointer at address {address:?}: {pointer:?}");
-        Self::pointer_verify(&pointer)?;
-        Ok(pointer)
+        // Query more peers to make sure we have the latest
+        self.query_additional_peers(key, initial).await
     }
 
-    /// Check if a pointer exists on the network
-    /// This method is much faster than [`Client::pointer_get`]
-    /// This may fail if called immediately after creating the pointer, as nodes sometimes take longer to store the pointer than this request takes to execute!
+    /// Ask more peers for their pointer records, merge with what we have.
+    async fn query_additional_peers(
+        &self,
+        key: &NetworkAddress,
+        initial: Vec<Record>,
+    ) -> Result<Vec<Record>, PointerError> {
+        let max_counter = initial
+            .iter()
+            .filter_map(|r| pointer_from_record(r.clone()).ok())
+            .map(|p| p.counter())
+            .max()
+            .unwrap_or(0);
+
+        let peers = match self
+            .network
+            .get_closest_peers(key.clone(), Some(FALLBACK_PEERS_COUNT))
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                warn!("Couldn't get peers for fallback query: {e}");
+                return Ok(initial);
+            }
+        };
+
+        debug!("Querying {} extra peers for pointer", peers.len());
+
+        // Ask each peer in parallel
+        let network = self.network.clone();
+        let queries: Vec<_> = peers
+            .into_iter()
+            .map(|peer| {
+                let network = network.clone();
+                let key = key.clone();
+                async move { network.get_record_from_peer(key, peer).await }
+            })
+            .collect();
+
+        let results: Vec<_> = futures::stream::iter(queries)
+            .buffer_unordered(FALLBACK_PEERS_COUNT)
+            .collect()
+            .await;
+
+        // Merge all records
+        let mut all = initial;
+        for res in results {
+            if let Ok(Some(rec)) = res {
+                all.push(rec);
+            }
+        }
+
+        // Keep only records with counter >= max_counter (or everything if nothing valid)
+        let filtered: Vec<Record> = all
+            .iter()
+            .filter(|r| {
+                pointer_from_record((*r).clone())
+                    .map(|p| p.counter() >= max_counter || max_counter == 0)
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect();
+
+        if filtered.is_empty() {
+            Ok(all)
+        } else {
+            Ok(filtered)
+        }
+    }
+
     pub async fn pointer_check_existence(
         &self,
         address: &PointerAddress,
     ) -> Result<bool, PointerError> {
         let key = NetworkAddress::from(*address);
-        debug!("Checking pointer existence at: {key:?}");
-
         match self
             .network
             .get_record(key.clone(), self.config.pointer.verification_quorum)
@@ -153,12 +194,10 @@ impl Client {
             Ok(None) => Ok(false),
             Ok(Some(_)) => Ok(true),
             Err(NetworkError::SplitRecord(..)) => Ok(true),
-            Err(err) => Err(PointerError::GetError(GetError::Network(err)))
-                .inspect_err(|err| error!("Error checking pointer existence: {err:?}")),
+            Err(err) => Err(PointerError::GetError(GetError::Network(err))),
         }
     }
 
-    /// Verify a pointer
     pub fn pointer_verify(pointer: &Pointer) -> Result<(), PointerError> {
         if !pointer.verify_signature() {
             return Err(PointerError::BadSignature);
@@ -166,45 +205,45 @@ impl Client {
         Ok(())
     }
 
-    /// Manually store a pointer on the network
+    /// Store a pointer on the network.
+    ///
+    /// Don't use this for updates! Use `pointer_create()` first, then `pointer_update()`.
+    /// Using `pointer_put()` on an existing pointer can cause problems.
     pub async fn pointer_put(
         &self,
         pointer: Pointer,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, PointerAddress), PointerError> {
         let address = pointer.address();
-
-        // pay for the pointer storage
         let xor_name = address.xorname();
-        debug!("Paying for pointer at address: {address:?}");
-        let (payment_proofs, _skipped_payments) = self
+
+        debug!("Paying for pointer at {address:?}");
+        let (payment_proofs, _) = self
             .pay_for_content_addrs(
                 DataTypes::Pointer,
                 std::iter::once((xor_name, Pointer::size())),
                 payment_option,
             )
             .await
-            .inspect_err(|err| {
-                error!("Failed to pay for pointer at address: {address:?} : {err}")
+            .map_err(|err| {
+                error!("Payment failed for {address:?}: {err}");
+                PointerError::Pay(err)
             })?;
 
-        // verify payment was successful
         let (proof, price) = match payment_proofs.get(&xor_name) {
-            Some((proof, price)) => (Some(proof), price),
+            Some((p, pr)) => (Some(p.clone()), *pr),
             None => {
-                info!("Pointer at address: {address:?} was already paid for, update is free");
-                (None, &AttoTokens::zero())
+                info!("Pointer already paid for at {address:?}");
+                (None, AttoTokens::zero())
             }
         };
 
-        let total_cost = *price;
-
-        let (record, target_nodes) = if let Some(proof) = proof {
+        let (record, targets) = if let Some(proof) = proof {
             let payees = proof
                 .payees()
                 .iter()
-                .map(|(peer_id, addrs)| PeerInfo {
-                    peer_id: *peer_id,
+                .map(|(id, addrs)| PeerInfo {
+                    peer_id: *id,
                     addrs: addrs.clone(),
                 })
                 .collect();
@@ -230,7 +269,7 @@ impl Client {
                 publisher: None,
                 expires: None,
             };
-            let target_nodes = self
+            let targets = self
                 .network
                 .get_closest_peers_with_retries(net_addr.clone(), Some(QUOTING_CANDIDATES))
                 .await
@@ -239,18 +278,13 @@ impl Client {
                     network_error: e,
                     payment: None,
                 })?;
-            (record, target_nodes)
+            (record, targets)
         };
 
-        // store the pointer on the network
-        debug!("Storing pointer at address {address:?} to the network on nodes {target_nodes:?}");
-
+        debug!("Storing pointer at {address:?}");
         self.network
-            .put_record_with_retries(record, target_nodes, &self.config.pointer)
+            .put_record_with_retries(record, targets, &self.config.pointer)
             .await
-            .inspect_err(|err| {
-                error!("Failed to put record - pointer {address:?} to the network: {err}")
-            })
             .map_err(|err| {
                 PointerError::PutError(PutError::Network {
                     address: Box::new(NetworkAddress::from(address)),
@@ -259,12 +293,9 @@ impl Client {
                 })
             })?;
 
-        Ok((total_cost, address))
+        Ok((price, address))
     }
 
-    /// Create a new pointer on the network.
-    ///
-    /// Make sure that the owner key is not already used for another pointer as each key is associated with one pointer
     pub async fn pointer_create(
         &self,
         owner: &SecretKey,
@@ -272,70 +303,53 @@ impl Client {
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, PointerAddress), PointerError> {
         let address = PointerAddress::new(owner.public_key());
-        let already_exists = self.pointer_check_existence(&address).await?;
-        if already_exists {
+        if self.pointer_check_existence(&address).await? {
             return Err(PointerError::PointerAlreadyExists(address));
         }
-
         let pointer = Pointer::new(owner, 0, target);
         self.pointer_put(pointer, payment_option).await
     }
 
-    /// Update an existing pointer to point to a new target on the network.
-    ///
-    /// The pointer needs to be created first with [`Client::pointer_put`].
-    /// This operation is free as the pointer was already paid for at creation.
-    /// Only the latest version of the pointer is kept on the Network, previous versions will be overwritten and unrecoverable.
     pub async fn pointer_update(
         &self,
         owner: &SecretKey,
         target: PointerTarget,
     ) -> Result<(), PointerError> {
         let address = PointerAddress::new(owner.public_key());
-        info!("Updating pointer at address {address:?} to {target:?}");
+        info!("Updating pointer {address:?} to {target:?}");
+
         let current = match self.pointer_get(&address).await {
-            Ok(pointer) => Some(pointer),
-            Err(PointerError::GetError(GetError::Network(NetworkError::SplitRecord(
-                result_map,
-            )))) => result_map
+            Ok(p) => Some(p),
+            Err(PointerError::GetError(GetError::Network(NetworkError::SplitRecord(map)))) => map
                 .values()
-                .filter_map(|record| try_deserialize_record::<Pointer>(record).ok())
-                .max_by_key(|pointer: &Pointer| pointer.counter()),
-            Err(err) => {
-                return Err(err);
-            }
+                .filter_map(|r| try_deserialize_record::<Pointer>(r).ok())
+                .max_by_key(|p| p.counter()),
+            Err(err) => return Err(err),
         };
 
-        if let Some(p) = current {
-            let _new = self.pointer_update_from(&p, owner, target).await?;
-            Ok(())
-        } else {
-            warn!(
-                "Pointer at address {address:?} cannot be updated as it does not exist, please create it first or wait for it to be created"
-            );
-            Err(PointerError::CannotUpdateNewPointer)
+        match current {
+            Some(p) => {
+                self.pointer_update_from(&p, owner, target).await?;
+                Ok(())
+            }
+            None => {
+                warn!("Pointer {address:?} doesn't exist");
+                Err(PointerError::CannotUpdateNewPointer)
+            }
         }
     }
 
-    /// Update an existing pointer from a specific pointer
-    ///
-    /// This will increment the counter of the pointer and update the target
-    /// This function is used internally by [`Client::pointer_update`] after the pointer has been retrieved from the network.
-    /// To skip the retrieval step if you already have the pointer, use this function directly
-    /// This function will return the new pointer after it has been updated
     pub async fn pointer_update_from(
         &self,
         current: &Pointer,
         owner: &SecretKey,
-        new_target: PointerTarget,
+        target: PointerTarget,
     ) -> Result<Pointer, PointerError> {
-        // prepare the new pointer to be stored
         let address = PointerAddress::new(owner.public_key());
         let new_counter = current.counter() + 1;
-        info!("Updating pointer at address {address:?} to version {new_counter}");
-        let pointer = Pointer::new(owner, new_counter, new_target);
+        info!("Updating pointer {address:?} to v{new_counter}");
 
-        // prepare the record to be stored
+        let pointer = Pointer::new(owner, new_counter, target);
         let net_addr = NetworkAddress::from(address);
         let record = Record {
             key: net_addr.to_record_key(),
@@ -346,8 +360,7 @@ impl Client {
             expires: None,
         };
 
-        // store the pointer on the network
-        let target_nodes = self
+        let targets = self
             .network
             .get_closest_peers_with_retries(net_addr.clone(), Some(QUOTING_CANDIDATES))
             .await
@@ -356,14 +369,11 @@ impl Client {
                 network_error: e,
                 payment: None,
             })?;
-        debug!("Updating pointer at address {address:?} to the network on nodes {target_nodes:?}");
 
+        debug!("Storing updated pointer");
         self.network
-            .put_record_with_retries(record, target_nodes, &self.config.pointer)
+            .put_record_with_retries(record, targets, &self.config.pointer)
             .await
-            .inspect_err(|err| {
-                error!("Failed to update pointer at address {address:?} to the network: {err}")
-            })
             .map_err(|err| {
                 PointerError::PutError(PutError::Network {
                     address: Box::new(NetworkAddress::from(address)),
@@ -375,47 +385,29 @@ impl Client {
         Ok(pointer)
     }
 
-    /// Calculate the cost of storing a pointer
     pub async fn pointer_cost(&self, key: &PublicKey) -> Result<AttoTokens, CostError> {
-        trace!("Getting cost for pointer of {key:?}");
-
-        let address = PointerAddress::new(*key);
-        let xor = address.xorname();
-        let store_quote = self
+        trace!("Pointer cost for {key:?}");
+        let addr = PointerAddress::new(*key);
+        let xor = addr.xorname();
+        let quotes = self
             .get_store_quotes(DataTypes::Pointer, std::iter::once((xor, Pointer::size())))
             .await?;
-        let total_cost = AttoTokens::from_atto(
-            store_quote
-                .0
-                .values()
-                .map(|quote| quote.price())
-                .sum::<Amount>(),
-        );
-        debug!("Calculated the cost to create pointer of {key:?} is {total_cost}");
-        Ok(total_cost)
+        let cost = AttoTokens::from_atto(quotes.0.values().map(|q| q.price()).sum());
+        debug!("Pointer cost: {cost}");
+        Ok(cost)
     }
 }
 
-/// Deserialize a pointer from a record
 fn pointer_from_record(record: Record) -> Result<Pointer, PointerError> {
     let key = &record.key;
-    let header = RecordHeader::from_record(&record).map_err(|err| {
-        PointerError::Corrupt(format!(
-            "Failed to parse record header for pointer at {key:?}: {err:?}"
-        ))
-    })?;
+    let header = RecordHeader::from_record(&record)
+        .map_err(|e| PointerError::Corrupt(format!("Bad header at {key:?}: {e:?}")))?;
 
-    let kind = header.kind;
-    if !matches!(kind, RecordKind::DataOnly(DataTypes::Pointer)) {
-        error!("Record kind mismatch: expected Pointer, got {kind:?}");
+    if !matches!(header.kind, RecordKind::DataOnly(DataTypes::Pointer)) {
+        error!("Wrong record type: {:?}", header.kind);
         return Err(GetError::RecordKindMismatch(RecordKind::DataOnly(DataTypes::Pointer)).into());
-    };
+    }
 
-    let pointer: Pointer = try_deserialize_record(&record).map_err(|err| {
-        PointerError::Corrupt(format!(
-            "Failed to parse record for pointer at {key:?}: {err:?}"
-        ))
-    })?;
-
-    Ok(pointer)
+    try_deserialize_record(&record)
+        .map_err(|e| PointerError::Corrupt(format!("Bad pointer at {key:?}: {e:?}")))
 }
