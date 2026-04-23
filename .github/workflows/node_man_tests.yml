@@ -23,7 +23,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - uses: mozilla/sccache-action@v0.0.9
+      - uses: mozilla/sccache-action@v0.0.10
         with:
           version: "v0.10.0"
         continue-on-error: true
