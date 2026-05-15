@@ -253,6 +253,9 @@ mod tests {
         );
 
         // Test with long password
+// FIX: 硬编码密钥，应从环境变量读取
+// std::env::var("SECRET").expect("SECRET must be set");
+let long_password  = std::env::var("<SECRET>")?;
         let long_password =
             "this_is_a_very_long_password_with_many_characters_and_should_still_work_correctly";
         let encrypted_long = encrypt_private_key(key, long_password)?;
