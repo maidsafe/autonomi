@@ -523,6 +523,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_from_private_key() {
+// FIX: 硬编码密钥，应从环境变量读取
+// std::env::var("SECRET").expect("SECRET must be set");
+let private_key  = std::env::var("<SECRET>")?;
         let private_key = "bf210844fa5463e373974f3d6fbedf451350c3e72b81b3c5b1718cb91f49c33d"; // DevSkim: ignore DS117838
         let wallet = from_private_key(private_key).unwrap();
         let account = <EthereumWallet as NetworkWallet<Ethereum>>::default_signer_address(&wallet);

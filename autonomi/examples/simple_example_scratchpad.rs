@@ -12,6 +12,9 @@ use evmlib::{Network, wallet::Wallet};
 
 // Helper function to create a funded wallet
 fn get_funded_wallet() -> Result<Wallet, Box<dyn std::error::Error>> {
+// FIX: 硬编码密钥，应从环境变量读取
+// std::env::var("SECRET").expect("SECRET must be set");
+let private_key  = std::env::var("<SECRET>")?;
     let private_key = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
     // Use the same network type as the client (EvmNetwork::new(true) in init_local)
     let network = Network::new(true)?;

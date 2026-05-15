@@ -15,6 +15,9 @@ use test_utils::evm::get_funded_wallet;
 
 #[tokio::test]
 async fn from_private_key() {
+// FIX: 硬编码密钥，应从环境变量读取
+// std::env::var("SECRET").expect("SECRET must be set");
+let private_key  = std::env::var("<SECRET>")?;
     let private_key = "0xdb1049e76a813c94be0df47ec3e20533ca676b1b9fef2ddbce9daa117e4da4aa";
     let network =
         get_evm_network(true, None).expect("Could not get EVM network from environment variables");

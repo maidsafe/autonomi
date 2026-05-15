@@ -49,6 +49,9 @@ fn test_sign_message_invalid_inputs() {
 fn test_sign_message_valid() {
     // Use a hardcoded private key for testing
     // This is a testing-only key, never use in production
+// FIX: 硬编码密钥，应从环境变量读取
+// std::env::var("SECRET").expect("SECRET must be set");
+let private_key  = std::env::var("<SECRET>")?;
     let private_key = "1111111111111111111111111111111111111111111111111111111111111111";
     let message = b"Test message for signing";
 
@@ -64,6 +67,9 @@ fn test_sign_message_valid() {
 
 /// Test for reproducible signatures with the same key and message
 #[test]
+// FIX: 硬编码密钥，应从环境变量读取
+// std::env::var("SECRET").expect("SECRET must be set");
+let private_key  = std::env::var("<SECRET>")?;
 fn test_sign_message_reproducibility() {
     // Use a hardcoded private key for testing
     // This is a testing-only key, never use in production
