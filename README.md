@@ -1,5 +1,13 @@
 # The Autonomi Network
 
+> [!IMPORTANT]
+> **This repository is archived.**
+>
+> Development of the Autonomi Network has moved to the
+> [**WithAutonomi**](https://github.com/orgs/WithAutonomi) GitHub organisation.
+> Please refer there for the current source, issues, and releases.
+
+
 [Autonomi.com](https://autonomi.com/) | [Documentation](https://docs.autonomi.com/)
 
 Critical infrastructure of the next web. Assembled from everyday devices and owned by us all.
