@@ -404,6 +404,7 @@ impl Network {
                         return Ok(());
                     }
                 }
+                Err(e) if e.cannot_retry() => return Err(e),
                 Err(e) => err_res.push((peer.peer_id, e.to_string())),
             }
         }
