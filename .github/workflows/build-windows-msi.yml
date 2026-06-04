@@ -199,7 +199,7 @@ jobs:
           }
 
       - name: Upload MSI artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: autonomi-msi-x86_64-pc-windows-msvc
           path: ${{ steps.version.outputs.version }}.autonomi.x86_64-pc-windows-msvc.msi

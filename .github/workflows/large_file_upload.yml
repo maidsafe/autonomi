@@ -724,7 +724,7 @@ jobs:
         shell: bash
 
       - name: Upload test logs
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: upload-retry-test-logs
           path: |
@@ -1267,7 +1267,7 @@ jobs:
         shell: bash
 
       - name: Upload test logs
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: upload-retry-regular-test-logs
           path: |
