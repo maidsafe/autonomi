@@ -146,7 +146,7 @@ pub async fn run(
         debug!(
             "Clean set to true, removing client, node dir, local registry and killing the network."
         );
-        let client_data_path = dirs_next::data_dir()
+        let client_data_path = dirs_next::data_local_dir()
             .ok_or_else(|| eyre!("Could not obtain user's data directory"))?
             .join("autonomi")
             .join("client");

@@ -259,7 +259,7 @@ impl PyAntNode {
     /// This is platform specific:
     ///  - Linux: $HOME/.local/share/autonomi/node/<peer-id>
     ///  - macOS: $HOME/Library/Application Support/autonomi/node/<peer-id>
-    ///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\node\<peer-id>
+    ///  - Windows: C:\Users\<username>\AppData\Local\autonomi\node\<peer-id>
     #[allow(clippy::redundant_closure)]
     #[staticmethod]
     #[pyo3(signature = (peer_id=None))]

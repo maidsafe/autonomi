@@ -36,4 +36,4 @@ runs:
         compression-level: 9
         name: ${{ inputs.log_file_prefix }}_${{ inputs.runner_os }}
         path: |
-          C:\Users\runneradmin\AppData\Roaming\autonomi\**\*.log*
+          C:\Users\runneradmin\AppData\Local\autonomi\**\*.log*

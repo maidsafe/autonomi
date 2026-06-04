@@ -154,7 +154,7 @@ pub async fn kill_network(
     let mut system = System::new_all();
     system.refresh_all();
 
-    let genesis_data_path = dirs_next::data_dir()
+    let genesis_data_path = dirs_next::data_local_dir()
         .ok_or_else(|| eyre!("Could not obtain user's data directory"))?
         .join("autonomi")
         .join("test_genesis");

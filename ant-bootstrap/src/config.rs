@@ -80,7 +80,7 @@ pub struct InitialPeersConfig {
     /// The default location is platform specific:
     ///  - Linux: $HOME/.local/share/autonomi/bootstrap_cache/bootstrap_cache_<network_id>.json
     ///  - macOS: $HOME/Library/Application Support/autonomi/bootstrap_cache/bootstrap_cache_<network_id>.json
-    ///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\bootstrap_cache\bootstrap_cache_<network_id>.json
+    ///  - Windows: C:\Users\<username>\AppData\Local\autonomi\bootstrap_cache\bootstrap_cache_<network_id>.json
     ///
     /// We fallback to $HOME dir and then to current working directory if the platform specific directory cannot be
     /// determined.
@@ -103,7 +103,7 @@ pub struct BootstrapConfig {
     /// The default location is platform specific:
     ///  - Linux: $HOME/.local/share/autonomi/bootstrap_cache/bootstrap_cache_<network_id>.json
     ///  - macOS: $HOME/Library/Application Support/autonomi/bootstrap_cache/bootstrap_cache_<network_id>.json
-    ///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\bootstrap_cache\bootstrap_cache_<network_id>.json
+    ///  - Windows: C:\Users\<username>\AppData\Local\autonomi\bootstrap_cache\bootstrap_cache_<network_id>.json
     pub cache_dir: PathBuf,
     /// The cache save scaling factor. We start with the min_cache_save_duration and scale it up to the max_cache_save_duration.
     pub cache_save_scaling_factor: u32,
@@ -305,12 +305,12 @@ impl BootstrapConfig {
 /// The default location is platform specific:
 ///  - Linux: $HOME/.local/share/autonomi/bootstrap_cache/bootstrap_cache_<network_id>.json
 ///  - macOS: $HOME/Library/Application Support/autonomi/bootstrap_cache/bootstrap_cache_<network_id>.json
-///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\bootstrap_cache\bootstrap_cache_<network_id>.json
+///  - Windows: C:\Users\<username>\AppData\Local\autonomi\bootstrap_cache\bootstrap_cache_<network_id>.json
 ///
 /// We fallback to $HOME dir and then to current working directory if the platform specific directory cannot be
 /// determined.
 fn default_cache_dir() -> PathBuf {
-    let base_dir = if let Some(dir) = dirs_next::data_dir() {
+    let base_dir = if let Some(dir) = dirs_next::data_local_dir() {
         dir
     } else if let Some(home) = dirs_next::home_dir() {
         warn!("Failed to obtain platform data directory, falling back to home directory");

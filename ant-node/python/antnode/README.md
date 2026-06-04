@@ -103,7 +103,7 @@ Get the default root directory path for the given peer ID.
 - Platform specific paths:
   - Linux: `$HOME/.local/share/autonomi/node/<peer-id>`
   - macOS: `$HOME/Library/Application Support/autonomi/node/<peer-id>`
-  - Windows: `C:\Users\<username>\AppData\Roaming\autonomi\node\<peer-id>`
+  - Windows: `C:\Users\<username>\AppData\Local\autonomi\node\<peer-id>`
 
 #### `get_logs_dir() -> str`
 Get the logs directory path.

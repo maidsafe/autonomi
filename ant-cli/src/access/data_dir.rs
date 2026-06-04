@@ -13,7 +13,7 @@ use color_eyre::{
 use std::path::PathBuf;
 
 pub fn get_client_data_dir_path() -> Result<PathBuf> {
-    let mut home_dirs = dirs_next::data_dir()
+    let mut home_dirs = dirs_next::data_local_dir()
         .ok_or_else(|| eyre!("Failed to obtain data dir, your OS might not be supported."))?;
     home_dirs.push("autonomi");
     home_dirs.push("client");

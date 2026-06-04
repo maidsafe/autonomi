@@ -44,7 +44,7 @@ pub fn get_root_dir_and_keypair(root_dir: &Option<PathBuf>) -> eyre::Result<(Pat
 
 /// Get the default antnode root dir for the provided PeerId
 pub fn get_antnode_root_dir(peer_id: PeerId) -> eyre::Result<PathBuf> {
-    let dir = dirs_next::data_dir()
+    let dir = dirs_next::data_local_dir()
         .ok_or_else(|| eyre!("could not obtain data dir"))?
         .join("autonomi")
         .join("node")
