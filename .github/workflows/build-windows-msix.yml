@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Download signed Windows artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: autonomi-x86_64-pc-windows-msvc-signed
           path: artifacts/x86_64-pc-windows-msvc-signed/release

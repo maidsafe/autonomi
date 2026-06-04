@@ -45,7 +45,7 @@ jobs:
           dnf install -y rpm-build rpm-sign gnupg2
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: autonomi-${{ matrix.target }}
           path: artifacts/${{ matrix.target }}/release

@@ -185,7 +185,7 @@ jobs:
 
       - name: Install dependencies
         run: npm install
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: pr-bins-${{ matrix.settings.target }}
           path: target/release
@@ -201,7 +201,7 @@ jobs:
           antctl-path: target/release/antctl
           evm-testnet-path: target/release/evm-testnet
       - name: Download artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: bindings-${{ matrix.settings.target }}-${{ matrix.packages.app_name }}
           path: ${{ matrix.packages.dir }}/.
