@@ -12,8 +12,7 @@
 // Allow the to_bytes_le method name
 #![allow(clippy::wrong_self_convention)]
 
-#[macro_use]
-extern crate tracing;
+pub(crate) mod logging;
 
 pub use evmlib::CustomNetwork;
 pub use evmlib::GasInfo;

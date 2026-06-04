@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::EvmError;
+use crate::{debug, error, info, warn};
 use evmlib::{
     common::{Address as RewardsAddress, QuoteHash},
     quoting_metrics::QuotingMetrics,
@@ -120,8 +121,8 @@ impl ProofOfPayment {
         for (encoded_peer_id, quote) in self.peer_quotes.iter() {
             let peer_id = match encoded_peer_id.to_peer_id() {
                 Ok(peer_id) => peer_id,
-                Err(e) => {
-                    warn!("Invalid encoded peer id: {e}");
+                Err(_e) => {
+                    warn!("Invalid encoded peer id: {_e}");
                     return false;
                 }
             };
