@@ -353,13 +353,12 @@ impl NodeRecordStore {
             timestamp: self.timestamp,
         };
 
-        #[allow(clippy::let_underscore_future)]
-        let _ = spawn(async move {
+        drop(tokio::task::spawn_blocking(move || {
             if let Ok(mut file) = fs::File::create(file_path) {
                 let mut serialiser = rmp_serde::encode::Serializer::new(&mut file);
                 let _ = historic_quoting_metrics.serialize(&mut serialiser);
             }
-        });
+        }));
     }
 
     /// Creates a new `DiskBackedStore` with the given configuration.

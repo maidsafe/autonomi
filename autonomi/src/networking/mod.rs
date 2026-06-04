@@ -183,7 +183,7 @@ pub enum NetworkError {
     )]
     PutRecordQuorumFailed(Vec<PeerId>, NonZeroUsize),
     #[error("Put record failed, the following peers stored the record: {0:?}, errors: {1:?}")]
-    PutRecordTooManyPeerFailed(Vec<PeerId>, Vec<(PeerId, String)>),
+    PutRecordTooManyPeerFailed(Vec<PeerId>, Vec<(PeerId, NetworkError)>),
     #[error("Put record timeout, only the following peers stored the record: {0:?}")]
     PutRecordTimeout(Vec<PeerId>),
     #[error("Put record rejected: {0}")]
@@ -263,7 +263,10 @@ impl NetworkError {
 
     /// When encountering these, the request should not be retried
     pub fn cannot_retry(&self) -> bool {
-        matches!(self, NetworkError::OutdatedRecordRejected { .. }) || self.is_fatal()
+        matches!(self, NetworkError::OutdatedRecordRejected { .. })
+            || self.is_fatal()
+            || matches!(self, NetworkError::PutRecordTooManyPeerFailed(_, errs)
+                if errs.iter().any(|(_, e)| e.cannot_retry()))
     }
 }
 
@@ -404,7 +407,7 @@ impl Network {
                         return Ok(());
                     }
                 }
-                Err(e) => err_res.push((peer.peer_id, e.to_string())),
+                Err(e) => err_res.push((peer.peer_id, e)),
             }
         }
 

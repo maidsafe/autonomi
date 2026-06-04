@@ -97,18 +97,31 @@ pub fn collect_upload_summary(
                         }
                         Some(ClientEvent::MerkleBatchPaymentComplete(receipt)) => {
                             // Progressively save receipt to disk for upload resume
-                            if let Some(ref file) = file_name
-                                && let Err(e) = cached_merkle_payments::save_merkle_payment(file, &receipt)
-                            {
-                                eprintln!("Warning: Failed to save Merkle payment receipt: {e}");
+                            if let Some(ref file) = file_name {
+                                let file = file.clone();
+                                let res = tokio::task::spawn_blocking(move || {
+                                    cached_merkle_payments::save_merkle_payment(&file, &receipt)
+                                }).await;
+                                match res {
+                                    Ok(Err(e)) => eprintln!("Warning: Failed to save Merkle payment receipt: {e}"),
+                                    Err(e) => eprintln!("Warning: Failed to spawn blocking task for Merkle payment: {e}"),
+                                    _ => {}
+                                }
                             }
                         }
                         Some(ClientEvent::RegularBatchPaymentComplete(batch_receipt)) => {
                             // Accumulate and progressively save receipt to disk for upload resume
                             if let Some(ref file) = file_name {
                                 accumulated_regular_receipt.extend(batch_receipt);
-                                if let Err(e) = cached_payments::save_regular_payment(file, &accumulated_regular_receipt) {
-                                    eprintln!("Warning: Failed to save regular payment receipt: {e}");
+                                let file = file.clone();
+                                let receipt_clone = accumulated_regular_receipt.clone();
+                                let res = tokio::task::spawn_blocking(move || {
+                                    cached_payments::save_regular_payment(&file, &receipt_clone)
+                                }).await;
+                                match res {
+                                    Ok(Err(e)) => eprintln!("Warning: Failed to save regular payment receipt: {e}"),
+                                    Err(e) => eprintln!("Warning: Failed to spawn blocking task for payment: {e}"),
+                                    _ => {}
                                 }
                             }
                         }
@@ -129,21 +142,31 @@ pub fn collect_upload_summary(
                 }
                 ClientEvent::MerkleBatchPaymentComplete(receipt) => {
                     // Progressively save receipt to disk for upload resume
-                    if let Some(ref file) = file_name
-                        && let Err(e) = cached_merkle_payments::save_merkle_payment(file, &receipt)
-                    {
-                        eprintln!("Warning: Failed to save Merkle payment receipt: {e}");
+                    if let Some(ref file) = file_name {
+                        let file = file.clone();
+                        let res = tokio::task::spawn_blocking(move || {
+                            cached_merkle_payments::save_merkle_payment(&file, &receipt)
+                        }).await;
+                        match res {
+                            Ok(Err(e)) => eprintln!("Warning: Failed to save Merkle payment receipt: {e}"),
+                            Err(e) => eprintln!("Warning: Failed to spawn blocking task for Merkle payment: {e}"),
+                            _ => {}
+                        }
                     }
                 }
                 ClientEvent::RegularBatchPaymentComplete(batch_receipt) => {
                     // Accumulate and progressively save receipt to disk for upload resume
                     if let Some(ref file) = file_name {
                         accumulated_regular_receipt.extend(batch_receipt);
-                        if let Err(e) = cached_payments::save_regular_payment(
-                            file,
-                            &accumulated_regular_receipt,
-                        ) {
-                            eprintln!("Warning: Failed to save regular payment receipt: {e}");
+                        let file = file.clone();
+                        let receipt_clone = accumulated_regular_receipt.clone();
+                        let res = tokio::task::spawn_blocking(move || {
+                            cached_payments::save_regular_payment(&file, &receipt_clone)
+                        }).await;
+                        match res {
+                            Ok(Err(e)) => eprintln!("Warning: Failed to save regular payment receipt: {e}"),
+                            Err(e) => eprintln!("Warning: Failed to spawn blocking task for payment: {e}"),
+                            _ => {}
                         }
                     }
                 }
